@@ -1,10 +1,11 @@
 """Fremantle Dockers Coach View: the whole season on one screen.
 
 Run with:  streamlit run app.py
-Laid out for a 1440x900 display with no page scroll. The chatbot opens in a
-dialog and needs ANTHROPIC_API_KEY (environment or Streamlit secrets).
-Multi-workspace keys also need ANTHROPIC_WORKSPACE_ID (wrkspc_...). The
-dashboard works without either.
+Laid out for a 1440x900 display with no page scroll: the dashboard on the
+left, the Wharf-ai chat panel down the right. Wharf-ai opens with an insight
+computed from the data (no API needed); answering questions needs
+ANTHROPIC_API_KEY (environment or Streamlit secrets), plus
+ANTHROPIC_WORKSPACE_ID (wrkspc_...) for multi-workspace keys.
 """
 
 import streamlit as st
@@ -13,10 +14,11 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import inject_css, header_band
+from theme import inject_css, header_band, chat_header, insight_card
 import data as D
 import views as V
 import chatbot as C
+import insights as I
 
 inject_css()
 
@@ -24,25 +26,57 @@ team_df = D.load_team()
 player_df = D.load_players()
 all_seasons = D.seasons(team_df)
 
+PANEL_H = 722       # Wharf-ai panel height (px), level with the dashboard bottom
+HISTORY_H = 570     # scrolling area inside the panel
 
-# ------------------------------------------------------------ chatbot
-@st.dialog("Ask the data", width="large")
-def chat_dialog(season):
-    st.caption("Answers come from the loaded box-score data only. The assistant "
-               "will say when something is not in the data.")
-    client = C.get_client()
-    if client is None:
-        st.info("Set ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID for "
-                "multi-workspace keys) in the environment or app secrets, then "
-                "reboot the app.")
-        return
+
+def example_prompts(season, baseline):
+    prompts = [
+        "How do our losses differ from our wins?",
+        "Which players lift in finals?",
+        "Where are we losing the clearance battle?",
+    ]
+    prompts.insert(1, f"What has changed most since {baseline}?" if baseline
+                   else "Which quarter do we fade in, and against whom?")
+    return prompts
+
+
+# ------------------------------------------------------------ Wharf-ai
+@st.fragment
+def chat_panel(season, baseline):
+    """Runs as a fragment: asking a question reruns only this panel."""
+    key = f"insight_{season}"
+    if key not in st.session_state:
+        st.session_state[key] = I.pick(team_df, player_df, season, baseline)
     msgs = st.session_state.setdefault("messages", [])
-    history = st.container(height=420, border=False)
+    client = C.get_client()
+
+    chat_header()
+    history = st.container(height=HISTORY_H, border=False)
     with history:
+        insight = st.session_state[key]
+        if insight:
+            insight_card(insight)
+            if st.button("↻ Another insight", key="more_insight", type="tertiary"):
+                st.session_state[key] = I.pick(team_df, player_df, season, baseline,
+                                               avoid=insight)
+                st.rerun(scope="fragment")
+        clicked = None
+        if not msgs:
+            st.caption("Try asking")
+            for i, q in enumerate(example_prompts(season, baseline)):
+                if st.button(q, key=f"ex_{i}", use_container_width=True,
+                             disabled=client is None):
+                    clicked = q
         for msg in msgs:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
-    prompt = st.chat_input("e.g. How does our clearance work compare to last season?")
+        if client is None:
+            st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
+                       "for multi-workspace keys) in the environment or app secrets.")
+
+    typed = st.chat_input("Ask Wharf-ai about the data", disabled=client is None)
+    prompt = typed or clicked
     if not prompt:
         return
     msgs.append({"role": "user", "content": prompt})
@@ -52,7 +86,8 @@ def chat_dialog(season):
         with st.chat_message("assistant"):
             try:
                 reply = st.write_stream(C.stream_answer(
-                    client, C.build_context("team", "player"), season, msgs))
+                    client, C.build_context("team", "player"), season, msgs,
+                    opening=st.session_state[key]))
             except Exception as exc:  # show API errors instead of crashing the app
                 msgs.pop()  # keep failed turns out of the history sent next time
                 if "anthropic-workspace-id" in str(exc):
@@ -60,32 +95,34 @@ def chat_dialog(season):
                              "ANTHROPIC_WORKSPACE_ID (starts with wrkspc_) in the "
                              "app secrets or environment, reboot the app, and try again.")
                 else:
-                    st.error(f"Sorry, the assistant hit an error: {exc}")
+                    st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
     msgs.append({"role": "assistant", "content": reply})
+    if clicked:
+        st.rerun(scope="fragment")  # redraw without the example prompts
 
 
-# ------------------------------------------------------------- header
-h1, h2, h3 = st.columns([7, 1.3, 1.1], vertical_alignment="center")
-with h2:
-    season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
-                                  key="season", label_visibility="collapsed")
-season = season or all_seasons[-1]
-baseline = D.baseline_season(season, all_seasons)
-tdf = D.team_season(team_df, season)
+# ------------------------------------------------------------- layout
+main, side = st.columns([3.55, 1])
 
-with h1:
-    last = tdf.tail(5)
-    form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
-            for r in last.itertuples()]
-    note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]} "
-            f"({tdf['game_dt'].iloc[-1]:%d %b %Y})") if len(tdf) else "No games"
-    if baseline is not None:
-        note += f" · changes vs {baseline}"
-    header_band(season, D.record(tdf), form, note)
-with h3:
-    if st.button("💬 Ask the data", use_container_width=True, type="primary"):
-        chat_dialog(season)
+with main:
+    h1, h2 = st.columns([6.2, 1], vertical_alignment="center")
+    with h2:
+        season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
+                                      key="season", label_visibility="collapsed")
+    season = season or all_seasons[-1]
+    baseline = D.baseline_season(season, all_seasons)
+    tdf = D.team_season(team_df, season)
+    with h1:
+        last = tdf.tail(5)
+        form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
+                for r in last.itertuples()]
+        note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]} "
+                f"({tdf['game_dt'].iloc[-1]:%d %b %Y})") if len(tdf) else "No games"
+        if baseline is not None:
+            note += f" · changes vs {baseline}"
+        header_band(season, D.record(tdf), form, note)
+    V.render(team_df, player_df, season, baseline)
 
-# --------------------------------------------------------------- body
-V.render(team_df, player_df, season, baseline)
+with side, st.container(border=True, height=PANEL_H):
+    chat_panel(season, baseline)

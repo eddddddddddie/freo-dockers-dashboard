@@ -10,7 +10,7 @@ import streamlit as st
 
 import data as D
 import charts as CH
-from theme import card_title, tiles_row, leaders_list
+from theme import COLORS, card_title, tiles_row, leaders_list
 
 MID_H = 238   # chart height in the middle row (px)
 BOT_H = 262   # chart height in the bottom row (px)
@@ -56,10 +56,13 @@ def render(team_df, player_df, season, baseline):
         card_title("Margin by game", f"green win, red loss · avg {tdf['margin'].mean():+.1f}" if len(tdf) else "")
         _plot(CH.margin_bars(tdf, MID_H))
     with c2, st.container(border=True):
-        card_title("Where we win", "win rate when each side wins the count")
+        # Win rate in games where each side won the count on that stat.
+        card_title("Where we win", keys=[("Freo won count", COLORS["freo"]),
+                                         ("Opp won count", COLORS["opp"])])
         _plot(CH.win_conditions_bars(D.win_conditions(tdf), MID_H))
     with c3, st.container(border=True):
-        card_title("Quarter pattern", "avg points, Freo margin on top")
+        card_title("Quarter pattern", "avg pts", keys=[("Freo", COLORS["freo"]),
+                                                     ("Opp", COLORS["opp"])])
         _plot(CH.quarter_bars(D.quarter_pattern(tdf), MID_H))
 
     # ---- bottom row

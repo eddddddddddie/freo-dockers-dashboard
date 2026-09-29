@@ -74,7 +74,9 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   Freo table, are collected and printed as warnings at the end instead of stopping the run.
 
 ## Dashboard layout (single Coach View, no other pages)
-One screen, laid out for a 1440x900 display with no page scroll (`app.py` -> `views.render`).
+One screen, laid out for a 1440x900 display with no page scroll: the dashboard (`views.render`)
+on the left, the Wharf-ai chat panel down the right (`app.chat_panel`, a fragment, so chatting
+does not re-render the charts).
 Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`; chart heights are
 fixed pixels (`MID_H`, `BOT_H` in `views.py`), so check the fit with a 1440x790 screenshot
 after any layout change.
@@ -86,10 +88,17 @@ after any layout change.
   pattern (from the cumulative quarter score strings).
 - Bottom row: role leaders (most games led + per game avg), player form heatmap (last 6 games vs
   the player's own season average, stat picker), top goalkickers.
-- Chatbot opens in a dialog from the header button.
+- Streamlit gives HTML markdown blocks a -1rem bottom margin; `inject_css` cancels it for the
+  band, tiles and panel blocks. Narrow charts use legend keys in the card title
+  (`card_title(keys=...)`) because Plotly legends stack vertically at that width.
 
-## Chatbot
-- Chat panel available on every page. Answers must be grounded in the loaded CSVs:
+## Chatbot (Wharf-ai)
+- Named Wharf-ai; right-hand panel with example prompts. It opens with an insight from
+  `insights.py`: a pool of facts computed with pandas (win-rate swing by stat, best quarter, close
+  games, home vs away, accuracy in wins vs losses, biggest change vs baseline, player in form,
+  centre vs stoppage clearances), one picked at random per page open and per season. No LLM
+  writes the insight, so it works without an API key. The shown insight is passed to the model.
+- Answers must be grounded in the loaded CSVs:
   compute numbers with code, then explain. Never state a stat that wasn't calculated.
 - Box-score data shows what happened, not structures or zones. The bot should say so
   when a question needs data we don't have.

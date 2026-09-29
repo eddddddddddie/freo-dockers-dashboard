@@ -72,6 +72,9 @@ def inject_css():
             font-weight:700; color:#6D28D9; margin:0; line-height:1.6;
           }
           .card-title span { color:#9CA3AF; font-weight:600; text-transform:none; letter-spacing:0; }
+          .card-title .key { color:#4B5563; margin-left:10px; white-space:nowrap; }
+          .card-title .key i { display:inline-block; width:9px; height:9px; border-radius:2px;
+            margin-right:4px; vertical-align:-1px; }
 
           /* Header band */
           .cv-band {
@@ -93,10 +96,10 @@ def inject_css():
           /* Headline tiles */
           .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
           .cv-tile { background:#fff; border:1px solid #E7E3EF; border-radius:10px;
-            padding:6px 10px 4px; box-shadow:0 1px 2px rgba(42,10,74,.06); }
-          .cv-tile .lbl { font-size:.68rem; color:#6B7280; white-space:nowrap; }
-          .cv-tile .val { font-size:1.35rem; font-weight:650; color:#2A0A4A; line-height:1.15; }
-          .cv-tile .dlt { font-size:.68rem; font-weight:600; margin-left:4px; }
+            padding:6px 8px 4px; min-width:0; box-shadow:0 1px 2px rgba(42,10,74,.06); }
+          .cv-tile .lbl { font-size:.66rem; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .cv-tile .val { font-size:1.15rem; font-weight:650; color:#2A0A4A; line-height:1.15; }
+          .cv-tile .dlt { font-size:.64rem; font-weight:600; margin-left:3px; white-space:nowrap; }
           .cv-tile svg { display:block; width:100%; height:22px; margin-top:1px; }
 
           /* Role leaders */
@@ -115,17 +118,44 @@ def inject_css():
 
           div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:30px; font-size:.8rem; }
 
-          /* Header controls */
-          div[data-testid="stButton"] button { height:52px; border-radius:10px; }
+          /* Streamlit pulls markdown blocks up by 1rem; not wanted for these. */
+          div[data-testid="stMarkdownContainer"]:has(> .cv-band),
+          div[data-testid="stMarkdownContainer"]:has(> .cv-tiles),
+          div[data-testid="stMarkdownContainer"]:has(> .wa-head),
+          div[data-testid="stMarkdownContainer"]:has(> .wa-insight) { margin-bottom:0 !important; }
+
+          /* Wharf-ai panel */
+          .wa-head { background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 70%,#6D28D9 100%);
+            color:#fff; border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:9px; }
+          .wa-head .dot { width:26px; height:26px; border-radius:50%; background:#fff; color:#4C1D95;
+            display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.8rem; }
+          .wa-head b { font-size:1rem; letter-spacing:.2px; }
+          .wa-head span { display:block; font-size:.64rem; color:#C4B5FD; }
+          .wa-insight { background:#F5F1FB; border-left:4px solid #7C3AED; border-radius:8px;
+            padding:9px 11px; font-size:.82rem; line-height:1.4; color:#1F2937; }
+          .wa-insight .tag { font-size:.6rem; font-weight:700; letter-spacing:.08em;
+            text-transform:uppercase; color:#7C3AED; margin-bottom:3px; }
+          .wa-insight b { color:#2A0A4A; }
+          [data-testid="stChatMessage"] { padding:6px 4px; }
+          [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li { font-size:.84rem; }
+
+          div[data-testid="stButton"] button { min-height:30px; border-radius:8px; padding:4px 10px;
+            justify-content:flex-start; text-align:left; }
+          div[data-testid="stButton"] button p { font-size:.78rem; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-def card_title(text, note=""):
+def card_title(text, note="", keys=None):
+    """Card heading. keys: optional [(label, colour)] drawn as a legend, for
+    charts too narrow for a Plotly legend."""
     note_html = f" <span>{html.escape(note)}</span>" if note else ""
-    st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}</div>',
+    key_html = "".join(
+        f'<span class="key"><i style="background:{c}"></i>{html.escape(l)}</span>'
+        for l, c in (keys or []))
+    st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}{key_html}</div>',
                 unsafe_allow_html=True)
 
 
@@ -221,3 +251,20 @@ def leaders_list(leaders):
                  f'<div class="num">{avg}<small>per game · led {r["led"]}/{r["games"]}</small>'
                  f'</div></div>')
     st.markdown(rows, unsafe_allow_html=True)
+
+
+def chat_header():
+    st.markdown('<div class="wa-head"><div class="dot">W</div><div><b>Wharf-ai</b>'
+                '<span>Answers from the loaded match data only</span></div></div>',
+                unsafe_allow_html=True)
+
+
+def _md_bold(text):
+    """Escape text and turn **bold** into <b> tags."""
+    import re
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(text))
+
+
+def insight_card(text):
+    st.markdown(f'<div class="wa-insight"><div class="tag">Insight</div>{_md_bold(text)}</div>',
+                unsafe_allow_html=True)

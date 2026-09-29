@@ -32,7 +32,7 @@ SOURCES = (
     if HAS_EXT else "afltables.com box scores"
 )
 
-SYSTEM_INTRO = f"""You are the analyst for a Fremantle Dockers (AFL) performance dashboard.
+SYSTEM_INTRO = f"""You are Wharf-ai, the analyst for a Fremantle Dockers (AFL) performance dashboard.
 You answer tactical and statistical questions using ONLY the data provided below,
 which was computed from the dashboard's CSV files ({SOURCES}) for the 2025 and 2026
 seasons. Where both sources carry a stat, the AFL Tables figure is used.
@@ -109,6 +109,12 @@ def build_context(_team_df_token, _player_df_token):
                 "freo_marks", "freo_tackles", "freo_rebound_50s", "opp_rebound_50s",
                 "freo_one_percenters", "freo_goal_assists"]
         cols += [c for c in EXT_TEAM_COLS if c in tdf.columns]
+        # Pre-computed splits so the model does not have to add up rows itself.
+        split_cols = [c for c in cols if c not in ("round", "opponent", "result")]
+        splits = tdf.groupby("result")[split_cols].agg(["mean", "sum"]).round(1)
+        splits.columns = [f"{c}_{a}" for c, a in splits.columns]
+        parts.append("Per-game averages and season totals in wins (W) vs losses (L) (CSV):")
+        parts.append(splits.reset_index().to_csv(index=False).strip())
         parts.append("Per-game team totals (CSV):")
         parts.append(tdf[cols].to_csv(index=False).strip())
         # Player season averages.
@@ -160,14 +166,18 @@ def get_client():
     return anthropic.Anthropic(**kwargs)
 
 
-def stream_answer(client, data_context, current_season, history):
+def stream_answer(client, data_context, current_season, history, opening=None):
     """Yield text chunks. The big data block is cached; the small viewing-season
-    note sits after it so the cached prefix stays stable across seasons."""
+    note (and the opening insight on screen) sits after it so the cached prefix
+    stays stable across seasons."""
+    note = f"The user is currently viewing the {current_season} season."
+    if opening:
+        note += (" The panel opened with this insight (computed from the data), which "
+                 f"the user may ask about: {opening}")
     system = [
         {"type": "text", "text": SYSTEM_INTRO + "\n" + data_context,
          "cache_control": {"type": "ephemeral"}},
-        {"type": "text",
-         "text": f"The user is currently viewing the {current_season} season."},
+        {"type": "text", "text": note},
     ]
     with client.messages.stream(
         model=MODEL,

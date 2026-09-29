@@ -45,8 +45,8 @@ def win_conditions_bars(wc, height):
                           "%{customdata} games<extra></extra>",
         ))
     fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(barmode="group", bargap=0.25, bargroupgap=0.08,
-                      margin=dict(l=4, r=4, t=26, b=4))
+    fig.update_layout(barmode="group", bargap=0.25, bargroupgap=0.08, showlegend=False,
+                      margin=dict(l=4, r=4, t=4, b=4))
     fig.update_xaxes(range=[0, 118], showticklabels=False, showgrid=False)
     fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11))
     return fig
@@ -70,7 +70,8 @@ def quarter_bars(qp, height):
                            text=f"{r['margin']:+.1f}", showarrow=False, yshift=10,
                            font=dict(size=11, color=COLORS["ink"]))
     fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.06)
+    fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.06, showlegend=False,
+                      margin=dict(l=4, r=6, t=8, b=4))
     top = max(qp["freo"].max(), qp["opp"].max())
     fig.update_yaxes(range=[0, top * 1.22])
     return fig
