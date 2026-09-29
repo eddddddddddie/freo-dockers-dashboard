@@ -14,6 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Check the merge: `python -c "import data; data.ext_check()"` (coverage, surname mismatches,
   and where the two sources disagree on shared stats).
 - Run: `streamlit run app.py`. There are no tests or linter config.
+- Secrets live in `.streamlit/secrets.toml` locally (gitignored, never commit it) or the app's
+  Secrets on Streamlit Cloud, read through `settings.get()`: `APP_USERNAME` / `APP_PASSWORD`
+  (login, required: the app stays locked without them), `ANTHROPIC_API_KEY`, optional
+  `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_BASE_URL`, `FREO_CHAT_MODEL`. The repo is public, so
+  never put credentials in code.
 
 ## Goal
 Build a player-by-player, game-by-game stats dashboard for the Fremantle Dockers (AFL),
@@ -74,12 +79,16 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   Freo table, are collected and printed as warnings at the end instead of stopping the run.
 
 ## Dashboard layout (single Coach View, no other pages)
-One screen, laid out for a 1440x900 display with no page scroll: the dashboard (`views.render`)
-on the left, the Wharf-ai chat panel down the right (`app.chat_panel`, a fragment, so chatting
-does not re-render the charts).
-Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`; chart heights are
-fixed pixels (`MID_H`, `BOT_H` in `views.py`), so check the fit with a 1440x790 screenshot
-after any layout change.
+The whole app sits behind a login (`auth.require_login`, username/password from secrets,
+compared in constant time, 30 s pause after 5 failed tries; lasts for the browser session).
+One screen with no page scroll, sized to the browser window: the dashboard (`views.render`) on
+the left, the Wharf-ai chat panel down the right (`app.chat_panel`, a fragment, so chatting does
+not re-render the charts). `components/viewport` is a tiny custom component that reports the
+window size (and again on resize); `layout.sizes(height, width)` turns it into the chart heights,
+panel height and player-form row count, tuned at 1440x790 and scaled from there (narrow windows
+give up extra height because titles wrap). The first run uses the 1440x790 design size.
+Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`. After any layout
+change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 - Header: season toggle (2025 / 2026), record, win rate, avg for/against/margin, last 5, data freshness.
 - 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
   accuracy change in absolute units (a % change of a value that can cross zero is meaningless);
@@ -110,8 +119,18 @@ after any layout change.
   writes the insight, so it works without an API key. The shown insight is passed to the model.
 - Avatars are generic SVGs in `assets/` (no club marks): `supporter.svg` (user, purple on white,
   bobble beanie) and `anchor.svg` (Wharf-ai, white on purple anchor with eyes).
-- Answers must be grounded in the loaded CSVs:
-  compute numbers with code, then explain. Never state a stat that wasn't calculated.
+- Answers must be grounded in the loaded CSVs: compute numbers with code, then explain. Never
+  state a stat that wasn't calculated. This is enforced with tools: `chatbot.stream_answer` runs a
+  manual streaming tool-use loop on `claude-sonnet-5-5` (adaptive thinking, effort `medium`,
+  server-side refusal fallback `fallbacks: "default"`), and the model gets every number from
+  `wharf_tools.py` (team_games, team_aggregate, correlate, quarter_breakdown, player_aggregate,
+  player_games): fixed pandas queries, no model-written code. Tool inputs stream eagerly, so
+  `wharf_tools.run` validates them and returns errors the model can fix. Goal accuracy from
+  `team_aggregate` is pooled, matching the dashboard.
+- Within one question the message list is append-only and assistant turns are passed back whole
+  (thinking + tool_use blocks), as preserved thinking requires; only the final text is kept in the
+  chat history between questions. Tools + the stable system prompt are cached; the per-view note
+  (season, opening insight) sits after the cache breakpoint.
 - Box-score data shows what happened, not structures or zones. The bot should say so
   when a question needs data we don't have.
 - Needs ANTHROPIC_API_KEY from the environment (never hard-code it). Multi-workspace

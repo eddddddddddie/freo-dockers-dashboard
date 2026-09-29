@@ -12,8 +12,7 @@ import data as D
 import charts as CH
 from theme import COLORS, card_title, tiles_row, leaders_list
 
-MID_H = 238   # chart height in the middle row (px)
-BOT_H = 262   # chart height in the bottom row (px)
+# Chart heights come from layout.sizes() (sized to the browser window).
 
 # Player stats offered on the form card: label -> column.
 FORM_STATS = {
@@ -43,7 +42,10 @@ def _plot(fig):
     st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
 
 
-def render(team_df, player_df, season, baseline):
+def render(team_df, player_df, season, baseline, sz):
+    """sz: pixel sizes from layout.sizes(); "mid"/"bot" are the chart heights of
+    the middle and bottom rows, "form_rows" the players shown in player form."""
+    MID_H, BOT_H = sz["mid"], sz["bot"]
     tdf = D.team_season(team_df, season)
     pdf = D.players_season(player_df, season)
     form_stats = FORM_STATS_EXT if "pressure_acts" in pdf.columns else FORM_STATS
@@ -80,7 +82,9 @@ def render(team_df, player_df, season, baseline):
 
     # ---- bottom row
     b1, b2, b3 = st.columns([1.05, 2.45, 1.2])
-    with b1, st.container(border=True):
+    # Same height as its neighbours; on very small windows the list scrolls
+    # inside the card instead of pushing the page past the screen.
+    with b1, st.container(border=True, height=max(BOT_H + 40, 200)):
         card_title("Role leaders", "most games led")
         leaders = D.role_leaders(pdf)
         gk = D.top_goalkickers(pdf, n=1)
@@ -98,7 +102,8 @@ def render(team_df, player_df, season, baseline):
             stat = st.selectbox("Form stat", list(form_stats), key="form_stat",
                                 label_visibility="collapsed")
         stat = stat or "Disposals"
-        vals, avgs, _ = D.form_matrix(pdf, form_stats.get(stat, "disposals"))
+        vals, avgs, _ = D.form_matrix(pdf, form_stats.get(stat, "disposals"),
+                                      n_players=sz["form_rows"])
         if len(vals):
             _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38))
         else:

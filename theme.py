@@ -135,6 +135,15 @@ def inject_css():
           .op-chip { display:inline-block; color:#fff; border-radius:4px; padding:1px 6px; margin:1px 3px 1px 0;
             font-size:.7rem; font-weight:600; white-space:nowrap; }
 
+          /* Window-size reporter: no visible footprint */
+          div[data-testid="stElementContainer"]:has(iframe[title*="viewport"]) {
+            position:absolute; width:0; height:0; overflow:hidden; margin:0; }
+
+          /* Login */
+          .login-head { margin:18vh 0 14px; text-align:center; }
+          .login-head b { display:block; font-size:1.4rem; color:#2A0A4A; }
+          .login-head span { color:#6B7280; font-size:.9rem; }
+
           /* Wharf-ai panel */
           .wa-head { background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 70%,#6D28D9 100%);
             color:#fff; border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:9px; }

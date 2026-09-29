@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>viewport</title></head>
+<body style="margin:0">
+<script>
+// Reports the dashboard window's size to Python (Streamlit component protocol),
+// and again whenever it is resized by more than a few pixels.
+(function () {
+  function send(type, extra) {
+    window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, extra), "*");
+  }
+  function size() {
+    var w = window.parent || window;
+    return {w: w.innerWidth, h: w.innerHeight};
+  }
+  var last = null, timer = null;
+  function report() {
+    var s = size();
+    if (last && Math.abs(s.w - last.w) < 16 && Math.abs(s.h - last.h) < 16) return;
+    last = s;
+    send("streamlit:setComponentValue", {value: s, dataType: "json"});
+  }
+  window.addEventListener("message", function (e) {
+    if (e.data && e.data.type === "streamlit:render") {
+      send("streamlit:setFrameHeight", {height: 0});
+      report();
+    }
+  });
+  try {
+    window.parent.addEventListener("resize", function () {
+      clearTimeout(timer);
+      timer = setTimeout(report, 250);
+    });
+  } catch (err) { /* parent not reachable: keep the first reading */ }
+  send("streamlit:componentReady", {apiVersion: 1});
+})();
+</script>
+</body>
+</html>

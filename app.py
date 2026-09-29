@@ -1,8 +1,9 @@
 """Fremantle Dockers Coach View: the whole season on one screen.
 
 Run with:  streamlit run app.py
-Laid out for a 1440x900 display with no page scroll: the dashboard on the
-left, the Wharf-ai chat panel down the right. Wharf-ai opens with an insight
+One screen with no page scroll, sized to the browser window (layout.py): the
+dashboard on the left, the Wharf-ai chat panel down the right. Sign-in needs
+APP_USERNAME / APP_PASSWORD in the environment or Streamlit secrets. Wharf-ai opens with an insight
 computed from the data (no API needed); answering questions needs
 ANTHROPIC_API_KEY (environment or Streamlit secrets), plus
 ANTHROPIC_WORKSPACE_ID (wrkspc_...) for multi-workspace keys.
@@ -17,6 +18,8 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    initial_sidebar_state="collapsed")
 
 from theme import inject_css, header_band, chat_header, insight_card
+import auth
+import layout
 import data as D
 import views as V
 import chatbot as C
@@ -24,6 +27,9 @@ import insights as I
 import deepdives as DD
 
 inject_css()
+auth.require_login()          # stops here until signed in
+win_w, win_h = layout.window_size()
+SZ = layout.sizes(win_h, win_w)
 
 team_df = D.load_team()
 player_df = D.load_players()
@@ -32,8 +38,13 @@ all_seasons = D.seasons(team_df)
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 AVATARS = {"user": os.path.join(ASSETS, "supporter.svg"),        # supporter in a bobble beanie
            "assistant": os.path.join(ASSETS, "anchor.svg")}      # Wharf-ai's anchor
-PANEL_H = 722       # Wharf-ai panel height (px), level with the dashboard bottom
-HISTORY_H = 570     # scrolling area inside the panel
+PANEL_H = SZ["panel"]       # Wharf-ai panel height (px), level with the dashboard bottom
+HISTORY_H = SZ["history"]   # scrolling area inside the panel
+TOOL_LABELS = {
+    "team_games": "listing games", "team_aggregate": "averaging team stats",
+    "correlate": "checking a correlation", "quarter_breakdown": "breaking down quarters",
+    "player_aggregate": "comparing players", "player_games": "pulling player games",
+}
 
 
 def example_prompts(season, baseline):
@@ -91,10 +102,16 @@ def chat_panel(season, baseline):
         with st.chat_message("user", avatar=AVATARS["user"]):
             st.markdown(prompt)
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
+            status = st.empty()
+            steps = []
+
+            def on_tool(name, args):
+                steps.append(TOOL_LABELS.get(name, name))
+                status.caption("Calculating: " + ", ".join(steps))
+
             try:
                 reply = st.write_stream(C.stream_answer(
-                    client, C.build_context("team", "player"), season, msgs,
-                    opening=st.session_state[key]))
+                    client, season, msgs, opening=st.session_state[key], on_tool=on_tool))
             except Exception as exc:  # show API errors instead of crashing the app
                 msgs.pop()  # keep failed turns out of the history sent next time
                 if "anthropic-workspace-id" in str(exc):
@@ -137,7 +154,7 @@ with main:
             DD.year_on_year(player_df, all_seasons)
         if st.button("Opponents", use_container_width=True):
             DD.opponents(team_df, all_seasons)
-    V.render(team_df, player_df, season, baseline)
+    V.render(team_df, player_df, season, baseline, SZ)
 
 with side, st.container(border=True, height=PANEL_H):
     chat_panel(season, baseline)
