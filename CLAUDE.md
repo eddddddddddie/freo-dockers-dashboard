@@ -69,7 +69,8 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   compute numbers with code, then explain. Never state a stat that wasn't calculated.
 - Box-score data shows what happened, not structures or zones. The bot should say so
   when a question needs data we don't have.
-- Needs an Anthropic API key read from an environment variable (ANTHROPIC_API_KEY). Never hard-code it.
+- Needs ANTHROPIC_API_KEY from the environment (never hard-code it). Multi-workspace
+  keys also need ANTHROPIC_WORKSPACE_ID (`wrkspc_...` from the console).
 
 ## Suggested stack
 Python + Streamlit + pandas + Plotly (simple to run locally), unless a better option is agreed.

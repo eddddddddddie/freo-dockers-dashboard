@@ -1,8 +1,8 @@
 """Fremantle Dockers performance dashboard.
 
 Run with:  streamlit run app.py
-The chatbot needs an Anthropic API key in the ANTHROPIC_API_KEY environment
-variable. The dashboard itself works without one.
+The chatbot needs ANTHROPIC_API_KEY. Multi-workspace keys also need
+ANTHROPIC_WORKSPACE_ID (wrkspc_...). The dashboard works without either.
 """
 
 import streamlit as st
@@ -29,6 +29,7 @@ season = st.sidebar.radio("Season", all_seasons, index=len(all_seasons) - 1)
 baseline = D.baseline_season(season, all_seasons)
 
 PAGES = {
+    "Season Overview": V.render_overview,
     "Home": V.render_home,
     "Midfield & Contest": V.render_midfield,
     "Ball Movement & Scoring": V.render_ball_movement,
@@ -45,8 +46,8 @@ else:
     st.sidebar.caption("No earlier season loaded for comparison.")
 
 # ------------------------------------------------------------- header
-subtitle = f"{season} season · {len(D.team_season(team_df, season))} games loaded"
-band(f"{page}", subtitle)
+subtitle = f"{len(D.team_season(team_df, season))} games loaded"
+band(f"{page}", subtitle, season=season)
 
 # --------------------------------------------------------- page body
 PAGES[page](team_df, player_df, season, baseline)
@@ -59,8 +60,9 @@ st.caption("Questions are answered from the loaded box-score data only. The "
 
 client = C.get_client()
 if client is None:
-    st.info("Set the ANTHROPIC_API_KEY environment variable and restart to enable "
-            "the chat assistant. The rest of the dashboard works without it.")
+    st.info("Set ANTHROPIC_API_KEY and restart to enable the chat assistant. "
+            "If your key is not scoped to a single workspace, also set "
+            "ANTHROPIC_WORKSPACE_ID (from console Settings or the API keys page).")
 else:
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -81,6 +83,15 @@ else:
                     C.stream_answer(client, context, season, st.session_state.messages)
                 )
             except Exception as exc:  # surface API errors instead of crashing the app
-                reply = f"Sorry, the assistant hit an error: {exc}"
+                err = str(exc)
+                if "anthropic-workspace-id" in err:
+                    reply = (
+                        "This API key is not tied to one workspace. Set "
+                        "ANTHROPIC_WORKSPACE_ID to your workspace ID (starts with "
+                        "wrkspc_) in the app secrets or environment, reboot the "
+                        "app, and try again."
+                    )
+                else:
+                    reply = f"Sorry, the assistant hit an error: {exc}"
                 st.error(reply)
         st.session_state.messages.append({"role": "assistant", "content": reply})

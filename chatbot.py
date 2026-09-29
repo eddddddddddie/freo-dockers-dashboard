@@ -5,7 +5,10 @@ model explains and compares those numbers but must not invent any that are not
 present. Box-score data shows what happened, not zones or structures, so the
 assistant is told to say when a question needs data we do not have.
 
-Reads ANTHROPIC_API_KEY from the environment (never hard-coded).
+Reads ANTHROPIC_API_KEY from the environment or Streamlit secrets (never
+hard-coded). Keys that are not scoped to one workspace also need
+ANTHROPIC_WORKSPACE_ID (wrkspc_...). Optional ANTHROPIC_BASE_URL for
+non-default API hosts.
 """
 
 import os
@@ -99,15 +102,37 @@ def build_context(_team_df_token, _player_df_token):
     return "\n".join(parts)
 
 
+def _setting(name):
+    """Look up a setting in the environment, then in Streamlit secrets."""
+    value = os.environ.get(name)
+    if not value:
+        try:
+            value = st.secrets.get(name)
+        except Exception:  # no secrets file configured
+            value = None
+    return str(value).strip() if value else None
+
+
 def get_client():
     """Return an Anthropic client, or None if the key or SDK is unavailable."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    api_key = _setting("ANTHROPIC_API_KEY")
+    if not api_key:
         return None
     try:
         import anthropic
     except ImportError:
         return None
-    return anthropic.Anthropic()
+    kwargs = {"api_key": api_key}
+    workspace_id = (
+        _setting("ANTHROPIC_WORKSPACE_ID")
+        or _setting("ANTHROPIC_AWS_WORKSPACE_ID")
+    )
+    if workspace_id:
+        kwargs["default_headers"] = {"anthropic-workspace-id": workspace_id}
+    base_url = _setting("ANTHROPIC_BASE_URL")
+    if base_url:
+        kwargs["base_url"] = base_url
+    return anthropic.Anthropic(**kwargs)
 
 
 def stream_answer(client, data_context, current_season, history):

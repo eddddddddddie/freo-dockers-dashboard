@@ -5,7 +5,7 @@ import streamlit as st
 
 import data as D
 import charts as CH
-from theme import COLORS
+from theme import COLORS, card_title, hero, leader_list, insight_box
 
 # Player stats offered on the Players page: label -> column.
 PLAYER_STATS = [
@@ -27,6 +27,76 @@ def _chart_with_table(fig, tdf, cols, rename, label="Show the numbers"):
     st.plotly_chart(fig, use_container_width=True)
     with st.expander(label):
         _table(tdf, cols, rename)
+
+
+# ------------------------------------------------------ Season Overview
+def render_overview(team_df, player_df, season, baseline):
+    """Card-grid overview inspired by a performance-analysis dashboard."""
+    tdf = D.team_season(team_df, season)
+    pdf = D.players_season(player_df, season)
+
+    # Row 1: Top Scorers | Possession Mix + insight
+    r1 = st.columns([1, 2])
+    with r1[0]:
+        with st.container(border=True):
+            card_title("Top Scorers")
+            gk = D.top_goalkickers(player_df, season, n=6)
+            if len(gk):
+                hero(f"{int(gk.iloc[0])}", f"goals · {gk.index[0]}")
+                st.plotly_chart(CH.top_scorers_bar(gk), use_container_width=True,
+                                config={"displayModeBar": False})
+            else:
+                st.caption("No goals recorded.")
+    with r1[1]:
+        with st.container(border=True):
+            card_title("Possession Mix")
+            mix = D.possession_mix(team_df, season)
+            inner = st.columns([2, 1])
+            with inner[0]:
+                st.plotly_chart(
+                    CH.possession_donut(mix["contested"], mix["uncontested"]),
+                    use_container_width=True, config={"displayModeBar": False})
+            with inner[1]:
+                insight_box(
+                    f"{mix['contested_pct']:.0f}%",
+                    f"of Freo's possessions are contested. They won the contested "
+                    f"count in {mix['won_games']} of {mix['games']} games this season.")
+
+    # Row 2: Output vs Baseline | Season Trends
+    r2 = st.columns([1, 2])
+    with r2[0]:
+        with st.container(border=True):
+            title = "Output vs Baseline" if baseline is None else f"Output vs {baseline}"
+            card_title(title)
+            frame = D.comparison_frame(team_df, season, baseline).head(9)
+            st.dataframe(frame, hide_index=True, width="stretch")
+    with r2[1]:
+        with st.container(border=True):
+            card_title("Season Trends")
+            labels = [m[0] for m in D.TREND_METRICS]
+            pick = st.selectbox("Metric", labels, index=0, key="trend_metric",
+                                label_visibility="collapsed")
+            _, fcol, ocol = next(m for m in D.TREND_METRICS if m[0] == pick)
+            st.plotly_chart(CH.trend_area(tdf, fcol, ocol, pick),
+                            use_container_width=True, config={"displayModeBar": False})
+
+    # Row 3: Volume vs Efficiency | Role Leaders
+    r3 = st.columns([2, 1])
+    with r3[0]:
+        with st.container(border=True):
+            card_title("Volume vs Efficiency")
+            st.caption("Inside 50s against score, per game. Wins in green, losses in red. "
+                       "We do not have shot locations, so this is the box-score view.")
+            st.plotly_chart(
+                CH.volume_efficiency_scatter(tdf, "freo_inside_50s", "freo_score",
+                                             "Inside 50s", "Score"),
+                use_container_width=True, config={"displayModeBar": False})
+    with r3[1]:
+        with st.container(border=True):
+            card_title("Role Leaders")
+            items = [(role, name, f"{games}<small> games</small>")
+                     for role, name, games in D.season_role_leaders(pdf)]
+            leader_list(items)
 
 
 # ---------------------------------------------------------------- Home

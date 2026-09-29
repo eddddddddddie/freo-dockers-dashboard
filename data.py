@@ -175,3 +175,50 @@ def role_leader_counts(pdf_season, role_col):
             counts[top["player"]] = counts.get(top["player"], 0) + 1
     s = pd.Series(counts).sort_values(ascending=False)
     return s
+
+
+def season_role_leaders(pdf_season):
+    """The player who led each role in the most games this season."""
+    out = []
+    for label, col in ROLES:
+        counts = role_leader_counts(pdf_season, col)
+        if len(counts):
+            out.append((label, counts.index[0], int(counts.iloc[0])))
+        else:
+            out.append((label, "-", 0))
+    return out
+
+
+# ---- Season Overview helpers ----------------------------------------------
+def top_goalkickers(player_df, season, n=6):
+    """Leading goalkickers for the season (total goals), highest first."""
+    pdf = players_season(player_df, season)
+    g = pdf.groupby("player")["goals"].sum()
+    g = g[g > 0].sort_values(ascending=False).head(n)
+    return g
+
+
+def possession_mix(team_df, season):
+    """Contested vs uncontested possession totals and the contested share, plus
+    how often Freo won the contested-possession count."""
+    tdf = team_season(team_df, season)
+    contested = int(tdf["freo_contested_poss"].sum())
+    uncontested = int(tdf["freo_uncontested_poss"].sum())
+    total = contested + uncontested
+    pct = contested / total * 100 if total else 0.0
+    d = differential(tdf, "freo_contested_poss", "opp_contested_poss")
+    return {
+        "contested": contested, "uncontested": uncontested, "total": total,
+        "contested_pct": pct, "won_games": d["ahead_games"], "games": len(tdf),
+    }
+
+
+# Metrics offered on the Season Trends card: label -> (freo col, opp col).
+TREND_METRICS = [
+    ("Inside 50s", "freo_inside_50s", "opp_inside_50s"),
+    ("Score", "freo_score", "opp_score"),
+    ("Disposals", "freo_disposals", "opp_disposals"),
+    ("Clearances", "freo_clearances", "opp_clearances"),
+    ("Contested poss", "freo_contested_poss", "opp_contested_poss"),
+    ("Marks", "freo_marks", "opp_marks"),
+]
