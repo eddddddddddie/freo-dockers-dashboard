@@ -67,20 +67,17 @@ def render(team_df, player_df, season, baseline, sz):
         _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), MID_H))
     with c2, card("wherewin"):
         # Win rate in games where each side won the count on that stat.
-        card_title("Where we win", keys=[("Freo won count", COLORS["freo"]),
-                                         ("Opp won count", COLORS["opp"])])
+        card_title("Where we win", keys=[("Freo won it", COLORS["freo"]),
+                                         ("Opp won it", COLORS["opp"])])
         _plot(CH.win_conditions_bars(D.win_conditions(tdf), MID_H))
     with c3, card("quarters"):
-        t, s = st.columns([1.25, 1], vertical_alignment="center")
+        t, s = st.columns([0.8, 1.2], vertical_alignment="center")
         with s:
             qview = st.segmented_control("Quarter view", ["Points", "W v L"],
                                          default="Points", key="qview",
                                          label_visibility="collapsed") or "Points"
         with t:
-            if qview == "Points":
-                card_title("Quarters", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])])
-            else:
-                card_title("Quarters", keys=[("Wins", COLORS["win"]), ("Losses", COLORS["loss"])])
+            card_title("Quarters")  # colour key sits inside the chart
         if qview == "Points":
             _plot(CH.quarter_bars(D.quarter_pattern(tdf), MID_H - 12))
         else:
@@ -115,7 +112,7 @@ def render(team_df, player_df, season, baseline, sz):
         else:
             st.caption("Not enough games yet.")
     with b3, card("drivers"):
-        card_title("What drives our margin", "correlation, not cause")
+        card_title("What drives our margin", "r, not cause")
         _plot(CH.drivers_bar(D.margin_drivers(tdf), BOT_H))
 
 

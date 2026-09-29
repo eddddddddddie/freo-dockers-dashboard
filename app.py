@@ -49,15 +49,64 @@ TOOL_LABELS = {
 }
 
 
-def example_prompts(season, baseline):
-    prompts = [
+def example_prompts(season, baseline, focus=None):
+    """Suggested questions, most useful first. The panel shows as many as fit."""
+    match = [
+        "Why did we win or lose this game?",
+        "Who were our best players in this game?",
+        "How did this game compare with our season average?",
+        "Where did the game turn, quarter by quarter?",
+    ] if focus else []
+    season_q = [
         "How do our losses differ from our wins?",
-        "Which players lift in finals?",
+        f"What has changed most since {baseline}?" if baseline else None,
+        "Which quarter do we fade in, and against whom?",
         "Where are we losing the clearance battle?",
+        "Which players are in the best form right now?",
+        "Which players lift in finals?",
+        "What do our close games have in common?",
+        "How do we perform at home versus away?",
+        "Which opponents have we struggled against?",
+        f"Who are our most improved players since {baseline}?" if baseline else None,
+        "Does winning the contested ball win us games?",
+        "How has our goal kicking accuracy trended?",
+        "Who leads our pressure acts, and does it matter?",
+        "Which players gain the most metres per game?",
+        "How did we finish the season compared with the start?",
+        "Who are our most reliable goalkickers?",
+        "Which players win the most clearances?",
+        "What happens when we lose the inside 50 count?",
+        "Who spends the most time on ground?",
     ]
-    prompts.insert(1, f"What has changed most since {baseline}?" if baseline
-                   else "Which quarter do we fade in, and against whom?")
-    return prompts
+    return match + [q for q in season_q if q]
+
+
+SIDE_SHARE = 1 / 4.55          # the chat panel's share of the window width (columns 3.55 : 1)
+CHAR_W = 6.4                   # average width of one character in panel text (px)
+
+
+def _lines(text, width):
+    return max(1, -(-int(len(text) * CHAR_W) // max(int(width), 1)))
+
+
+def fitting_prompts(prompts, insight, win_w, history_h):
+    """As many prompts as fit between the insight card and the chat box.
+    Button and insight heights are estimated from text length and the panel
+    width, since long prompts wrap onto two lines in a narrow panel."""
+    # Measured at 1440 and 1920 wide: a prompt button is 30px (50px on two
+    # lines) plus a 6px gap; the insight card is about 36px + 18px a line.
+    panel_w = (win_w - 36) * SIDE_SHARE - 34
+    used = 6 + 30 + 6 + 34 + 6                       # gaps, "Another insight", "Try asking"
+    if insight:
+        used += 36 + 18 * _lines(insight, panel_w - 26)
+    out = []
+    for q in prompts:
+        h = 30 + 20 * (_lines(q, panel_w - 22) - 1) + 6
+        if used + h > history_h:
+            continue            # too tall for what is left: a shorter one may still fit
+        used += h
+        out.append(q)
+    return out or prompts[:3]
 
 
 # ------------------------------------------------------------ Wharf-ai
@@ -97,16 +146,26 @@ def chat_panel(season, baseline, focus=None):
                 st.rerun(scope="fragment")
         clicked = None
         if not msgs:
-            st.caption("Try asking")
-            for i, q in enumerate(example_prompts(season, baseline)):
+            # Fill the panel to the bottom: as many suggestions as fit under the insight.
+            st.markdown('<div class="wa-sub">Try asking</div>', unsafe_allow_html=True)
+            shown = fitting_prompts(example_prompts(season, baseline, focus), insight,
+                                    win_w, HISTORY_H)
+            for i, q in enumerate(shown):
                 if st.button(q, key=f"ex_{i}", use_container_width=True,
                              disabled=client is None):
                     clicked = q
-        for msg in msgs:
+        for n, msg in enumerate(msgs):
             with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
                 st.markdown(msg["content"])
                 for fig_json in msg.get("charts", []):
                     _show_chart(fig_json)
+            # Follow-ups under the latest answer only.
+            if msg["role"] == "assistant" and n == len(msgs) - 1 and msg.get("followups"):
+                st.markdown('<div class="wa-sub">Ask next</div>', unsafe_allow_html=True)
+                for j, q in enumerate(msg["followups"]):
+                    if st.button(q, key=f"fu_{n}_{j}", use_container_width=True,
+                                 disabled=client is None):
+                        clicked = q
         if client is None:
             st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
                        "for multi-workspace keys) in the environment or app secrets.")
@@ -122,7 +181,7 @@ def chat_panel(season, baseline, focus=None):
             st.markdown(prompt)
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             status = st.empty()
-            steps, charts = [], []
+            steps, charts, followups = [], [], []
 
             def on_tool(name, args):
                 steps.append(TOOL_LABELS.get(name, name))
@@ -131,7 +190,8 @@ def chat_panel(season, baseline, focus=None):
             try:
                 reply = st.write_stream(C.stream_answer(
                     client, season, msgs, opening=st.session_state[key], on_tool=on_tool,
-                    on_chart=lambda fig: charts.append(fig.to_json()), focus=focus))
+                    on_chart=lambda fig: charts.append(fig.to_json()), focus=focus,
+                    on_followups=followups.extend))
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
             except Exception as exc:  # show API errors instead of crashing the app
@@ -143,7 +203,11 @@ def chat_panel(season, baseline, focus=None):
                 else:
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
-    msgs.append({"role": "assistant", "content": reply, "charts": charts})
+    if not followups:  # the model left them out: offer unasked suggestions instead
+        asked = {m["content"] for m in msgs if m["role"] == "user"}
+        followups = [q for q in example_prompts(season, baseline, focus) if q not in asked][:3]
+    msgs.append({"role": "assistant", "content": reply, "charts": charts,
+                 "followups": followups})
     # Redraw without the example prompts. A question handed over from a deep
     # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
     st.rerun() if pending and not (typed or clicked) else st.rerun(scope="fragment")

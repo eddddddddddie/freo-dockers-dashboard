@@ -14,6 +14,7 @@ non-default API hosts, and FREO_CHAT_MODEL to override the model.
 
 import json
 import os
+import re
 
 import streamlit as st
 
@@ -64,6 +65,10 @@ How to answer:
 - When a trend or ranking is easier to see than read, call show_chart (at most 2 per
   answer); the app draws it from the data below your answer text, so refer to it as
   "the chart below".
+- End every answer with one last line, in exactly this form and nothing after it:
+  FOLLOWUPS: <question> | <question> | <question>
+  Three short follow-up questions (under 10 words each) the coach might ask next, answerable
+  from this data and different from what was just asked. Plain text, no formatting.
 - Keep answers short for a coach reading a side panel: lead with the answer, then the few
   numbers that support it. Use short bullet lists rather than tables. Do not use em dashes.
 """
@@ -116,8 +121,52 @@ def _tool_input(block):
     return args if isinstance(args, dict) else None
 
 
+MARKER = "FOLLOWUPS:"
+
+
+def parse_followups(text):
+    """'a? | b? | c?' -> up to three clean questions."""
+    parts = [re.sub(r"^[\s*_\-\d.)]+|[\s*_]+$", "", p) for p in text.split("|")]
+    return [p for p in parts if 3 < len(p) < 120][:3]
+
+
+def _hold_back_marker(chunks, on_followups):
+    """Pass answer text through, but strip the trailing FOLLOWUPS line and hand
+    it to on_followups. Holds back a few characters so a marker split across
+    chunks is still caught."""
+    buf, capturing, tail = "", False, ""
+    for chunk in chunks:
+        if capturing:
+            tail += chunk
+            continue
+        buf += chunk
+        i = buf.find(MARKER)
+        if i >= 0:
+            out, tail, capturing = buf[:i].rstrip(" *_\n"), buf[i + len(MARKER):], True
+            buf = ""
+            if out:
+                yield out
+            continue
+        safe = len(buf) - (len(MARKER) - 1)
+        if safe > 0:
+            yield buf[:safe]
+            buf = buf[safe:]
+    if buf and not capturing:
+        yield buf
+    if on_followups:
+        on_followups(parse_followups(tail.strip().splitlines()[0]) if tail.strip() else [])
+
+
 def stream_answer(client, current_season, history, opening=None, on_tool=None,
-                  on_chart=None, focus=None):
+                  on_chart=None, focus=None, on_followups=None):
+    """Yield answer text (without the FOLLOWUPS line); see _stream_answer."""
+    yield from _hold_back_marker(
+        _stream_answer(client, current_season, history, opening, on_tool, on_chart, focus),
+        on_followups)
+
+
+def _stream_answer(client, current_season, history, opening=None, on_tool=None,
+                   on_chart=None, focus=None):
     """Yield answer text as it streams, running tool calls in between.
 
     history: prior turns as plain text ({"role", "content"}), ending with the

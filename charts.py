@@ -31,6 +31,16 @@ def win_conditions_bars(wc, height):
     return fig
 
 
+def _inline_key(fig, items):
+    """A one-line colour key drawn inside the chart (top left), for cards whose
+    title row has no room for one."""
+    text = "  ".join(f'<span style="color:{c}">■</span> {l}' for l, c in items)
+    fig.add_annotation(text=text, xref="paper", yref="paper", x=0, y=1.0, xanchor="left",
+                       yanchor="bottom", showarrow=False, font=dict(size=10, color=COLORS["muted"]))
+    fig.update_layout(margin=dict(t=22))
+    return fig
+
+
 def quarter_bars(qp, height):
     """Average points for and against in each quarter."""
     fig = go.Figure()
@@ -53,7 +63,7 @@ def quarter_bars(qp, height):
                       margin=dict(l=4, r=6, t=8, b=4))
     top = max(qp["freo"].max(), qp["opp"].max())
     fig.update_yaxes(range=[0, top * 1.22])
-    return fig
+    return _inline_key(fig, [("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])])
 
 
 # One-hue sequential purple, light to dark.
@@ -164,7 +174,7 @@ def running_margin_lines(rm, height):
     lo, hi = float(rm[qs].min().min()), float(rm[qs].max().max())
     pad = (hi - lo) * 0.18 or 5
     fig.update_yaxes(range=[min(lo, 0) - pad, max(hi, 0) + pad])
-    return fig
+    return _inline_key(fig, [("Wins", COLORS["win"]), ("Losses", COLORS["loss"])])
 
 
 def player_map(pa, xcol, ycol, xlab, ylab, size_col, height, n_labels=10):

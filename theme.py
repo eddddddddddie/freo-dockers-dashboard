@@ -1,7 +1,9 @@
 """Colours, Plotly styling, CSS and HTML components for the Coach View.
 
-Purple and white theme on a grey canvas with white cards, packed to fit one
-1440x900 screen with no page scroll. The categorical pair (Freo purple,
+Styled after the club website's look (flat deep purple #331C54 header and
+navigation, #F7F7F7 page, white cards with a soft shadow, bold Inter headings
+in sentence case, purple-to-maroon match card), without any club logo, crest,
+photos or other trademarks. Data colours stay the validated pair below. The categorical pair (Freo purple,
 opposition orange) was validated for lightness, chroma, colour-vision
 separation and contrast on a light surface. Colour follows the entity (Freo is
 always purple), never rank. No club logo or trademarks.
@@ -19,11 +21,11 @@ COLORS = {
     "ink": "#1F2937",
     "muted": "#6B7280",
     "grid": "#E7E3EF",
-    "brand": "#2A0A4A",    # deep Freo purple (header band)
+    "brand": "#331C54",    # deep Freo purple, as on the club site (header band, nav)
     "spark": "#B8A6DC",    # sparkline de-emphasis hue
 }
 
-FONT = "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+FONT = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
 
 
 def style_fig(fig, y_title="", unified=True, height=240):
@@ -52,6 +54,14 @@ def inject_css():
     st.markdown(
         """
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+          :root { --brand:#331C54; --brand-2:#4A2A78; --maroon:#5E1A3F; --ink:#1A1A1A;
+                  --muted:#525252; --line:#E6E6E6; --canvas:#F7F7F7; }
+          html, body, .stApp, .stApp button, .stApp input, .stApp textarea, .stApp select,
+          .stApp [data-testid="stMarkdownContainer"], .stApp [data-baseweb] {
+            font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+          .stApp { background:var(--canvas); color:var(--ink); }
+
           /* One screen: no Streamlit chrome, tight padding and gaps. */
           header[data-testid="stHeader"], footer, #MainMenu,
           [data-testid="stToolbar"], [data-testid="stDecoration"],
@@ -64,33 +74,35 @@ def inject_css():
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
           div[class*="st-key-card_"],
           div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:#FFFFFF; border:1px solid #E7E3EF !important; border-radius:10px;
-            box-shadow:0 1px 2px rgba(42,10,74,.06);
+            background:#FFFFFF; border:1px solid var(--line) !important; border-radius:8px;
+            box-shadow:0 1px 3px rgba(0,0,0,.07);
           }
           div[class*="st-key-card_"] { gap:2px; }
           div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
           .st-key-deep_dive [data-baseweb="select"] * { font-size:.8rem; }
           .card-title {
-            text-transform:uppercase; letter-spacing:.07em; font-size:.66rem;
-            font-weight:700; color:#6D28D9; margin:0; line-height:1.6;
+            font-size:.82rem; font-weight:700; letter-spacing:-.2px; color:var(--ink);
+            margin:0; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
           }
-          .card-title span { color:#9CA3AF; font-weight:600; text-transform:none; letter-spacing:0; }
-          .card-title .key { color:#4B5563; margin-left:10px; white-space:nowrap; }
+          .card-title span { color:var(--muted); font-weight:400; font-size:.7rem; letter-spacing:0; }
+          .card-title .key { color:var(--muted); margin-left:8px; white-space:nowrap; font-size:.66rem; font-weight:500; }
           .card-title .key i { display:inline-block; width:9px; height:9px; border-radius:2px;
             margin-right:4px; vertical-align:-1px; }
 
           /* Header band */
           .cv-band {
-            background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 60%,#6D28D9 100%);
-            color:#fff; border-radius:10px; padding:7px 14px; height:52px;
+            background:var(--brand);
+            color:#fff; border-radius:8px; padding:7px 14px; height:52px;
             display:flex; align-items:center; gap:clamp(10px, 1.2vw, 22px); overflow:hidden;
           }
-          .cv-band .ttl { font-weight:700; font-size:1.05rem; white-space:nowrap; }
-          .cv-band .ttl small { display:block; font-weight:500; font-size:.66rem; color:#C4B5FD; }
+          .cv-band .ttl { font-weight:800; font-size:1.08rem; letter-spacing:-.3px; white-space:nowrap; }
+          .cv-band .ttl small { display:block; font-weight:500; font-size:.66rem; letter-spacing:0;
+            color:rgba(255,255,255,.72); }
+          .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
           .cv-stat { line-height:1.05; white-space:nowrap; }
           .cv-stat b { font-size:1.08rem; font-weight:700; }
-          .cv-stat span { display:block; font-size:.62rem; letter-spacing:.08em;
-            text-transform:uppercase; color:#C4B5FD; }
+          .cv-stat span { display:block; font-size:.62rem; letter-spacing:.04em;
+            text-transform:uppercase; color:rgba(255,255,255,.72); }
           .cv-form { display:flex; gap:3px; }
           .cv-form i { font-style:normal; font-size:.66rem; font-weight:700; width:20px;
             height:20px; border-radius:4px; display:flex; align-items:center;
@@ -98,22 +110,22 @@ def inject_css():
 
           /* Headline tiles */
           .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
-          .cv-tile { background:#fff; border:1px solid #E7E3EF; border-radius:10px;
-            padding:6px 8px 4px; min-width:0; box-shadow:0 1px 2px rgba(42,10,74,.06); }
-          .cv-tile .lbl { font-size:.66rem; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-          .cv-tile .val { font-size:1.15rem; font-weight:650; color:#2A0A4A; line-height:1.15; }
+          .cv-tile { background:#fff; border:1px solid var(--line); border-radius:8px;
+            padding:6px 8px 4px; min-width:0; box-shadow:0 1px 3px rgba(0,0,0,.07); }
+          .cv-tile .lbl { font-size:.68rem; font-weight:600; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .cv-tile .val { font-size:1.15rem; font-weight:800; letter-spacing:-.4px; color:var(--ink); line-height:1.15; }
           .cv-tile .dlt { font-size:.64rem; font-weight:600; margin-left:3px; white-space:nowrap; }
           .cv-tile svg { display:block; width:100%; height:22px; margin-top:1px; }
 
           /* Role leaders */
           .cv-lead { display:flex; justify-content:space-between; align-items:center;
-            padding:2px 0; border-bottom:1px solid #F3F0F9; }
+            padding:2px 0; border-bottom:1px solid #EFEFEF; }
           .cv-lead:last-child { border-bottom:none; }
-          .cv-lead .role { color:#7C3AED; font-size:.6rem; text-transform:uppercase;
-            letter-spacing:.06em; font-weight:700; }
-          .cv-lead .name { font-weight:600; font-size:.84rem; color:#1F2937; line-height:1.2; }
-          .cv-lead .num { text-align:right; font-weight:700; color:#2A0A4A; font-size:.95rem; line-height:1.1; }
-          .cv-lead .num small { display:block; color:#9CA3AF; font-weight:500; font-size:.62rem; }
+          .cv-lead .role { color:var(--brand); font-size:.6rem; text-transform:uppercase;
+            letter-spacing:.05em; font-weight:700; }
+          .cv-lead .name { font-weight:700; font-size:.84rem; color:var(--ink); line-height:1.2; letter-spacing:-.1px; }
+          .cv-lead .num { text-align:right; font-weight:800; color:var(--ink); font-size:.95rem; line-height:1.1; }
+          .cv-lead .num small { display:block; color:var(--muted); font-weight:400; font-size:.62rem; }
 
           /* Compact segmented controls */
           div[data-testid="stButtonGroup"] button { min-height:28px; padding:2px 9px; }
@@ -128,16 +140,17 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .wa-insight),
           div[data-testid="stMarkdownContainer"]:has(> .card-title),
           div[data-testid="stMarkdownContainer"]:has(> .cv-lead),
-          div[data-testid="stMarkdownContainer"]:has(> .tp) { margin-bottom:0 !important; }
+          div[data-testid="stMarkdownContainer"]:has(> .tp),
+          div[data-testid="stMarkdownContainer"]:has(> .wa-sub) { margin-bottom:0 !important; }
 
           /* Opponents grid (deep dive) */
           .op-wrap { max-height:470px; overflow-y:auto; margin-bottom:12px; }
           .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
           .op-grid th { text-align:left; font-size:.64rem; text-transform:uppercase; letter-spacing:.07em;
-            color:#6D28D9; padding:4px 6px; border-bottom:1px solid #E7E3EF; position:sticky; top:0; background:#fff; }
+            color:var(--brand); padding:4px 6px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
           .op-grid td { padding:4px 6px; border-bottom:1px solid #F3F0F9; vertical-align:middle; }
           .op-name { font-weight:600; white-space:nowrap; }
-          .op-num { font-weight:700; color:#2A0A4A; white-space:nowrap; }
+          .op-num { font-weight:700; color:var(--ink); white-space:nowrap; }
           .op-chip { display:inline-block; color:#fff; border-radius:4px; padding:1px 6px; margin:1px 3px 1px 0;
             font-size:.7rem; font-weight:600; white-space:nowrap; }
 
@@ -147,45 +160,53 @@ def inject_css():
 
           /* Login */
           .login-head { margin:18vh 0 14px; text-align:center; }
-          .login-head b { display:block; font-size:1.4rem; color:#2A0A4A; }
-          .login-head span { color:#6B7280; font-size:.9rem; }
+          .login-head b { display:block; font-size:1.5rem; font-weight:800; letter-spacing:-.5px; color:var(--ink); }
+          .login-head span { color:var(--muted); font-size:.9rem; }
 
-          @media (max-width: 1380px) { .cv-band .opt { display:none; } }
+          @media (max-width: 1500px) { .cv-band .opt { display:none; } }
+          @media (max-width: 1380px) { .cv-band { gap:9px; padding:7px 10px; }
+            .cv-band .cv-stat b { font-size:.94rem; } .cv-band .ttl { font-size:.98rem; } }
 
           /* Match mode */
-          .cv-res { font-style:normal; font-size:.8rem; padding:2px 8px; border-radius:5px; }
+          .cv-res { font-style:normal; font-size:.72rem; font-weight:700; padding:2px 9px; border-radius:999px;
+            text-transform:uppercase; letter-spacing:.04em; }
           .tp { display:flex; flex-direction:column; gap:4px; margin-top:2px; }
           .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px; }
-          .tp-f, .tp-o { font-weight:700; font-size:.85rem; color:#2A0A4A; }
+          .tp-f, .tp-o { font-weight:800; font-size:.85rem; color:var(--ink); }
           .tp-f { text-align:right; } .tp-o { color:#9A4A0E; }
-          .tp-lbl { font-size:.72rem; color:#4B5563; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .tp-lbl { font-size:.72rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .tp-bar { position:relative; height:9px; border-radius:5px; background:#C25E12; overflow:visible; }
           .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:#7C3AED; border-radius:5px 0 0 5px; }
           .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:#1F2937; margin-left:-1px; }
 
           /* Quarter-time check */
-          .qt-big { font-size:2.6rem; font-weight:800; color:#2A0A4A; line-height:1; margin-top:6px; }
+          .qt-big { font-size:2.6rem; font-weight:800; letter-spacing:-1px; color:var(--ink); line-height:1; margin-top:6px; }
           .qt-sub { color:#6B7280; font-size:.85rem; margin:4px 0 10px; }
           .qt-line { font-size:.9rem; color:#1F2937; margin:3px 0; }
-          .qt-line b { color:#4C1D95; }
+          .qt-line b { color:var(--brand); }
 
           /* Wharf-ai panel */
-          .wa-head { background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 70%,#6D28D9 100%);
+          .wa-head { background:var(--brand);
             color:#fff; border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:9px; }
           .wa-head .dot { width:30px; height:30px; border-radius:50%; border:1.5px solid #fff; }
-          .wa-head b { font-size:1rem; letter-spacing:.2px; }
-          .wa-head span { display:block; font-size:.64rem; color:#C4B5FD; }
-          .wa-insight { background:#F5F1FB; border-left:4px solid #7C3AED; border-radius:8px;
+          .wa-head b { font-size:1rem; font-weight:800; letter-spacing:-.2px; }
+          .wa-head span { display:block; font-size:.64rem; color:rgba(255,255,255,.72); }
+          .wa-insight { background:#F4F1F8; border-left:4px solid var(--brand); border-radius:8px;
             padding:9px 11px; font-size:.82rem; line-height:1.4; color:#1F2937; }
           .wa-insight .tag { font-size:.6rem; font-weight:700; letter-spacing:.08em;
-            text-transform:uppercase; color:#7C3AED; margin-bottom:3px; }
-          .wa-insight b { color:#2A0A4A; }
+            text-transform:uppercase; color:var(--brand); margin-bottom:3px; }
+          .wa-insight b { color:var(--ink); }
           [data-testid="stChatMessage"] { padding:6px 4px; }
           [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li { font-size:.84rem; }
 
           div[data-testid="stButton"] button { min-height:30px; border-radius:8px; padding:4px 10px;
-            justify-content:flex-start; text-align:left; }
-          div[data-testid="stButton"] button p { font-size:.78rem; }
+            justify-content:flex-start; text-align:left; background:#fff; border:1px solid var(--line); }
+          div[data-testid="stButton"] button:hover { border-color:var(--brand); color:var(--brand); }
+          div[data-testid="stButton"] button p { font-size:.78rem; font-weight:500; text-align:left; }
+          div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
+          div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
+          div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
+          .wa-sub { font-size:.7rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -333,7 +354,7 @@ def match_band(game, venue_date):
     color = COLORS["win"] if game["result"] == "W" else COLORS["loss"]
     fq, oq = game["freo_qtrs"].split()[-1], game["opp_qtrs"].split()[-1]
     st.markdown(
-        f'<div class="cv-band"><div class="ttl">{html.escape(game["round"])} v '
+        f'<div class="cv-band match"><div class="ttl">{html.escape(game["round"])} v '
         f'{html.escape(game["opponent"])}<small>{html.escape(venue_date)}</small></div>'
         f'<div class="cv-stat"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
         f'<span>{html.escape(game["type"])}</span></div>'

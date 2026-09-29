@@ -131,7 +131,12 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (`card_title(keys=...)`) because Plotly legends stack vertically at that width.
 
 ## Chatbot (Wharf-ai)
-- Named Wharf-ai; right-hand panel with example prompts. It opens with an insight from
+- Named Wharf-ai; right-hand panel. With no messages it shows as many suggested prompts as fit
+  under the insight (`app.fitting_prompts` estimates each button's height from its length and the
+  panel width, calibrated at 1440 and 1920 wide); match mode leads with match questions. Every
+  answer ends with a hidden `FOLLOWUPS: q | q | q` line that `chatbot._hold_back_marker` strips
+  from the streamed text; the three show as "Ask next" buttons under the latest answer (unasked
+  suggestions are used if the model leaves the line out). It opens with an insight from
   `insights.py`: a pool of facts computed with pandas (win-rate swing by stat, best quarter, close
   games, home vs away, accuracy in wins vs losses, biggest change vs baseline, player in form,
   centre vs stoppage clearances), one picked at random per page open and per season. No LLM
@@ -162,7 +167,12 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 Python + Streamlit + pandas + Plotly (simple to run locally), unless a better option is agreed.
 
 ## Style and constraints
-- Freo-style purple and white theme. Do NOT use the Fremantle club logo or other trademarks.
+- Styled after fremantlefc.com.au's look: flat deep purple #331C54 header / nav / Wharf-ai head,
+  #F7F7F7 page, white cards (8px radius, soft shadow), Inter (Google Fonts) with bold
+  sentence-case titles, purple-to-maroon match band with a pill for the result. Palette in CSS
+  variables at the top of `theme.inject_css`. Data colours (Freo #7C3AED, opp #C25E12) stay the
+  validated pair; #331C54 is too dark for data marks. Do NOT use the Fremantle club logo, crest,
+  photos, fonts files or other trademarks.
 - Sanity-check every displayed number (e.g. kicks + handballs = disposals; % change maths).
 - In written text and UI copy, don't use em dashes.
 

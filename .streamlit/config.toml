@@ -1,10 +1,10 @@
-# Fremantle Dockers purple and white theme. No club logo or trademarks used.
-# Grey canvas + white cards (card-grid look inspired by a performance dashboard).
+# Fremantle Dockers purple and white theme, after the club site's look
+# (deep purple #331C54, #F7F7F7 page, white cards). No club logo or trademarks.
 [theme]
-primaryColor = "#7C3AED"
-backgroundColor = "#F1F0F4"
+primaryColor = "#331C54"
+backgroundColor = "#F7F7F7"
 secondaryBackgroundColor = "#FFFFFF"
-textColor = "#1F2937"
+textColor = "#1A1A1A"
 font = "sans serif"
 
 [server]
