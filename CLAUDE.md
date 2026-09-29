@@ -27,8 +27,13 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
     bounces, goal_assists, pct_played.
   - `freo_team_games.csv`: one row per game, Freo totals (`freo_*`) vs opposition totals (`opp_*`),
     plus scores, quarter-by-quarter scoring strings, crowd.
-- The scraper has not yet been run against the live site. First task: run it, fix any
-  parsing warnings it prints, and confirm row counts look right (about 23 players x 27 games for 2026).
+- Scraped 2026-09-29 with no warnings: 51 games (2025: 24, 2026: 27), 23 players per game, 1173 player rows.
+  Player sums match team totals, score = 6 x goals + behinds, and margin = freo_score - opp_score.
+- Data quirks to handle in the dashboard:
+  - Team `freo_behinds`/`opp_behinds` include rushed behinds; summed player behinds don't. Use team totals for goal accuracy.
+  - AFL Tables doesn't mark substitutes on 2026 pages, so `sub` is blank for all of 2026. Don't infer subs
+    from low `pct_played` (ruckmen routinely play around 45%).
+  - Round labels are AFL Tables' own, and neither season has an R1.
 - Not available from AFL Tables: metres gained, pressure acts, score involvements, shot
   locations, xG. Footywire could add some advanced stats later. Do not invent these.
 
