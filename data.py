@@ -657,3 +657,129 @@ def opponent_grid(team_df):
         out.append({"opponent": opp, "wins": w, "losses": len(g) - w,
                     "avg_margin": g["margin"].mean(), "games": games})
     return sorted(out, key=lambda r: r["avg_margin"])
+
+
+# ---- League data and the opponent scout report ---------------------------------
+LEAGUE_CSV = "league_team_games.csv"
+# Stats compared across the league: label -> (column, higher is better).
+SCOUT_STATS = [
+    ("Inside 50s", "inside50s", True), ("Contested poss", "contested_possessions", True),
+    ("Centre clearances", "centre_clearances", True),
+    ("Stoppage clearances", "stoppage_clearances", True),
+    ("Metres gained", "metres_gained", True), ("Tackles", "tackles", True),
+    ("Pressure acts", "pressure_acts", True), ("Intercepts", "intercepts", True),
+    ("Turnovers", "turnovers", False), ("Scoring shots", "scoring_shots", True),
+    ("Points against", "score_against", False),
+]
+
+
+@st.cache_data
+def load_league():
+    """Every club's games, one row per team per match, with the opposition's
+    totals alongside (opp_*) and differentials (diff_*). None if not scraped."""
+    if not os.path.exists(LEAGUE_CSV):
+        return None
+    lg = pd.read_csv(LEAGUE_CSV)
+    lg["scoring_shots"] = lg["goals_for"] + lg["behinds_for"]
+    stats = [c for c in lg.columns if c not in (
+        "season", "api_round", "round_number", "is_final", "date_local", "utc_date", "match_id",
+        "venue", "team", "opponent", "is_home", "result", "margin") and not c.startswith("q")
+        and not c.endswith("_against") and not c.endswith("_for")] + [
+        "goals_for", "behinds_for"]
+    stats = list(dict.fromkeys(stats))  # scoring_shots is already in the list
+    opp = lg[["match_id", "team"] + stats].rename(
+        columns={"team": "opponent", **{c: f"opp_{c}" for c in stats}})
+    lg = lg.merge(opp, on=["match_id", "opponent"], how="left")
+    diffs = pd.DataFrame({f"diff_{c}": lg[c] - lg[f"opp_{c}"] for c in stats})
+    lg = pd.concat([lg, diffs], axis=1)  # one concat, not a column at a time
+    lg["win"] = (lg["result"] == "W").astype(int)
+    lg["accuracy"] = lg["goals_for"] / lg["scoring_shots"].replace(0, pd.NA) * 100
+    lg["game_dt"] = pd.to_datetime(lg["date_local"])
+    return lg.sort_values("game_dt").reset_index(drop=True)
+
+
+def ladder(lg, season):
+    """Ladder from the home and away results: 4 points a win, 2 a draw,
+    percentage = points for / points against x 100."""
+    g = lg[(lg["season"] == season) & (~lg["is_final"])]
+    t = g.groupby("team").agg(played=("result", "size"), wins=("win", "sum"),
+                              draws=("result", lambda r: int((r == "D").sum())),
+                              pf=("score_for", "sum"), pa=("score_against", "sum"))
+    t["losses"] = t["played"] - t["wins"] - t["draws"]
+    t["points"] = 4 * t["wins"] + 2 * t["draws"]
+    t["pct"] = t["pf"] / t["pa"] * 100
+    t = t.sort_values(["points", "pct"], ascending=False)
+    t["position"] = range(1, len(t) + 1)
+    return t
+
+
+def team_ranks(lg, season):
+    """Per game average of each scout stat for every club, and its league rank
+    (1 = best, taking 'higher is better' into account)."""
+    g = lg[lg["season"] == season]
+    avg = g.groupby("team")[[c for _, c, _ in SCOUT_STATS]].mean()
+    ranks = pd.DataFrame({c: avg[c].rank(ascending=not better, method="min")
+                          for _, c, better in SCOUT_STATS})
+    return avg, ranks
+
+
+def scout_tiles(lg, team, season, freo="Fremantle"):
+    """Headline numbers for a club: value, league rank, and Freo's value."""
+    g = lg[lg["season"] == season]
+    per = g.groupby("team")
+    specs = [
+        ("Avg margin", per["margin"].mean(), True, "{:+.1f}"),
+        ("Inside 50 diff", per["diff_inside50s"].mean(), True, "{:+.1f}"),
+        ("Contested poss diff", per["diff_contested_possessions"].mean(), True, "{:+.1f}"),
+        ("Clearance diff", per["diff_total_clearances"].mean(), True, "{:+.1f}"),
+        ("Metres gained diff", per["diff_metres_gained"].mean(), True, "{:+.0f}"),
+        ("Pressure acts diff", per["diff_pressure_acts"].mean(), None, "{:+.1f}"),
+        ("Goal accuracy", per["goals_for"].sum() / per["scoring_shots"].sum() * 100, True, "{:.1f}%"),
+        ("Points against", per["score_against"].mean(), False, "{:.1f}"),
+    ]
+    out = []
+    for label, series, better, fmt in specs:
+        rank = series.rank(ascending=better is False, method="min") if better is not None else None
+        out.append({"label": label, "value": fmt.format(series[team]),
+                    "freo": fmt.format(series[freo]) if freo in series else "-",
+                    "rank": int(rank[team]) if rank is not None else None,
+                    "series": g[g["team"] == team]["margin"].tolist()})
+    return out
+
+
+def scout_win_conditions(lg, team, season):
+    """Win rate for a club when it wins vs loses the count on each stat."""
+    g = lg[(lg["season"] == season) & (lg["team"] == team)]
+    rows = []
+    for label, col in [("Centre clearances", "centre_clearances"),
+                       ("Stoppage clearances", "stoppage_clearances"),
+                       ("Contested poss", "contested_possessions"), ("Inside 50s", "inside50s"),
+                       ("Pressure acts", "pressure_acts"), ("Metres gained", "metres_gained"),
+                       ("Disposals", "disposals")]:
+        ahead, behind = g[g[f"diff_{col}"] > 0], g[g[f"diff_{col}"] < 0]
+        rows.append({"stat": label, "ahead_games": len(ahead), "behind_games": len(behind),
+                     "ahead_winrate": ahead["win"].mean() * 100 if len(ahead) else None,
+                     "behind_winrate": behind["win"].mean() * 100 if len(behind) else None})
+    return pd.DataFrame(rows)
+
+
+def scout_quarters(lg, team, season):
+    """A club's average points for and against in each quarter."""
+    g = lg[(lg["season"] == season) & (lg["team"] == team)].dropna(subset=["q4_for"])
+    cum_f = g[[f"q{i}_for" for i in range(1, 5)]].to_numpy()
+    cum_a = g[[f"q{i}_against" for i in range(1, 5)]].to_numpy()
+    f = pd.DataFrame(cum_f - pd.DataFrame(cum_f).shift(axis=1, fill_value=0).to_numpy(),
+                     columns=["Q1", "Q2", "Q3", "Q4"])
+    a = pd.DataFrame(cum_a - pd.DataFrame(cum_a).shift(axis=1, fill_value=0).to_numpy(),
+                     columns=["Q1", "Q2", "Q3", "Q4"])
+    return pd.DataFrame({"quarter": f.columns, "freo": f.mean().values, "opp": a.mean().values,
+                         "margin": (f - a).mean().values, "won": (f > a).sum().values,
+                         "games": len(f)})
+
+
+def head_to_head(team_df, team):
+    """Every Freo game against a club, both seasons, newest first."""
+    g = team_df[team_df["opponent"] == team].sort_values("game_dt", ascending=False)
+    cols = ["season", "round", "type", "venue", "result", "freo_score", "opp_score", "margin",
+            "freo_inside_50s", "opp_inside_50s", "freo_contested_poss", "opp_contested_poss"]
+    return g[[c for c in cols if c in g.columns]]

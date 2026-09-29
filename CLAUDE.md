@@ -13,6 +13,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Advanced stats: `python afl_api_scraper.py 2025 2026` (same defaults, about 3 minutes for both
   seasons). Writes `freo_player_games_ext.csv` and `freo_team_games_ext.csv`. Optional: the
   dashboard runs on the AFL Tables CSVs alone and hides the extra stats.
+- League data (opponent scout report, ladder): `python league_scraper.py 2025 2026` (about 22
+  minutes: 2 requests a match for ~430 matches). Writes `league_team_games.csv`, one row per team
+  per match, team totals summed from player stats, cumulative quarter scores (the API's
+  `periodScore` is per quarter, so it is summed). Checks Fremantle rows against AFL Tables.
+- Tests: `pip install -r requirements-dev.txt`, then `pytest -m "not ui"` (data rules, Wharf-ai
+  tools vs plain pandas, login, usage cap, insights, headless app start via AppTest) and
+  `pytest -m ui` (Playwright: one-screen fit in every view at 1440x790, 1920x960, 1280x680,
+  1680x950). `.github/workflows/checks.yml` runs both on every push with a test-only login.
+  Locally the tests sign in with the login in `.streamlit/secrets.toml`, because Streamlit copies
+  secrets into the environment at startup and overrides anything set before.
+- Wharf-ai accuracy eval: `python evals/wharf_eval.py` (27 questions, 2 of them league, expected answers computed
+  with plain pandas, deterministic grading; spends real money, about US$0.20 a run; results in
+  `evals/results/`, gitignored). Run it after any change to the prompt, tools or model.
 - Check the merge: `python -c "import data; data.ext_check()"` (coverage, surname mismatches,
   and where the two sources disagree on shared stats).
 - Run: `streamlit run app.py`. There are no tests or linter config.
@@ -94,6 +107,16 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 - Header: season toggle (2025 / 2026), Season/Match view switch, Deep dives dropdown, and a band
   with record, win rate, avg for/against/margin, last 5, data freshness (the two averages hide
   below 1380px wide).
+- Scout mode (`views.render_scout`, needs league_team_games.csv): pick any club (defaults to the
+  last opponent); band with home and away record, ladder spot (computed: 4 points a win, 2 a draw,
+  percentage) and form; tiles with the club's value, league rank and Freo's value; style vs league
+  (rank of 18 on each stat, club vs Freo); how they win; their quarters; their last 14 games;
+  every Freo game against them. Wharf-ai gets `league_aggregate` and `ladder` tools.
+- First-visit tour (`tour.py`, `components/tour`): driver.js 1.8.0 from jsDelivr, loaded into the
+  app page; 13 steps spotlighting each part; runs once per browser (localStorage
+  `freoCoachTourDone_v1`), replay from Deep dives -> App tour. It waits until every target card
+  has rendered, and never starts over a running tour. The CSS that hides Streamlit's footer must
+  not match `footer` generally: driver.js draws its buttons in a `<footer>`.
 - Match mode (`views.render_match`): pick one game (most recent first); the band shows the score
   line; tiles show this game against the season average (sparkline accents that game); tale of the
   tape (Freo vs opposition share per stat, tick at Freo's season average share); game flow (running
@@ -141,6 +164,11 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   games, home vs away, accuracy in wins vs losses, biggest change vs baseline, player in form,
   centre vs stoppage clearances), one picked at random per page open and per season. No LLM
   writes the insight, so it works without an API key. The shown insight is passed to the model.
+- Daily cap and usage log (`usage.py`): every question is logged to SQLite (question, tools,
+  steps, tokens, estimated cost at Sonnet 5.5 prices); `WHARF_DAILY_CAP` (default 50) per day,
+  shared by everyone, resets at midnight Perth time; shown in the panel header; log in Deep dives
+  -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
+  starts again after a restart or redeploy.
 - Avatars are generic SVGs in `assets/` (no club marks): `supporter.svg` (user, purple on white,
   bobble beanie) and `anchor.svg` (Wharf-ai, white on purple anchor with eyes).
 - Answers must be grounded in the loaded CSVs: compute numbers with code, then explain. Never

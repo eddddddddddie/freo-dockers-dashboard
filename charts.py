@@ -5,13 +5,15 @@ two or more series."""
 import plotly.graph_objects as go
 from theme import COLORS, style_fig
 
+import data as D
 
 
-def win_conditions_bars(wc, height):
-    """Win rate when Freo win vs lose the count on each stat."""
+
+def win_conditions_bars(wc, height, names=("Freo won it", "Opp won it"), colors=None):
+    """Win rate when a side wins vs loses the count on each stat."""
+    colors = colors or (COLORS["freo"], COLORS["opp"])
     fig = go.Figure()
-    for key, name, color in [("ahead", "Freo won it", COLORS["freo"]),
-                             ("behind", "Opp won it", COLORS["opp"])]:
+    for key, name, color in [("ahead", names[0], colors[0]), ("behind", names[1], colors[1])]:
         rate = wc[f"{key}_winrate"]
         n = wc[f"{key}_games"]
         fig.add_trace(go.Bar(
@@ -41,17 +43,18 @@ def _inline_key(fig, items):
     return fig
 
 
-def quarter_bars(qp, height):
-    """Average points for and against in each quarter."""
+def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None):
+    """Average points for and against in each quarter. names/colors let the
+    scout report show an opponent (orange) against the teams it played (grey)."""
+    colors = colors or (COLORS["freo"], COLORS["opp"])
     fig = go.Figure()
-    for col, name, color in [("freo", "Fremantle", COLORS["freo"]),
-                             ("opp", "Opposition", COLORS["opp"])]:
+    for col, name, color in [("freo", names[0], colors[0]), ("opp", names[1], colors[1])]:
         fig.add_trace(go.Bar(
             x=qp["quarter"], y=qp[col], name=name,
             marker=dict(color=color, cornerradius=3),
             customdata=qp[["margin", "won", "games"]].values,
             hovertemplate="%{x} " + name + ": <b>%{y:.1f}</b> pts avg<br>"
-                          "Freo won %{customdata[1]} of %{customdata[2]} "
+                          + names[0].split()[0] + " won %{customdata[1]} of %{customdata[2]} "
                           "(avg %{customdata[0]:+.1f})<extra></extra>",
         ))
     for _, r in qp.iterrows():
@@ -63,7 +66,8 @@ def quarter_bars(qp, height):
                       margin=dict(l=4, r=6, t=8, b=4))
     top = max(qp["freo"].max(), qp["opp"].max())
     fig.update_yaxes(range=[0, top * 1.22])
-    return _inline_key(fig, [("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])])
+    short = [n if len(n) <= 10 else D.abbr(n) for n in names]
+    return _inline_key(fig, [(short[0], colors[0]), (short[1], colors[1])])
 
 
 # One-hue sequential purple, light to dark.
@@ -345,4 +349,47 @@ def answer_chart(series, title, y_title, kind="line", height=210):
         fig.update_xaxes(showticklabels=False, showgrid=False)
     else:
         fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
+    return fig
+
+
+# ---- Opponent scout report ------------------------------------------------------
+def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle"):
+    """League rank (18th on the left, 1st on the right) on each stat for the
+    opponent (orange) and Freo (purple), joined by a line."""
+    fig = go.Figure()
+    labels = [l for l, _, _ in stats]
+    for (label, col, _), y in zip(stats, labels):
+        a, b = ranks.loc[team, col], ranks.loc[freo, col]
+        fig.add_trace(go.Scatter(x=[a, b], y=[y, y], mode="lines", hoverinfo="skip",
+                                 line=dict(color=COLORS["grid"], width=4), showlegend=False))
+    for name, who, color in [(team, team, COLORS["opp"]), ("Fremantle", freo, COLORS["freo"])]:
+        fig.add_trace(go.Scatter(
+            x=[ranks.loc[who, c] for _, c, _ in stats], y=labels, mode="markers", name=name,
+            marker=dict(size=11, color=color, line=dict(color="#FFFFFF", width=2)),
+            customdata=[[avg.loc[who, c]] for _, c, _ in stats],
+            hovertemplate=f"{name}<br>%{{y}}: %{{customdata[0]:.1f}} a game<br>"
+                          "Rank %{x:.0f} of 18<extra></extra>"))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=8, t=22, b=4))
+    fig.update_xaxes(range=[18.6, 0.4], tickvals=[18, 12, 6, 1],
+                     ticktext=["18th", "12th", "6th", "1st"], showgrid=True, gridcolor=COLORS["grid"])
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11))
+    return _inline_key(fig, [(team, COLORS["opp"]), ("Fremantle", COLORS["freo"])])
+
+
+def form_bars(games, height):
+    """A club's margin in each of its recent games, green win / red loss."""
+    colors = [COLORS["win"] if r == "W" else COLORS["loss"] for r in games["result"]]
+    x = (games["api_round"].str.replace("Round ", "R", regex=False)
+         .str.replace(r"^(\w)\w* .*Finals?$", r"\1F", regex=True) + " " +
+         games["opponent"].map(D.abbr)).tolist()
+    fig = go.Figure(go.Bar(
+        x=x, y=games["margin"], marker=dict(color=colors, cornerradius=3),
+        customdata=games[["opponent", "score_for", "score_against"]].values,
+        hovertemplate="%{x} v %{customdata[0]}<br>%{customdata[1]} to %{customdata[2]} "
+                      "(%{y:+})<extra></extra>"))
+    fig = style_fig(fig, "Margin", unified=False, height=height)
+    fig.update_layout(showlegend=False, bargap=0.2, margin=dict(l=4, r=6, t=6, b=4))
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
+    fig.update_yaxes(zeroline=True, zerolinecolor=COLORS["grid"])
     return fig

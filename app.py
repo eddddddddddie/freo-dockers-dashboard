@@ -18,7 +18,8 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import inject_css, header_band, match_band, chat_header, insight_card
+from theme import (inject_css, header_band, match_band, scout_band, chat_header,
+                   insight_card)
 import auth
 import layout
 import data as D
@@ -26,10 +27,13 @@ import views as V
 import chatbot as C
 import insights as I
 import deepdives as DD
+import usage as U
+import tour
 
 inject_css()
 auth.require_login()          # stops here until signed in
 win_w, win_h = layout.window_size()
+tour.show()                   # first-visit walkthrough (once per browser)
 SZ = layout.sizes(win_h, win_w)
 
 team_df = D.load_team()
@@ -51,6 +55,17 @@ TOOL_LABELS = {
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
+    if focus and focus.startswith("the opponent scout report for "):
+        club = focus.split(" for ", 1)[1].split(",")[0]
+        scout = [f"What wins {club} games?",
+                 f"Where are {club} weakest compared with the league?",
+                 f"How have we gone against {club}?",
+                 f"How do {club} compare with us on contested ball?",
+                 f"Which quarters do {club} win?",
+                 f"How do {club} go when they lose the inside 50 count?"]
+        focus = None
+    else:
+        scout = []
     match = [
         "Why did we win or lose this game?",
         "Who were our best players in this game?",
@@ -78,7 +93,7 @@ def example_prompts(season, baseline, focus=None):
         "What happens when we lose the inside 50 count?",
         "Who spends the most time on ground?",
     ]
-    return match + [q for q in season_q if q]
+    return scout + match + [q for q in season_q if q]
 
 
 SIDE_SHARE = 1 / 4.55          # the chat panel's share of the window width (columns 3.55 : 1)
@@ -110,7 +125,8 @@ def fitting_prompts(prompts, insight, win_w, history_h):
 
 
 # ------------------------------------------------------------ Wharf-ai
-DEEP_DIVES = ["Player map", "Year on year", "Opponents", "Quarter-time check"]
+DEEP_DIVES = ["Player map", "Year on year", "Opponents", "Quarter-time check",
+              "Wharf-ai usage", "App tour"]
 
 
 def _pick_deep_dive():
@@ -134,7 +150,9 @@ def chat_panel(season, baseline, focus=None):
     msgs = st.session_state.setdefault("messages", [])
     client = C.get_client()
 
-    chat_header()
+    asked, limit = U.questions_today(), U.cap()
+    chat_header(f"Answers from the match data only · {asked}/{limit} questions today")
+    capped = asked >= limit
     history = st.container(height=HISTORY_H, border=False)
     with history:
         insight = st.session_state[key]
@@ -170,11 +188,19 @@ def chat_panel(season, baseline, focus=None):
             st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
                        "for multi-workspace keys) in the environment or app secrets.")
 
-    typed = st.chat_input("Ask Wharf-ai about the data", disabled=client is None)
+    typed = st.chat_input("Daily question limit reached; resets at midnight Perth time"
+                          if capped else "Ask Wharf-ai about the data",
+                          disabled=client is None or capped)
     pending = st.session_state.pop("pending_prompt", None)  # sent from a deep dive
     prompt = typed or clicked or (pending if client is not None else None)
     if not prompt:
         return
+    if capped:
+        with history:
+            st.info(f"Wharf-ai has answered {limit} questions today, the daily limit. "
+                    "It resets at midnight Perth time.")
+        return
+    tally = U.Tally()
     msgs.append({"role": "user", "content": prompt})
     with history:
         with st.chat_message("user", avatar=AVATARS["user"]):
@@ -184,6 +210,7 @@ def chat_panel(season, baseline, focus=None):
             steps, charts, followups = [], [], []
 
             def on_tool(name, args):
+                tally.tools.append(name)
                 steps.append(TOOL_LABELS.get(name, name))
                 status.caption("Calculating: " + ", ".join(steps))
 
@@ -191,10 +218,11 @@ def chat_panel(season, baseline, focus=None):
                 reply = st.write_stream(C.stream_answer(
                     client, season, msgs, opening=st.session_state[key], on_tool=on_tool,
                     on_chart=lambda fig: charts.append(fig.to_json()), focus=focus,
-                    on_followups=followups.extend))
+                    on_followups=followups.extend, on_usage=tally.add_usage))
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
             except Exception as exc:  # show API errors instead of crashing the app
+                U.record(prompt, tally, ok=False)
                 msgs.pop()  # keep failed turns out of the history sent next time
                 if "anthropic-workspace-id" in str(exc):
                     st.error("This API key is not tied to one workspace. Set "
@@ -203,6 +231,7 @@ def chat_panel(season, baseline, focus=None):
                 else:
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
+    U.record(prompt, tally)
     if not followups:  # the model left them out: offer unasked suggestions instead
         asked = {m["content"] for m in msgs if m["role"] == "user"}
         followups = [q for q in example_prompts(season, baseline, focus) if q not in asked][:3]
@@ -218,20 +247,36 @@ main, side = st.columns([3.55, 1])
 focus = None
 
 with main:
-    h1, h2, h3, h4 = st.columns([5.4, 0.88, 1.02, 1.0], vertical_alignment="center")
+    h1, h2, h3, h4 = st.columns([5.15, 0.88, 1.38, 0.95], vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")
+    league = D.load_league()
     with h3:
-        view = st.segmented_control("View", ["Season", "Match"], default="Season",
+        views = ["Season", "Match"] + (["Scout"] if league is not None else [])
+        view = st.segmented_control("View", views, default="Season",
                                     key="view", label_visibility="collapsed") or "Season"
     season = season or all_seasons[-1]
     baseline = D.baseline_season(season, all_seasons)
     tdf = D.team_season(team_df, season)
-    pos = None
+    pos = scout = None
     with h1:
-        if view == "Match" and len(tdf):
-            pick, band = st.columns([1.4, 3.0], vertical_alignment="center")
+        if view == "Scout":
+            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
+            clubs = sorted(t for t in league["team"].unique() if t != "Fremantle")
+            last_opp = tdf["opponent"].iloc[-1] if len(tdf) else clubs[0]
+            with pick:
+                scout = st.selectbox("Opponent", clubs, index=clubs.index(last_opp),
+                                     key="scout_team", label_visibility="collapsed")
+            with band:
+                lad = D.ladder(league, season)
+                games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
+                last5 = [(r.result, f"{r.api_round} v {r.opponent}: {r.score_for} to {r.score_against}")
+                         for r in games.itertuples()]
+                scout_band(scout, season, lad.loc[scout], last5)
+            focus = f"the opponent scout report for {scout}, {season} season"
+        elif view == "Match" and len(tdf):
+            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
             choices = D.game_choices(tdf)
             with pick:
                 label = st.selectbox("Game", [c[0] for c in choices], key=f"game_{season}",
@@ -265,7 +310,14 @@ with main:
         DD.opponents(team_df, all_seasons)
     elif dive == "Quarter-time check":
         DD.quarter_time(team_df, all_seasons)
-    if pos is not None:
+    elif dive == "Wharf-ai usage":
+        DD.usage_log()
+    elif dive == "App tour":
+        tour.replay()
+        st.rerun()
+    if scout is not None:
+        V.render_scout(team_df, league, season, scout, SZ)
+    elif pos is not None:
         V.render_match(team_df, player_df, season, pos, SZ)
     else:
         V.render(team_df, player_df, season, baseline, SZ)

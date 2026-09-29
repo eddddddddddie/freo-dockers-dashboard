@@ -154,3 +154,30 @@ def quarter_time(team_df, all_seasons):
                      "season": "Season", "round": "Round", "type": "Type",
                      "opponent": "Opponent"})
         st.dataframe(show, hide_index=True, use_container_width=True, height=180)
+
+
+@st.dialog("Wharf-ai usage", width="large")
+def usage_log():
+    """Questions asked, tools used, tokens and estimated cost."""
+    import pandas as pd
+    import usage as U
+    s = U.summary()
+    c = st.columns(4)
+    c[0].metric("Questions today", f"{s['today']} / {s['cap']}")
+    c[1].metric("Cost today (US$)", f"{s['today_cost']:.2f}")
+    c[2].metric("Questions, last 7 days", s["week"])
+    c[3].metric("Cost, last 7 days (US$)", f"{s['week_cost']:.2f}")
+    rows = U.recent()
+    if not rows:
+        st.info("No questions logged yet.")
+        return
+    df = pd.DataFrame(rows)[["ts", "question", "tools", "steps", "input_tokens", "output_tokens",
+                             "cache_read", "cost_usd", "ok"]]
+    df["tools"] = df["tools"].str.replace(r'[\[\]"]', "", regex=True)
+    df["ok"] = df["ok"].map({1: "yes", 0: "failed"})
+    st.dataframe(df.rename(columns={"ts": "When", "question": "Question", "tools": "Tools",
+                                    "steps": "Steps", "input_tokens": "Input", "output_tokens": "Output",
+                                    "cache_read": "Cache read", "cost_usd": "US$", "ok": "OK"}),
+                 hide_index=True, use_container_width=True, height=380)
+    st.caption("Costs are estimates at claude-sonnet-5-5 list prices. The log is stored on the "
+               "app's own disk: on Streamlit Cloud it starts again after a restart or redeploy.")

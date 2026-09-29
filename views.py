@@ -10,7 +10,8 @@ import streamlit as st
 
 import data as D
 import charts as CH
-from theme import COLORS, card_title, tiles_row, leaders_list, tape
+from theme import (COLORS, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
+                   h2h_table)
 
 # Chart heights come from layout.sizes() (sized to the browser window).
 
@@ -166,3 +167,46 @@ def render_match(team_df, player_df, season, pos, sz):
         vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
         grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
         _plot(CH.match_player_grid(vals, pct, [lbl for lbl, _ in stats], grid_h))
+
+
+# ---- Opponent scout report ----------------------------------------------------
+def render_scout(team_df, lg, season, opp, sz):
+    """One club's season on one screen, set against the league and Freo.
+
+    Row 1: their key numbers with league rank and Freo's figure.
+    Row 2: style vs league (rank on each stat) | how they win | their quarters.
+    Row 3: their recent form | every Freo game against them.
+    """
+    MID_H, BOT_H = sz["mid"], sz["bot"]
+    grey = "#9CA3AF"
+    scout_tiles_row(D.scout_tiles(lg, opp, season))
+
+    c1, c2, c3 = st.columns([1.45, 1.35, 1.2])
+    with c1, card("style"):
+        card_title("Style vs league", "rank of 18 on each stat")
+        avg, ranks = D.team_ranks(lg, season)
+        _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H))
+    with c2, card("howtheywin"):
+        short = D.abbr(opp)
+        card_title("How they win", keys=[(f"{short} won it", COLORS["opp"]),
+                                         ("Their opponent did", grey)])
+        _plot(CH.win_conditions_bars(D.scout_win_conditions(lg, opp, season), MID_H,
+                                     names=(f"{short} won it", "Their opponent won it"),
+                                     colors=(COLORS["opp"], grey)))
+    with c3, card("theirquarters"):
+        card_title("Their quarters", "avg points")
+        _plot(CH.quarter_bars(D.scout_quarters(lg, opp, season), MID_H - 12,
+                              names=(opp, "Opponents"), colors=(COLORS["opp"], grey)))
+
+    b1, b2 = st.columns([1.55, 1.45])
+    games = lg[(lg["season"] == season) & (lg["team"] == opp)].tail(14)
+    with b1, card("theirform"):
+        card_title("Their form", f"last {len(games)} games, green win, red loss")
+        _plot(CH.form_bars(games, BOT_H))
+    with b2, card("h2h", height=BOT_H + 40):
+        card_title("Against Fremantle", "every game, both seasons")
+        rows = D.head_to_head(team_df, opp)
+        if len(rows):
+            h2h_table(rows)
+        else:
+            st.caption("No games against Fremantle in the data.")

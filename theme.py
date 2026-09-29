@@ -63,7 +63,7 @@ def inject_css():
           .stApp { background:var(--canvas); color:var(--ink); }
 
           /* One screen: no Streamlit chrome, tight padding and gaps. */
-          header[data-testid="stHeader"], footer, #MainMenu,
+          header[data-testid="stHeader"], footer:not(.driver-popover-footer), #MainMenu,
           [data-testid="stToolbar"], [data-testid="stDecoration"],
           section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none !important; }
           .block-container { padding:8px 14px 0 !important; max-width:100% !important; }
@@ -155,7 +155,8 @@ def inject_css():
             font-size:.7rem; font-weight:600; white-space:nowrap; }
 
           /* Window-size reporter: no visible footprint */
-          div[data-testid="stElementContainer"]:has(iframe[title*="viewport"]) {
+          div[data-testid="stElementContainer"]:has(iframe[title*="viewport"]),
+          div[data-testid="stElementContainer"]:has(iframe[title*="tour"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
 
           /* Login */
@@ -163,9 +164,12 @@ def inject_css():
           .login-head b { display:block; font-size:1.5rem; font-weight:800; letter-spacing:-.5px; color:var(--ink); }
           .login-head span { color:var(--muted); font-size:.9rem; }
 
-          @media (max-width: 1500px) { .cv-band .opt { display:none; } }
+          @media (max-width: 1500px) { .cv-band .opt { display:none; }
+            .cv-band.match { gap:12px; padding:7px 11px; }
+            .cv-band.match .cv-stat b { font-size:.98rem; } .cv-band.match .ttl { font-size:1rem; } }
           @media (max-width: 1380px) { .cv-band { gap:9px; padding:7px 10px; }
-            .cv-band .cv-stat b { font-size:.94rem; } .cv-band .ttl { font-size:.98rem; } }
+            .cv-band .cv-stat b { font-size:.94rem; } .cv-band .ttl { font-size:.98rem; }
+            .cv-band.match .ttl small { display:none; } }
 
           /* Match mode */
           .cv-res { font-style:normal; font-size:.72rem; font-weight:700; padding:2px 9px; border-radius:999px;
@@ -178,6 +182,11 @@ def inject_css():
           .tp-bar { position:relative; height:9px; border-radius:5px; background:#C25E12; overflow:visible; }
           .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:#7C3AED; border-radius:5px 0 0 5px; }
           .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:#1F2937; margin-left:-1px; }
+
+          /* Scout report */
+          .cv-tile .rk { font-size:.62rem; font-weight:700; color:#fff; background:var(--brand);
+            border-radius:999px; padding:1px 7px; margin-left:6px; vertical-align:2px; letter-spacing:0; }
+          .cv-tile .fr { font-size:.66rem; color:var(--muted); margin-top:3px; }
 
           /* Quarter-time check */
           .qt-big { font-size:2.6rem; font-weight:800; letter-spacing:-1px; color:var(--ink); line-height:1; margin-top:6px; }
@@ -330,10 +339,9 @@ def _svg_data_uri(name):
         return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode()
 
 
-def chat_header():
+def chat_header(note="Answers from the loaded match data only"):
     st.markdown(f'<div class="wa-head"><img class="dot" src="{_svg_data_uri("anchor.svg")}" alt="">'
-                '<div><b>Wharf-ai</b>'
-                '<span>Answers from the loaded match data only</span></div></div>',
+                f'<div><b>Wharf-ai</b><span>{html.escape(note)}</span></div></div>',
                 unsafe_allow_html=True)
 
 
@@ -380,3 +388,52 @@ def tape(rows):
                 f'<em style="left:{r["season_share"]:.1f}%"></em></div>'
                 f'<span class="tp-o">{o}</span></div>')
     st.markdown(f'<div class="tp">{out}</div>', unsafe_allow_html=True)
+
+
+def _ordinal(n):
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def scout_band(team, season, lad_row, last5):
+    """Header band for the scout report: record, ladder spot, percentage, form."""
+    chips = "".join(
+        f'<i title="{html.escape(t)}" style="background:'
+        f'{COLORS["win"] if r == "W" else COLORS["loss"]}">{r}</i>' for r, t in last5)
+    stats = [
+        (f'{int(lad_row["wins"])}-{int(lad_row["losses"])}' +
+         (f'-{int(lad_row["draws"])}' if lad_row["draws"] else ""), "H&A"),
+        (_ordinal(int(lad_row["position"])), "Ladder"),
+    ]
+    stat_html = "".join(f'<div class="cv-stat"><b>{v}</b><span>{l}</span></div>' for v, l in stats)
+    st.markdown(
+        f'<div class="cv-band match"><div class="ttl">Scout: {html.escape(team)}'
+        f'<small>{season} · percentage {lad_row["pct"]:.1f} (home and away)</small></div>{stat_html}'
+        f'<div class="cv-stat"><div class="cv-form">{chips}</div><span>Last 5</span></div></div>',
+        unsafe_allow_html=True)
+
+
+def scout_tiles_row(tiles):
+    """Opponent tiles: their value, league rank, and Freo's value for comparison."""
+    cells = []
+    for t in tiles:
+        rank = (f'<span class="rk">{_ordinal(t["rank"])}</span>' if t["rank"] else "")
+        cells.append(
+            f'<div class="cv-tile"><div class="lbl">{html.escape(t["label"])}</div>'
+            f'<div class="val">{t["value"]}{rank}</div>'
+            f'<div class="fr">Freo {t["freo"]}</div></div>')
+    st.markdown(f'<div class="cv-tiles">{"".join(cells)}</div>', unsafe_allow_html=True)
+
+
+def h2h_table(rows):
+    """Freo's games against one club: result chip, score and two key counts."""
+    body = ""
+    for r in rows.itertuples():
+        color = COLORS["win"] if r.result == "W" else COLORS["loss"]
+        body += (f'<tr><td>{r.season} {html.escape(r.round)}</td><td>{html.escape(r.venue)}</td>'
+                 f'<td><span class="op-chip" style="background:{color}">{r.result} '
+                 f'{int(r.margin):+d}</span></td><td class="op-num">{r.freo_score}-{r.opp_score}</td>'
+                 f'<td>{int(r.freo_inside_50s - r.opp_inside_50s):+d}</td>'
+                 f'<td>{int(r.freo_contested_poss - r.opp_contested_poss):+d}</td></tr>')
+    st.markdown('<table class="op-grid"><thead><tr><th>Game</th><th>Venue</th><th>Result</th>'
+                '<th>Score</th><th>I50 diff</th><th>CP diff</th></tr></thead>'
+                f'<tbody>{body}</tbody></table>', unsafe_allow_html=True)

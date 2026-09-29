@@ -158,15 +158,17 @@ def _hold_back_marker(chunks, on_followups):
 
 
 def stream_answer(client, current_season, history, opening=None, on_tool=None,
-                  on_chart=None, focus=None, on_followups=None):
-    """Yield answer text (without the FOLLOWUPS line); see _stream_answer."""
+                  on_chart=None, focus=None, on_followups=None, on_usage=None):
+    """Yield answer text (without the FOLLOWUPS line); see _stream_answer.
+    on_usage(usage) receives each model request's token usage."""
     yield from _hold_back_marker(
-        _stream_answer(client, current_season, history, opening, on_tool, on_chart, focus),
+        _stream_answer(client, current_season, history, opening, on_tool, on_chart, focus,
+                       on_usage),
         on_followups)
 
 
 def _stream_answer(client, current_season, history, opening=None, on_tool=None,
-                   on_chart=None, focus=None):
+                   on_chart=None, focus=None, on_usage=None):
     """Yield answer text as it streams, running tool calls in between.
 
     history: prior turns as plain text ({"role", "content"}), ending with the
@@ -208,6 +210,8 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
                 wrote_text = True
                 yield text
             response = stream.get_final_message()
+        if on_usage:
+            on_usage(response.usage)
 
         if response.stop_reason == "refusal":
             yield "\n\nWharf-ai can't help with that one."

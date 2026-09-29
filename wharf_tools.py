@@ -225,6 +225,55 @@ def player_games(players, stats, filters=None, limit=30):
     return _csv(p[cols].head(max(1, min(int(limit), MAX_ROWS))), "Most recent first.")
 
 
+LEAGUE_GROUPS = ["team", "result", "is_home", "opponent", "season", "is_final"]
+
+
+def _league():
+    lg = D.load_league()
+    if lg is None:
+        raise ToolError("League data is not loaded (run league_scraper.py).")
+    return lg
+
+
+def league_aggregate(metrics, agg="mean", group_by="team", filters=None, teams=None,
+                     sort_by=None, limit=18):
+    """Any club's games: aggregate league metrics, by team by default."""
+    lg = _league()
+    f = dict(filters or {})
+    if f.get("season") not in (None, "all"):
+        lg = lg[lg["season"] == int(f["season"])]
+    if f.get("result"):
+        lg = lg[lg["result"] == str(f["result"]).upper()[:1]]
+    if f.get("finals") is not None:
+        lg = lg[lg["is_final"] == bool(f["finals"])]
+    if f.get("opponent"):
+        lg = lg[lg["opponent"] == _match_one(str(f["opponent"]), lg["opponent"].unique(), "club")]
+    if teams:
+        lg = lg[lg["team"].isin([_match_one(n, lg["team"].unique(), "club") for n in teams])]
+    numeric = set(lg.select_dtypes("number").columns)
+    _check_cols(metrics, numeric, "league metric")
+    if agg not in AGGS:
+        raise ToolError(f"agg must be one of {AGGS}.")
+    _check_cols([group_by], LEAGUE_GROUPS, "group_by")
+    g = lg.groupby(group_by)
+    out = g[metrics].agg(agg)
+    out.insert(0, "games", g.size())
+    if agg == "mean" and "accuracy" in metrics:  # pooled, as elsewhere
+        out["accuracy"] = g["goals_for"].sum() / g["scoring_shots"].sum() * 100
+    out = out.reset_index()
+    sort_by = sort_by or metrics[0]
+    _check_cols([sort_by], set(out.columns), "sort column")
+    out = out.sort_values(sort_by, ascending=False).head(max(1, min(int(limit), MAX_ROWS)))
+    return _csv(out, f"{agg} per game unless agg is sum/count, one row per {group_by}.")
+
+
+def ladder(season):
+    """Ladder from home and away results."""
+    lad = D.ladder(_league(), int(season)).reset_index()
+    return _csv(lad[["position", "team", "played", "wins", "losses", "draws", "points", "pct"]],
+                "Home and away only; 4 points a win, 2 a draw; pct = points for / against x 100.")
+
+
 def show_chart(kind, title, metrics=None, players=None, stat=None, filters=None,
                min_games=5, top_n=10):
     """Draw a chart under the answer from the data itself (the model never
@@ -355,10 +404,27 @@ TOOLS.append(_tool(
      "min_games": {"type": "integer"}, "top_n": {"type": "integer"}},
     ["kind", "title"]))
 
+TOOLS.append(_tool(
+    "league_aggregate",
+    "Any club's games, for opponent questions and league comparisons: aggregate league "
+    "metrics (mean per game by default) grouped by team (default), result, is_home, opponent, "
+    "season or is_final. Filter by season, result, finals (true/false), opponent, or teams.",
+    {"metrics": {"type": "array", "items": {"type": "string"}},
+     "agg": {"type": "string", "enum": AGGS},
+     "group_by": {"type": "string", "enum": LEAGUE_GROUPS},
+     "filters": {"type": "object", "additionalProperties": False, "properties": {
+         "season": {"type": ["integer", "string"]}, "result": {"type": "string", "enum": ["W", "L", "D"]},
+         "finals": {"type": "boolean"}, "opponent": {"type": "string"}}},
+     "teams": {"type": "array", "items": {"type": "string"}},
+     "sort_by": {"type": "string"}, "limit": {"type": "integer"}}, ["metrics"]))
+TOOLS.append(_tool("ladder", "The ladder for a season, from home and away results.",
+                   {"season": {"type": "integer"}}, ["season"]))
+
 _IMPL = {
     "team_games": team_games, "team_aggregate": team_aggregate, "correlate": correlate,
     "quarter_breakdown": quarter_breakdown, "player_aggregate": player_aggregate,
     "player_games": player_games, "show_chart": show_chart,
+    "league_aggregate": league_aggregate, "ladder": ladder,
 }
 
 
@@ -395,4 +461,18 @@ def describe():
         f"PLAYER STATS (for player_aggregate, player_games): {', '.join(player_stats())}.\n"
         f"Seasons: {', '.join(str(s) for s in D.seasons(t))}. Opponents: "
         f"{', '.join(sorted(t['opponent'].unique()))}."
+        + _league_describe()
     )
+
+
+def _league_describe():
+    lg = D.load_league()
+    if lg is None:
+        return ""
+    skip = {"season", "round_number"}
+    cols = sorted(c for c in lg.select_dtypes("number").columns
+                  if c not in skip and not c.startswith("opp_") and not c.startswith("diff_"))
+    return ("\nLEAGUE METRICS (league_aggregate; every club's games, one row per team per match; "
+            "team names as above plus Fremantle): " + ", ".join(cols) + ", plus opp_<stat> (the "
+            "opposition's) and diff_<stat> (team minus opposition) for each count stat. There "
+            "are no player stats for other clubs.")
