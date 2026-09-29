@@ -68,62 +68,6 @@ def record(tdf):
     }
 
 
-# Metrics shown in the current vs baseline comparison table. Each is a per game
-# average of a Freo column (accuracy is already a percentage).
-COMPARISON_METRICS = [
-    ("Score for", "freo_score"),
-    ("Score against", "opp_score"),
-    ("Margin", "margin"),
-    ("Goal accuracy %", "freo_accuracy"),
-    ("Disposals", "freo_disposals"),
-    ("Clearances", "freo_clearances"),
-    ("Contested poss", "freo_contested_poss"),
-    ("Inside 50s", "freo_inside_50s"),
-    ("Marks", "freo_marks"),
-    ("Tackles", "freo_tackles"),
-    ("Rebound 50s", "freo_rebound_50s"),
-    ("One percenters", "freo_one_percenters"),
-]
-
-
-def comparison_frame(team_df, season, baseline):
-    """Per game averages for the selected season, the baseline season, and the
-    percentage change. Returns a display DataFrame."""
-    cur = team_season(team_df, season)
-    rows = []
-    base = team_season(team_df, baseline) if baseline is not None else None
-    # Win % is a rate, not an average, so handle it first.
-    cur_rec = record(cur)
-    if base is not None:
-        base_rec = record(base)
-        rows.append(_row("Win %", cur_rec["win_pct"], base_rec["win_pct"], pct=True))
-    else:
-        rows.append(_row("Win %", cur_rec["win_pct"], None, pct=True))
-    for label, col in COMPARISON_METRICS:
-        cur_val = cur[col].mean()
-        base_val = base[col].mean() if base is not None else None
-        rows.append(_row(label, cur_val, base_val))
-    cur_label = f"{season}"
-    base_label = f"{baseline}" if baseline is not None else "no baseline"
-    df = pd.DataFrame(rows)
-    df.columns = ["Metric", cur_label, base_label, "Change"]
-    return df
-
-
-def _row(label, cur, base, pct=False):
-    cur_s = "-" if cur is None or pd.isna(cur) else f"{cur:.1f}"
-    if base is None or pd.isna(base):
-        return [label, cur_s, "-", "-"]
-    base_s = f"{base:.1f}"
-    if base == 0:
-        change = "-"
-    else:
-        delta = (cur - base) / abs(base) * 100
-        arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "→")
-        change = f"{arrow} {delta:+.1f}%"
-    return [label, cur_s, base_s, change]
-
-
 def differential(tdf, freo_col, opp_col):
     """Win rate in games where Freo won vs lost the count on a stat."""
     ahead = tdf[tdf[freo_col] > tdf[opp_col]]
@@ -145,24 +89,6 @@ ROLES = [
     ("Spoiler", "one_percenters"),
     ("Forward Threat", "forward_threat"),
 ]
-
-
-def role_leaders_table(pdf_season):
-    """One row per game with the leading player and value for each role."""
-    rows = []
-    for (rnd, opp), grp in pdf_season.groupby(["round", "opponent"], sort=False):
-        row = {"Round": rnd, "Opponent": opp}
-        for label, col in ROLES:
-            idx = grp[col].idxmax()
-            top = grp.loc[idx]
-            val = int(top[col])
-            row[label] = f"{top['player']} ({val})" if val > 0 else "-"
-        rows.append(row)
-    # Keep chronological order using the season frame's existing order.
-    order = pdf_season.drop_duplicates(["round", "opponent"])[["round", "opponent"]]
-    order = list(zip(order["round"], order["opponent"]))
-    rows.sort(key=lambda r: order.index((r["Round"], r["Opponent"])))
-    return pd.DataFrame(rows)
 
 
 def role_leader_counts(pdf_season, role_col):
@@ -189,36 +115,167 @@ def season_role_leaders(pdf_season):
     return out
 
 
-# ---- Season Overview helpers ----------------------------------------------
-def top_goalkickers(player_df, season, n=6):
-    """Leading goalkickers for the season (total goals), highest first."""
-    pdf = players_season(player_df, season)
-    g = pdf.groupby("player")["goals"].sum()
-    g = g[g > 0].sort_values(ascending=False).head(n)
-    return g
 
 
-def possession_mix(team_df, season):
-    """Contested vs uncontested possession totals and the contested share, plus
-    how often Freo won the contested-possession count."""
-    tdf = team_season(team_df, season)
-    contested = int(tdf["freo_contested_poss"].sum())
-    uncontested = int(tdf["freo_uncontested_poss"].sum())
-    total = contested + uncontested
-    pct = contested / total * 100 if total else 0.0
-    d = differential(tdf, "freo_contested_poss", "opp_contested_poss")
-    return {
-        "contested": contested, "uncontested": uncontested, "total": total,
-        "contested_pct": pct, "won_games": d["ahead_games"], "games": len(tdf),
-    }
+# ---- Coach View helpers ----------------------------------------------------
+TEAM_ABBR = {
+    "Adelaide": "ADE", "Brisbane Lions": "BRL", "Carlton": "CAR",
+    "Collingwood": "COL", "Essendon": "ESS", "Geelong": "GEE",
+    "Gold Coast": "GCS", "Greater Western Sydney": "GWS", "Hawthorn": "HAW",
+    "Melbourne": "MEL", "North Melbourne": "NTH", "Port Adelaide": "PTA",
+    "Richmond": "RIC", "St Kilda": "STK", "Sydney": "SYD",
+    "West Coast": "WCE", "Western Bulldogs": "WBD",
+}
 
 
-# Metrics offered on the Season Trends card: label -> (freo col, opp col).
-TREND_METRICS = [
-    ("Inside 50s", "freo_inside_50s", "opp_inside_50s"),
-    ("Score", "freo_score", "opp_score"),
-    ("Disposals", "freo_disposals", "opp_disposals"),
+def abbr(team):
+    return TEAM_ABBR.get(team, team[:3].upper())
+
+
+def game_labels(tdf):
+    """Short x-axis labels, e.g. 'R2 GEE'."""
+    return (tdf["round"] + " " + tdf["opponent"].map(abbr)).tolist()
+
+
+# Headline tiles: (label, kind, freo col, opp col, higher is better).
+# kind "diff" = Freo minus opposition per game; "avg" = Freo per game average;
+# "opp" = opposition per game average; "acc" = season goal accuracy.
+TILES = [
+    ("Clearance diff", "diff", "freo_clearances", "opp_clearances", True),
+    ("Contested poss diff", "diff", "freo_contested_poss", "opp_contested_poss", True),
+    ("Inside 50 diff", "diff", "freo_inside_50s", "opp_inside_50s", True),
+    ("Disposals", "avg", "freo_disposals", None, True),
+    ("Goal accuracy", "acc", None, None, True),
+    ("Tackles", "avg", "freo_tackles", None, True),
+    ("Rebound 50s", "avg", "freo_rebound_50s", None, None),
+    ("Opp score", "opp", "opp_score", None, False),
+]
+
+
+def _tile_series(tdf, kind, fcol, ocol):
+    """Per game values for a tile's sparkline."""
+    if kind == "diff":
+        return tdf[fcol] - tdf[ocol]
+    if kind == "acc":
+        return tdf["freo_accuracy"]
+    return tdf[fcol]
+
+
+def _tile_value(tdf, kind, fcol, ocol):
+    """Season value. Accuracy is pooled (total goals / total scoring shots),
+    not an average of per game percentages."""
+    if not len(tdf):
+        return None
+    if kind == "acc":
+        shots = tdf["freo_scoring_shots"].sum()
+        return tdf["freo_goals"].sum() / shots * 100 if shots else None
+    return float(_tile_series(tdf, kind, fcol, ocol).mean())
+
+
+def tiles(team_df, season, baseline):
+    """Values for the headline tiles, with change vs the baseline season.
+    Differentials and accuracy change in absolute units (a % change of a
+    number that can cross zero is meaningless); plain averages change in %."""
+    cur = team_season(team_df, season)
+    base = team_season(team_df, baseline) if baseline is not None else None
+    out = []
+    for label, kind, fcol, ocol, better in TILES:
+        val = _tile_value(cur, kind, fcol, ocol)
+        bval = _tile_value(base, kind, fcol, ocol) if base is not None else None
+        change, unit = None, ""
+        if val is not None and bval is not None:
+            if kind == "diff":
+                change = val - bval
+            elif kind == "acc":
+                change, unit = val - bval, " pts"
+            elif bval:
+                change, unit = (val - bval) / abs(bval) * 100, "%"
+        out.append({
+            "label": label, "kind": kind, "value": val, "base": bval,
+            "change": change, "unit": unit, "better": better,
+            "series": _tile_series(cur, kind, fcol, ocol).round(1).tolist(),
+            "games": game_labels(cur),
+        })
+    return out
+
+
+def _qtr_points(qtrs):
+    """'3.1 8.4 13.8 16.14' (cumulative goals.behinds) -> points in each quarter."""
+    cum = [6 * int(g) + int(b) for g, b in (q.split(".") for q in qtrs.split())]
+    return [c - p for c, p in zip(cum, [0] + cum[:-1])]
+
+
+def quarter_pattern(tdf):
+    """Average points for and against in each quarter, and quarters won."""
+    f = pd.DataFrame(tdf["freo_qtrs"].map(_qtr_points).tolist(), columns=["Q1", "Q2", "Q3", "Q4"])
+    o = pd.DataFrame(tdf["opp_qtrs"].map(_qtr_points).tolist(), columns=["Q1", "Q2", "Q3", "Q4"])
+    return pd.DataFrame({
+        "quarter": f.columns,
+        "freo": f.mean().values, "opp": o.mean().values,
+        "margin": (f - o).mean().values,
+        "won": (f > o).sum().values, "games": len(f),
+    })
+
+
+# Stats for the "where we win" card: label -> (freo col, opp col).
+WIN_STATS = [
     ("Clearances", "freo_clearances", "opp_clearances"),
     ("Contested poss", "freo_contested_poss", "opp_contested_poss"),
+    ("Inside 50s", "freo_inside_50s", "opp_inside_50s"),
+    ("Tackles", "freo_tackles", "opp_tackles"),
     ("Marks", "freo_marks", "opp_marks"),
+    ("Disposals", "freo_disposals", "opp_disposals"),
 ]
+
+
+def win_conditions(tdf):
+    rows = []
+    for label, fcol, ocol in WIN_STATS:
+        d = differential(tdf, fcol, ocol)
+        rows.append({"stat": label, **d})
+    return pd.DataFrame(rows)
+
+
+def role_leaders(pdf_season):
+    """Per role: the player who led it in the most games, how many games,
+    and their per game average for that stat."""
+    games = pdf_season.groupby(["round", "opponent"]).ngroups
+    out = []
+    for label, col in ROLES:
+        counts = role_leader_counts(pdf_season, col)
+        if not len(counts):
+            out.append({"role": label, "player": "-", "led": 0, "games": games, "avg": None})
+            continue
+        name = counts.index[0]
+        avg = pdf_season.loc[pdf_season["player"] == name, col].mean()
+        out.append({"role": label, "player": name, "led": int(counts.iloc[0]),
+                    "games": games, "avg": avg})
+    return out
+
+
+def top_goalkickers(pdf_season, n=6):
+    g = pdf_season.groupby("player")["goals"].agg(["sum", "count"])
+    g = g[g["sum"] > 0].sort_values(["sum", "count"], ascending=[False, True]).head(n)
+    return g.rename(columns={"sum": "goals", "count": "games"})
+
+
+def form_matrix(pdf_season, col, n_games=6, n_players=12, min_games=5):
+    """Last n games of the season for the top players on one stat.
+
+    Rows are the n_players with the best season per game average (min_games
+    played) who played at least one of the last n games. Returns (values,
+    season averages, game labels); values are NaN where the player did not play.
+    """
+    order = pdf_season.drop_duplicates(["round", "opponent"]).sort_values("game_dt")
+    recent = order.tail(n_games)
+    labels = (recent["round"] + " " + recent["opponent"].map(abbr)).tolist()
+    stats = pdf_season.groupby("player")[col].agg(["mean", "count"])
+    stats = stats[stats["count"] >= min_games]
+    rec = pdf_season[pdf_season["round"].isin(recent["round"])]
+    stats = stats[stats.index.isin(rec["player"])]
+    top = stats.sort_values("mean", ascending=False).head(n_players)
+    vals = (rec[rec["player"].isin(top.index)]
+            .pivot_table(index="player", columns="round", values=col, aggfunc="sum")
+            .reindex(index=top.index, columns=recent["round"]))
+    vals.columns = labels
+    return vals, top["mean"], labels

@@ -1,51 +1,48 @@
-"""Colours, Plotly styling, CSS and card components for the dashboard.
+"""Colours, Plotly styling, CSS and HTML components for the Coach View.
 
-Purple and white theme with a card-grid layout: a deep-purple left nav rail, a
-grey canvas, and white cards with small caps section titles, mirroring a
-performance-analysis dashboard. The categorical palette was validated for the
-lightness band, chroma floor, colour-vision separation and contrast on a light
-surface. Colour follows the entity (Freo is always purple), never rank.
+Purple and white theme on a grey canvas with white cards, packed to fit one
+1440x900 screen with no page scroll. The categorical pair (Freo purple,
+opposition orange) was validated for lightness, chroma, colour-vision
+separation and contrast on a light surface. Colour follows the entity (Freo is
+always purple), never rank. No club logo or trademarks.
 """
+
+import html
 
 import streamlit as st
 
 COLORS = {
     "freo": "#7C3AED",     # Fremantle (categorical slot 1)
     "opp": "#C25E12",      # Opposition (categorical slot 2)
-    "teal": "#0D9488",     # third series / secondary accent
-    "magenta": "#BE185D",  # fourth series
     "win": "#15803D",
     "loss": "#DC2626",
     "ink": "#1F2937",
     "muted": "#6B7280",
     "grid": "#E7E3EF",
-    "brand": "#2A0A4A",    # deep Freo purple (nav rail, top band, hero numbers)
-    "brand2": "#4C1D95",
-    "freo_fill": "rgba(124,58,237,0.16)",
-    "opp_fill": "rgba(194,94,18,0.14)",
+    "brand": "#2A0A4A",    # deep Freo purple (header band)
+    "spark": "#B8A6DC",    # sparkline de-emphasis hue
 }
 
-PALETTE = [COLORS["freo"], COLORS["opp"], COLORS["teal"], COLORS["magenta"]]
 FONT = "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
 
 
-def style_fig(fig, y_title="", unified=True, height=380):
-    """Shared chart look: white surface, recessive grid and axes, a legend across
-    the top, a single y axis (never dual-axis)."""
+def style_fig(fig, y_title="", unified=True, height=240):
+    """Shared chart look: transparent surface, recessive grid and axes, a compact
+    legend across the top, a single y axis (never dual-axis)."""
     fig.update_layout(
         template="plotly_white",
-        font=dict(family=FONT, color=COLORS["ink"], size=13),
+        font=dict(family=FONT, color=COLORS["ink"], size=12),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=8, r=12, t=30, b=8),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                    font=dict(color=COLORS["muted"], size=12)),
+        margin=dict(l=4, r=6, t=24, b=4),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0,
+                    font=dict(color=COLORS["muted"], size=11)),
         hovermode="x unified" if unified else "closest",
         height=height,
     )
     fig.update_xaxes(showgrid=False, tickfont=dict(color=COLORS["muted"]),
                      linecolor=COLORS["grid"])
-    fig.update_yaxes(title=dict(text=y_title, font=dict(color=COLORS["muted"], size=12)),
+    fig.update_yaxes(title=dict(text=y_title, font=dict(color=COLORS["muted"], size=11)),
                      gridcolor=COLORS["grid"], zeroline=False,
                      tickfont=dict(color=COLORS["muted"]))
     return fig
@@ -55,111 +52,170 @@ def inject_css():
     st.markdown(
         """
         <style>
-          .block-container { padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1300px; }
+          /* One screen: no Streamlit chrome, tight padding and gaps. */
+          header[data-testid="stHeader"], footer, #MainMenu,
+          [data-testid="stToolbar"], [data-testid="stDecoration"],
+          section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none !important; }
+          .block-container { padding:8px 14px 0 !important; max-width:100% !important; }
+          div[data-testid="stVerticalBlock"] { gap:6px; }
+          div[data-testid="stHorizontalBlock"] { gap:8px; }
+          div[data-testid="stElementContainer"]:has(> .stPlotlyChart) { margin:0; }
 
-          /* Top band */
-          .freo-band {
-            background: linear-gradient(100deg, #2A0A4A 0%, #4C1D95 55%, #6D28D9 100%);
-            color:#fff; padding:16px 22px; border-radius:14px; margin-bottom:16px;
-            display:flex; justify-content:space-between; align-items:center;
-          }
-          .freo-band h1 { color:#fff; font-size:1.5rem; margin:0; font-weight:700; letter-spacing:.2px; }
-          .freo-band p { color:#E9D5FF; margin:.25rem 0 0; font-size:.88rem; }
-          .band-chip { text-align:right; line-height:1.1; }
-          .band-chip span { display:block; color:#C4B5FD; font-size:.66rem; letter-spacing:.14em; }
-          .band-chip b { color:#fff; font-size:1.35rem; }
-
-          /* Dark purple nav rail */
-          section[data-testid="stSidebar"] { background:#2A0A4A; }
-          section[data-testid="stSidebar"] h1,
-          section[data-testid="stSidebar"] h2,
-          section[data-testid="stSidebar"] h3,
-          section[data-testid="stSidebar"] p,
-          section[data-testid="stSidebar"] label,
-          section[data-testid="stSidebar"] span,
-          section[data-testid="stSidebar"] div { color:#EDE9FE; }
-          section[data-testid="stSidebar"] hr { border-color:#4C1D95; }
-
-          /* Cards (any bordered container) */
+          /* Cards (bordered containers) */
           div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:#FFFFFF; border:1px solid #E7E3EF; border-radius:14px;
-            padding:8px 16px 14px; box-shadow:0 1px 3px rgba(42,10,74,.07);
+            background:#FFFFFF; border:1px solid #E7E3EF !important; border-radius:10px;
+            box-shadow:0 1px 2px rgba(42,10,74,.06);
           }
+          div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
           .card-title {
-            text-transform:uppercase; letter-spacing:.07em; font-size:.72rem;
-            font-weight:700; color:#7C3AED; border-bottom:1px solid #F0EDF7;
-            padding-bottom:7px; margin:2px 0 12px;
+            text-transform:uppercase; letter-spacing:.07em; font-size:.66rem;
+            font-weight:700; color:#6D28D9; margin:0; line-height:1.6;
           }
+          .card-title span { color:#9CA3AF; font-weight:600; text-transform:none; letter-spacing:0; }
 
-          h2, h3 { color:#2A0A4A; }
+          /* Header band */
+          .cv-band {
+            background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 60%,#6D28D9 100%);
+            color:#fff; border-radius:10px; padding:7px 14px; height:52px;
+            display:flex; align-items:center; gap:22px; overflow:hidden;
+          }
+          .cv-band .ttl { font-weight:700; font-size:1.05rem; white-space:nowrap; }
+          .cv-band .ttl small { display:block; font-weight:500; font-size:.66rem; color:#C4B5FD; }
+          .cv-stat { line-height:1.05; white-space:nowrap; }
+          .cv-stat b { font-size:1.15rem; font-weight:700; }
+          .cv-stat span { display:block; font-size:.62rem; letter-spacing:.08em;
+            text-transform:uppercase; color:#C4B5FD; }
+          .cv-form { display:flex; gap:3px; }
+          .cv-form i { font-style:normal; font-size:.66rem; font-weight:700; width:20px;
+            height:20px; border-radius:4px; display:flex; align-items:center;
+            justify-content:center; color:#fff; }
 
-          /* Hero number */
-          .hero-num { font-size:2.6rem; font-weight:800; color:#2A0A4A; line-height:1; }
-          .hero-label { color:#6B7280; font-size:.82rem; margin-top:3px; }
+          /* Headline tiles */
+          .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
+          .cv-tile { background:#fff; border:1px solid #E7E3EF; border-radius:10px;
+            padding:6px 10px 4px; box-shadow:0 1px 2px rgba(42,10,74,.06); }
+          .cv-tile .lbl { font-size:.68rem; color:#6B7280; white-space:nowrap; }
+          .cv-tile .val { font-size:1.35rem; font-weight:650; color:#2A0A4A; line-height:1.15; }
+          .cv-tile .dlt { font-size:.68rem; font-weight:600; margin-left:4px; }
+          .cv-tile svg { display:block; width:100%; height:22px; margin-top:1px; }
 
-          /* Leader list */
-          .lead-row { display:flex; justify-content:space-between; align-items:baseline;
-            padding:8px 0; border-bottom:1px solid #F3F0F9; }
-          .lead-row:last-child { border-bottom:none; }
-          .lead-role { color:#9333EA; font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; }
-          .lead-name { font-weight:600; color:#1F2937; font-size:.95rem; }
-          .lead-val { font-weight:800; color:#7C3AED; font-size:1.1rem; }
-          .lead-val small { color:#9CA3AF; font-weight:600; font-size:.7rem; }
+          /* Role leaders */
+          .cv-lead { display:flex; justify-content:space-between; align-items:center;
+            padding:4px 0; border-bottom:1px solid #F3F0F9; }
+          .cv-lead:last-child { border-bottom:none; }
+          .cv-lead .role { color:#7C3AED; font-size:.6rem; text-transform:uppercase;
+            letter-spacing:.06em; font-weight:700; }
+          .cv-lead .name { font-weight:600; font-size:.84rem; color:#1F2937; line-height:1.2; }
+          .cv-lead .num { text-align:right; font-weight:700; color:#2A0A4A; font-size:.95rem; line-height:1.1; }
+          .cv-lead .num small { display:block; color:#9CA3AF; font-weight:500; font-size:.62rem; }
 
-          /* Insight callout */
-          .insight-box { background:linear-gradient(135deg,#7C3AED 0%, #4C1D95 100%);
-            color:#fff; border-radius:12px; padding:14px 16px; height:100%; }
-          .insight-box .big { font-size:1.7rem; font-weight:800; line-height:1; }
-          .insight-box .txt { font-size:.84rem; color:#EDE9FE; margin-top:8px; }
+          /* Compact segmented controls */
+          div[data-testid="stButtonGroup"] button { min-height:28px; padding:2px 9px; }
+          div[data-testid="stButtonGroup"] button p { font-size:.74rem; }
 
-          /* Results strip */
-          .results-strip { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px; }
-          .chip { border-radius:8px; padding:6px 9px; min-width:74px; text-align:center;
-            font-size:.72rem; line-height:1.25; color:#fff; }
-          .chip .rnd { font-weight:700; font-size:.7rem; opacity:.92; }
-          .chip .opp { display:block; font-weight:600; }
-          .chip .mgn { display:block; opacity:.95; }
-
-          /* Inline insight (light) used on analysis pages */
-          .insight { background:#F5F1FB; border-left:4px solid #7C3AED; border-radius:8px;
-            padding:12px 14px; margin:4px 0 10px; color:#1F2937; font-size:.92rem; }
-          .insight b { color:#4C1D95; }
+          /* Header controls */
+          div[data-testid="stButton"] button { height:52px; border-radius:10px; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-def band(title, subtitle, season=None):
-    chip = (f'<div class="band-chip"><span>SEASON</span><b>{season}</b></div>'
-            if season is not None else "")
+def card_title(text, note=""):
+    note_html = f" <span>{html.escape(note)}</span>" if note else ""
+    st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}</div>',
+                unsafe_allow_html=True)
+
+
+def header_band(season, rec, form, data_note):
+    """form: list of (result, tooltip) for the last five games."""
+    chips = "".join(
+        f'<i title="{html.escape(t)}" style="background:'
+        f'{COLORS["win"] if r == "W" else COLORS["loss"]}">{r}</i>'
+        for r, t in form)
+    stats = [
+        (f'{rec["wins"]}-{rec["losses"]}', "Record"),
+        (f'{rec["win_pct"]:.0f}%', "Win rate"),
+        (f'{rec["score_for"]:.1f}', "Avg for"),
+        (f'{rec["score_against"]:.1f}', "Avg against"),
+        (f'{rec["margin"]:+.1f}', "Avg margin"),
+    ]
+    stat_html = "".join(f'<div class="cv-stat"><b>{v}</b><span>{l}</span></div>'
+                        for v, l in stats)
     st.markdown(
-        f'<div class="freo-band"><div><h1>{title}</h1><p>{subtitle}</p></div>{chip}</div>',
+        f'<div class="cv-band"><div class="ttl">Fremantle {season}'
+        f'<small>{html.escape(data_note)}</small></div>{stat_html}'
+        f'<div class="cv-stat"><div class="cv-form">{chips}</div><span>Last 5</span></div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
 
-# ---- card components -------------------------------------------------------
-def card_title(text):
-    st.markdown(f'<div class="card-title">{text}</div>', unsafe_allow_html=True)
+def _sparkline(values, labels):
+    """Inline SVG sparkline with a hover title on every point. The last game is
+    drawn in the accent colour."""
+    vals = [v for v in values if v == v]
+    if len(vals) < 2:
+        return ""
+    w, h, pad = 160, 22, 3
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1
+    n = len(values)
+    pts = []
+    for i, v in enumerate(values):
+        if v != v:
+            continue
+        x = pad + i * (w - 2 * pad) / (n - 1)
+        y = h - pad - (v - lo) / span * (h - 2 * pad)
+        pts.append((x, y, v, labels[i]))
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y, _, _ in pts)
+    dots = "".join(
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="transparent">'
+        f'<title>{html.escape(lbl)}: {v:g}</title></circle>'
+        for x, y, v, lbl in pts)
+    lx, ly = pts[-1][0], pts[-1][1]
+    return (f'<svg viewBox="0 0 {w} {h}" preserveAspectRatio="none">'
+            f'<polyline points="{line}" fill="none" stroke="{COLORS["spark"]}" '
+            f'stroke-width="1.5" vector-effect="non-scaling-stroke"/>'
+            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="2.5" fill="{COLORS["freo"]}"/>'
+            f'{dots}</svg>')
 
 
-def hero(number, label):
-    st.markdown(f'<div class="hero-num">{number}</div><div class="hero-label">{label}</div>',
-                unsafe_allow_html=True)
+def tiles_row(tiles, baseline):
+    cells = []
+    for t in tiles:
+        v = t["value"]
+        if v is None:
+            val = "-"
+        elif t["kind"] == "diff":
+            val = f"{v:+.1f}"
+        elif t["kind"] == "acc":
+            val = f"{v:.1f}%"
+        else:
+            val = f"{v:.1f}"
+        dlt = ""
+        if t["change"] is not None:
+            c = t["change"]
+            arrow = "▲" if c > 0 else ("▼" if c < 0 else "→")
+            if t["better"] is None or c == 0:
+                color = COLORS["muted"]
+            else:
+                good = (c > 0) == t["better"]
+                color = COLORS["win"] if good else COLORS["loss"]
+            dlt = (f'<span class="dlt" style="color:{color}" '
+                   f'title="{baseline}: {t["base"]:.1f}">{arrow} {c:+.1f}{t["unit"]}</span>')
+        cells.append(
+            f'<div class="cv-tile"><div class="lbl">{html.escape(t["label"])}</div>'
+            f'<div class="val">{val}{dlt}</div>{_sparkline(t["series"], t["games"])}</div>')
+    st.markdown(f'<div class="cv-tiles">{"".join(cells)}</div>', unsafe_allow_html=True)
 
 
-def leader_list(items):
-    """items: list of (role, name, value_html)."""
+def leaders_list(leaders):
     rows = ""
-    for role, name, val in items:
-        rows += (f'<div class="lead-row"><div>'
-                 f'<div class="lead-role">{role}</div>'
-                 f'<div class="lead-name">{name}</div></div>'
-                 f'<div class="lead-val">{val}</div></div>')
+    for r in leaders:
+        avg = "-" if r["avg"] is None else f'{r["avg"]:.1f}'
+        rows += (f'<div class="cv-lead"><div><div class="role">{html.escape(r["role"])}</div>'
+                 f'<div class="name">{html.escape(r["player"])}</div></div>'
+                 f'<div class="num">{avg}<small>per game · led {r["led"]}/{r["games"]}</small>'
+                 f'</div></div>')
     st.markdown(rows, unsafe_allow_html=True)
-
-
-def insight_box(big, text):
-    st.markdown(f'<div class="insight-box"><div class="big">{big}</div>'
-                f'<div class="txt">{text}</div></div>', unsafe_allow_html=True)

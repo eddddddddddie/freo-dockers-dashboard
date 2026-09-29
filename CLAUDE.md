@@ -53,16 +53,20 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
 - Built-in check: kicks + handballs == disposals on every player row. Failures, plus matches with no
   Freo table, are collected and printed as warnings at the end instead of stopping the run.
 
-## Dashboard pages
-1. Home: season record, results strip, key numbers vs previous season
-2. Midfield & Contest: clearances, contested possessions, inside 50s, Freo vs opposition by round
-3. Ball Movement & Scoring: disposals, marks, goal accuracy (goals vs behinds), goal assists
-4. Defence: rebound 50s, one percenters, opposition inside 50s and scores
-5. Players: pick any player, game-by-game form, last-5 average, season comparison
-6. Role leaders (per game): Ball Winner (contested poss), Tackler, Clearances, Rebounder
-   (rebound 50s), Spoiler (one percenters), Forward Threat (goals + goal assists)
-- Global season selector (2025 / 2026) and a "current vs baseline" table with correct % change.
-- Differential insights, e.g. "win rate when Freo wins the clearance count".
+## Dashboard layout (single Coach View, no other pages)
+One screen, laid out for a 1440x900 display with no page scroll (`app.py` -> `views.render`).
+Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`; chart heights are
+fixed pixels (`MID_H`, `BOT_H` in `views.py`), so check the fit with a 1440x790 screenshot
+after any layout change.
+- Header: season toggle (2025 / 2026), record, win rate, avg for/against/margin, last 5, data freshness.
+- 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
+  accuracy change in absolute units (a % change of a value that can cross zero is meaningless);
+  plain averages change in %. Accuracy is pooled (total goals / total scoring shots).
+- Middle row: margin by game, "where we win" (win rate when each side wins the count), quarter
+  pattern (from the cumulative quarter score strings).
+- Bottom row: role leaders (most games led + per game avg), player form heatmap (last 6 games vs
+  the player's own season average, stat picker), top goalkickers.
+- Chatbot opens in a dialog from the header button.
 
 ## Chatbot
 - Chat panel available on every page. Answers must be grounded in the loaded CSVs:
