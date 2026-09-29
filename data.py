@@ -496,3 +496,36 @@ def running_margin(tdf):
     out = cum.groupby("result").mean()
     out["games"] = cum.groupby("result").size()
     return out
+
+
+# ---- Deep dives ------------------------------------------------------------
+def player_averages(pdf_season, cols, min_games=5):
+    """Per game averages for each player with at least min_games this season."""
+    have = [c for c in cols if c in pdf_season.columns]
+    g = pdf_season.groupby("player")
+    out = g[have].mean()
+    out["games"] = g.size()
+    return out[out["games"] >= min_games]
+
+
+def year_on_year(player_df, s0, s1, col, n=15, min_games=8):
+    """Per game average of one stat in two seasons, for players with min_games
+    in both. The n with the highest s1 value, sorted by change."""
+    a = player_averages(players_season(player_df, s0), [col], min_games)[col]
+    b = player_averages(players_season(player_df, s1), [col], min_games)[col]
+    both = pd.DataFrame({"before": a, "after": b}).dropna()
+    both = both.sort_values("after", ascending=False).head(n)
+    both["change"] = both["after"] - both["before"]
+    return both.sort_values("change", ascending=False)
+
+
+def opponent_grid(team_df):
+    """Every game against each opponent, both seasons, toughest first (lowest
+    average margin). Returns [(opponent, record, avg margin, {season: [games]})]."""
+    out = []
+    for opp, g in team_df.sort_values("game_dt").groupby("opponent"):
+        w = int((g["result"] == "W").sum())
+        games = {int(s): gs.to_dict("records") for s, gs in g.groupby("season")}
+        out.append({"opponent": opp, "wins": w, "losses": len(g) - w,
+                    "avg_margin": g["margin"].mean(), "games": games})
+    return sorted(out, key=lambda r: r["avg_margin"])

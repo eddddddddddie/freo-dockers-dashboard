@@ -165,3 +165,70 @@ def running_margin_lines(rm, height):
     pad = (hi - lo) * 0.18 or 5
     fig.update_yaxes(range=[min(lo, 0) - pad, max(hi, 0) + pad])
     return fig
+
+
+def player_map(pa, xcol, ycol, xlab, ylab, size_col, height, n_labels=10):
+    """Every player's per game averages on two stats. Dotted lines at the team
+    median split the map into four quadrants; the leaders on either axis are
+    labelled directly, the rest on hover."""
+    size = pa[size_col] if size_col in pa.columns else pa["games"]
+    sref = float(size.max() or 1)
+    lead = set(pa[xcol].nlargest(n_labels // 2).index) | set(pa[ycol].nlargest(n_labels // 2).index)
+    fig = go.Figure(go.Scatter(
+        x=pa[xcol], y=pa[ycol], mode="markers+text",
+        text=[p if p in lead else "" for p in pa.index], textposition="top center",
+        textfont=dict(size=10, color=COLORS["ink"]),
+        marker=dict(size=8 + 14 * (size / sref) ** 2, color=COLORS["freo"], opacity=0.75,
+                    line=dict(color="#FFFFFF", width=2)),
+        customdata=list(zip(pa.index, pa["games"], size.round(0))),
+        hovertemplate="<b>%{customdata[0]}</b> (%{customdata[1]} games)<br>"
+                      + xlab + ": %{x:.1f}<br>" + ylab + ": %{y:.1f}<extra></extra>",
+    ))
+    fig.add_vline(x=pa[xcol].median(), line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig.add_hline(y=pa[ycol].median(), line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig = style_fig(fig, ylab + " per game", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=8, r=16, t=16, b=8))
+    fig.update_xaxes(title=dict(text=xlab + " per game", font=dict(color=COLORS["muted"], size=11)),
+                     showgrid=True, gridcolor=COLORS["grid"])
+    return fig
+
+
+def _spread(values, gap):
+    """Label positions: the values, pushed apart to at least `gap`."""
+    order = values.sort_values()
+    pos, last = {}, None
+    for name, v in order.items():
+        y = v if last is None else max(v, last + gap)
+        pos[name] = y
+        last = y
+    return pos
+
+
+def slope_chart(yoy, s0, s1, stat_label, height):
+    """Per game average in two seasons, one line per player. Up in Freo purple,
+    down in muted grey; names and values labelled at the ends."""
+    fig = go.Figure()
+    lo = float(min(yoy["before"].min(), yoy["after"].min()))
+    hi = float(max(yoy["before"].max(), yoy["after"].max()))
+    gap = (hi - lo) / max(height - 40, 1) * 14  # one label line in data units
+    y_right = _spread(yoy["after"], gap)
+    y_left = _spread(yoy["before"], gap)
+    for name, r in yoy.iterrows():
+        up = r["change"] >= 0
+        color = COLORS["freo"] if up else "#9CA3AF"
+        fig.add_trace(go.Scatter(
+            x=[str(s0), str(s1)], y=[r["before"], r["after"]], mode="lines+markers",
+            line=dict(color=color, width=2), marker=dict(size=8, color=color),
+            hovertemplate=f"<b>{name}</b><br>%{{x}}: %{{y:.1f}} {stat_label.lower()} a game"
+                          f"<br>Change {r['change']:+.1f}<extra></extra>",
+            showlegend=False,
+        ))
+        fig.add_annotation(x=1, y=y_right[name], text=f"{name}  {r['after']:.1f} ({r['change']:+.1f})",
+                           showarrow=False, xanchor="left", xshift=10, font=dict(size=10, color=COLORS["ink"]))
+        fig.add_annotation(x=0, y=y_left[name], text=f"{r['before']:.1f}", showarrow=False,
+                           xanchor="right", xshift=-10, font=dict(size=10, color=COLORS["muted"]))
+    fig = style_fig(fig, stat_label + " per game", unified=False, height=height)
+    fig.update_layout(margin=dict(l=8, r=230, t=16, b=8))
+    # Season labels are categories, not numbers; pad so end labels fit.
+    fig.update_xaxes(type="category", tickfont=dict(size=12), range=[-0.35, 1.05])
+    return fig

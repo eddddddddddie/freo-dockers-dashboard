@@ -124,6 +124,17 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .wa-head),
           div[data-testid="stMarkdownContainer"]:has(> .wa-insight) { margin-bottom:0 !important; }
 
+          /* Opponents grid (deep dive) */
+          .op-wrap { max-height:470px; overflow-y:auto; margin-bottom:12px; }
+          .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
+          .op-grid th { text-align:left; font-size:.64rem; text-transform:uppercase; letter-spacing:.07em;
+            color:#6D28D9; padding:4px 6px; border-bottom:1px solid #E7E3EF; position:sticky; top:0; background:#fff; }
+          .op-grid td { padding:4px 6px; border-bottom:1px solid #F3F0F9; vertical-align:middle; }
+          .op-name { font-weight:600; white-space:nowrap; }
+          .op-num { font-weight:700; color:#2A0A4A; white-space:nowrap; }
+          .op-chip { display:inline-block; color:#fff; border-radius:4px; padding:1px 6px; margin:1px 3px 1px 0;
+            font-size:.7rem; font-weight:600; white-space:nowrap; }
+
           /* Wharf-ai panel */
           .wa-head { background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 70%,#6D28D9 100%);
             color:#fff; border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:9px; }

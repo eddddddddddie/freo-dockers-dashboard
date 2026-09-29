@@ -92,6 +92,12 @@ after any layout change.
   (last 6 games, one-hue light to dark purple by the game as a % of the player's own season average,
   50% to 150%; stat picker), what drives our margin (Pearson r of each differential with margin;
   label it association, not cause).
+- Deep dives menu in the header opens full-size dialogs (`deepdives.py`), keeping the main view on
+  one screen: player map (per game averages on two chosen stats, median quadrants, dot size = time
+  on ground), year on year (slope chart of per game averages, top 15 with 8+ games in both seasons),
+  opponents (every game vs each club, both seasons, toughest first). The opponents dialog can hand a
+  question to Wharf-ai via `st.session_state["pending_prompt"]`; that arrives on a full-app run, so
+  the chat panel must not call `st.rerun(scope="fragment")` then (Streamlit raises).
 - Streamlit gives HTML markdown blocks a -1rem bottom margin; `inject_css` cancels it for the
   band, tiles and panel blocks. Narrow charts use legend keys in the card title
   (`card_title(keys=...)`) because Plotly legends stack vertically at that width.

@@ -21,6 +21,7 @@ import data as D
 import views as V
 import chatbot as C
 import insights as I
+import deepdives as DD
 
 inject_css()
 
@@ -81,7 +82,8 @@ def chat_panel(season, baseline):
                        "for multi-workspace keys) in the environment or app secrets.")
 
     typed = st.chat_input("Ask Wharf-ai about the data", disabled=client is None)
-    prompt = typed or clicked
+    pending = st.session_state.pop("pending_prompt", None)  # sent from a deep dive
+    prompt = typed or clicked or (pending if client is not None else None)
     if not prompt:
         return
     msgs.append({"role": "user", "content": prompt})
@@ -103,14 +105,16 @@ def chat_panel(season, baseline):
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
     msgs.append({"role": "assistant", "content": reply})
-    st.rerun(scope="fragment")  # redraw without the example prompts
+    # Redraw without the example prompts. A question handed over from a deep
+    # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
+    st.rerun() if pending and not (typed or clicked) else st.rerun(scope="fragment")
 
 
 # ------------------------------------------------------------- layout
 main, side = st.columns([3.55, 1])
 
 with main:
-    h1, h2 = st.columns([6.2, 1], vertical_alignment="center")
+    h1, h2, h3 = st.columns([5.6, 1, 0.95], vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")
@@ -126,6 +130,13 @@ with main:
         if baseline is not None:
             note += f" · changes vs {baseline}"
         header_band(season, D.record(tdf), form, note)
+    with h3, st.popover("Deep dives", use_container_width=True):
+        if st.button("Player map", use_container_width=True):
+            DD.player_map(player_df, season)
+        if st.button("Year on year", use_container_width=True):
+            DD.year_on_year(player_df, all_seasons)
+        if st.button("Opponents", use_container_width=True):
+            DD.opponents(team_df, all_seasons)
     V.render(team_df, player_df, season, baseline)
 
 with side, st.container(border=True, height=PANEL_H):
