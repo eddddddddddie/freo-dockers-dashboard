@@ -5,27 +5,6 @@ two or more series."""
 import plotly.graph_objects as go
 from theme import COLORS, style_fig
 
-import data as D
-
-
-def margin_bars(tdf, height):
-    """Margin in every game of the season, coloured by result."""
-    labels = D.game_labels(tdf)
-    colors = [COLORS["win"] if r == "W" else COLORS["loss"] for r in tdf["result"]]
-    avg = tdf["margin"].mean()
-    fig = go.Figure(go.Bar(
-        x=labels, y=tdf["margin"], marker=dict(color=colors, cornerradius=3),
-        customdata=tdf[["opponent", "result", "freo_score", "opp_score", "venue"]].values,
-        hovertemplate="<b>%{x}</b> vs %{customdata[0]}<br>%{customdata[1]} "
-                      "%{customdata[2]} to %{customdata[3]} (%{y:+})<br>"
-                      "%{customdata[4]}<extra></extra>",
-    ))
-    fig.add_hline(y=avg, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig = style_fig(fig, "Margin", unified=False, height=height)
-    fig.update_layout(bargap=0.18, showlegend=False)
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10))
-    fig.update_yaxes(zeroline=True, zerolinecolor=COLORS["grid"])
-    return fig
 
 
 def win_conditions_bars(wc, height):
@@ -106,18 +85,83 @@ def form_heatmap(vals, avgs, stat_label, height):
     return fig
 
 
-def goalkickers_bar(gk, height):
-    fig = go.Figure(go.Bar(
-        y=gk.index, x=gk["goals"], orientation="h",
-        marker=dict(color=COLORS["freo"], cornerradius=3),
-        text=gk["goals"], textposition="outside",
-        textfont=dict(size=11, color=COLORS["ink"]),
-        customdata=gk["games"],
-        hovertemplate="%{y}: <b>%{x}</b> goals in %{customdata} games<extra></extra>",
+# Diverging: opposition orange <- neutral grey -> Freo purple. The poles are the
+# two entity colours, so "purple = Freo won it" reads the same as everywhere else.
+DIVERGING = [[0, COLORS["opp"]], [0.25, "#E9B48A"], [0.5, "#F0EFEC"],
+             [0.75, "#B79AEE"], [1, COLORS["freo"]]]
+
+
+def game_strip(rows, z, hover, labels, results, height):
+    """One column per game: a W/L row on top, then margin and key differentials,
+    each row shaded by who won it (scaled to that row's biggest gap)."""
+    fig = go.Figure()
+    fig.add_trace(go.Heatmap(
+        z=[z_row for z_row in z], x=labels, y=rows, customdata=hover,
+        colorscale=DIVERGING, zmin=-1, zmax=1, xgap=1.5, ygap=2, showscale=False,
+        hovertemplate="%{customdata}<extra></extra>",
+    ))
+    # Result row: its own trace so it can use win/loss colours and a letter.
+    fig.add_trace(go.Heatmap(
+        z=[[1 if r == "W" else 0 for r in results]], x=labels, y=["Result"],
+        text=[results], texttemplate="%{text}", textfont=dict(size=10, color="#FFFFFF"),
+        colorscale=[[0, COLORS["loss"]], [1, COLORS["win"]]], zmin=0, zmax=1,
+        xgap=1.5, ygap=2, showscale=False, hoverinfo="skip",
     ))
     fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=4, t=4, b=4))
-    fig.update_xaxes(showticklabels=False, showgrid=False,
-                     range=[0, gk["goals"].max() * 1.2 if len(gk) else 1])
+    fig.update_layout(margin=dict(l=4, r=4, t=8, b=4))
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=9), showgrid=False)
+    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11),
+                     categoryorder="array", categoryarray=["Result"] + rows)
+    return fig
+
+
+def drivers_bar(dr, height):
+    """Correlation of each differential with margin, strongest first. Positive
+    (goes with winning) in Freo purple, negative in muted grey."""
+    colors = [COLORS["freo"] if r > 0 else "#9CA3AF" for r in dr["r"]]
+    fig = go.Figure(go.Bar(
+        y=dr["stat"], x=dr["r"], orientation="h",
+        marker=dict(color=colors, cornerradius=3),
+        text=[f"{r:+.2f}" if r > 0 else "" for r in dr["r"]], textposition="outside",
+        textfont=dict(size=10, color=COLORS["ink"]), cliponaxis=False,
+        customdata=dr["games"],
+        hovertemplate="%{y} differential vs margin<br>r = <b>%{x:+.2f}</b> over "
+                      "%{customdata} games<extra></extra>",
+    ))
+    # Negative values labelled just right of zero, clear of the stat names.
+    for stat, r in zip(dr["stat"], dr["r"]):
+        if r <= 0:
+            fig.add_annotation(x=0, y=stat, text=f"{r:+.2f}", showarrow=False,
+                               xanchor="left", xshift=4, font=dict(size=10, color=COLORS["ink"]))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=30, t=4, b=4), bargap=0.3)
+    fig.update_xaxes(range=[-0.8, 1.15], showticklabels=False, showgrid=False,
+                     zeroline=True, zerolinecolor=COLORS["grid"], zerolinewidth=1)
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=11))
+    return fig
+
+
+def running_margin_lines(rm, height):
+    """Average margin at each quarter break in wins and in losses."""
+    fig = go.Figure()
+    qs = ["Q1", "Q2", "Q3", "Q4"]
+    for res, name, color, pos in [("W", "Wins", COLORS["win"], "top center"),
+                                  ("L", "Losses", COLORS["loss"], "bottom center")]:
+        if res not in rm.index:
+            continue
+        y = rm.loc[res, qs].values
+        n = int(rm.loc[res, "games"])
+        fig.add_trace(go.Scatter(
+            x=qs, y=y, name=name, mode="lines+markers+text",
+            line=dict(color=color, width=2), marker=dict(size=8),
+            text=[f"{v:+.1f}" for v in y], textposition=pos,
+            textfont=dict(size=10, color=COLORS["ink"]),
+            hovertemplate=f"{name} ({n} games)<br>%{{x}} break: <b>%{{y:+.1f}}</b><extra></extra>",
+        ))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig = style_fig(fig, "Avg margin", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=10, t=14, b=4))
+    lo, hi = float(rm[qs].min().min()), float(rm[qs].max().max())
+    pad = (hi - lo) * 0.18 or 5
+    fig.update_yaxes(range=[min(lo, 0) - pad, max(hi, 0) + pad])
     return fig

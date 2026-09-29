@@ -1,8 +1,8 @@
 """The Coach View: the whole season on one 1440x900 screen.
 
 Row 1: headline tiles (season value, change vs baseline, per game sparkline).
-Row 2: margin by round | where we win | quarter pattern.
-Row 3: role leaders | player form | top goalkickers.
+Row 2: game strip | where we win | quarters (points, or wins v losses).
+Row 3: role leaders (incl. top goalkicker) | player form | what drives our margin.
 Every chart has hover detail in place of axis clutter.
 """
 
@@ -53,23 +53,42 @@ def render(team_df, player_df, season, baseline):
     # ---- middle row
     c1, c2, c3 = st.columns([2.2, 1.35, 1.15])
     with c1, st.container(border=True):
-        card_title("Margin by game", f"green win, red loss · avg {tdf['margin'].mean():+.1f}" if len(tdf) else "")
-        _plot(CH.margin_bars(tdf, MID_H))
+        card_title("Game strip", "who won each count",
+                   keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])])
+        rows, z, hover, labels = D.game_strip(tdf)
+        _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), MID_H))
     with c2, st.container(border=True):
         # Win rate in games where each side won the count on that stat.
         card_title("Where we win", keys=[("Freo won count", COLORS["freo"]),
                                          ("Opp won count", COLORS["opp"])])
         _plot(CH.win_conditions_bars(D.win_conditions(tdf), MID_H))
     with c3, st.container(border=True):
-        card_title("Quarter pattern", "avg pts", keys=[("Freo", COLORS["freo"]),
-                                                     ("Opp", COLORS["opp"])])
-        _plot(CH.quarter_bars(D.quarter_pattern(tdf), MID_H))
+        t, s = st.columns([1.25, 1], vertical_alignment="center")
+        with s:
+            qview = st.segmented_control("Quarter view", ["Points", "W v L"],
+                                         default="Points", key="qview",
+                                         label_visibility="collapsed") or "Points"
+        with t:
+            if qview == "Points":
+                card_title("Quarters", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])])
+            else:
+                card_title("Quarters", keys=[("Wins", COLORS["win"]), ("Losses", COLORS["loss"])])
+        if qview == "Points":
+            _plot(CH.quarter_bars(D.quarter_pattern(tdf), MID_H - 12))
+        else:
+            _plot(CH.running_margin_lines(D.running_margin(tdf), MID_H - 12))
 
     # ---- bottom row
     b1, b2, b3 = st.columns([1.05, 2.45, 1.2])
     with b1, st.container(border=True):
         card_title("Role leaders", "most games led")
-        leaders_list(D.role_leaders(pdf))
+        leaders = D.role_leaders(pdf)
+        gk = D.top_goalkickers(pdf, n=1)
+        if len(gk):
+            leaders.append({"role": "Top goalkicker", "player": gk.index[0],
+                            "value": f"{int(gk['goals'].iloc[0])}",
+                            "sub": f"goals in {int(gk['games'].iloc[0])} games"})
+        leaders_list(leaders)
     with b2, st.container(border=True):
         t, s = st.columns([2.6, 1], vertical_alignment="center")
         with t:
@@ -85,5 +104,5 @@ def render(team_df, player_df, season, baseline):
         else:
             st.caption("Not enough games yet.")
     with b3, st.container(border=True):
-        card_title("Goalkickers", "season total")
-        _plot(CH.goalkickers_bar(D.top_goalkickers(pdf, n=8), BOT_H))
+        card_title("What drives our margin", "correlation, not cause")
+        _plot(CH.drivers_bar(D.margin_drivers(tdf), BOT_H))

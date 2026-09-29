@@ -84,11 +84,14 @@ after any layout change.
 - 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
   accuracy change in absolute units (a % change of a value that can cross zero is meaningless);
   plain averages change in %. Accuracy is pooled (total goals / total scoring shots).
-- Middle row: margin by game, "where we win" (win rate when each side wins the count), quarter
-  pattern (from the cumulative quarter score strings).
-- Bottom row: role leaders (most games led + per game avg), player form heatmap (last 6 games,
-  one-hue light to dark purple by the game as a % of the player's own season average, 50% to 150%;
-  stat picker), top goalkickers.
+- Middle row: game strip (one column per game: result, then margin and key differentials shaded
+  orange to purple by who won the count, each row scaled to its 90th percentile gap), "where we win"
+  (win rate when each side wins the count), quarters (points per quarter, or average running margin
+  at each break in wins vs losses; from the cumulative quarter score strings).
+- Bottom row: role leaders (most games led + per game avg, plus top goalkicker), player form heatmap
+  (last 6 games, one-hue light to dark purple by the game as a % of the player's own season average,
+  50% to 150%; stat picker), what drives our margin (Pearson r of each differential with margin;
+  label it association, not cause).
 - Streamlit gives HTML markdown blocks a -1rem bottom margin; `inject_css` cancels it for the
   band, tiles and panel blocks. Narrow charts use legend keys in the card title
   (`card_title(keys=...)`) because Plotly legends stack vertically at that width.

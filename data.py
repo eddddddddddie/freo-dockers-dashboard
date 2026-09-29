@@ -415,3 +415,84 @@ def form_matrix(pdf_season, col, n_games=6, n_players=12, min_games=5):
             .reindex(index=top.index, columns=recent["round"]))
     vals.columns = labels
     return vals, top["mean"], labels
+
+
+# ---- Game strip, margin drivers, running margin ------------------------------
+# Rows of the game strip: label -> (freo col, opp col). A row is shaded by the
+# differential, scaled to that row's biggest gap in the season.
+STRIP_ROWS = [
+    ("Inside 50s", "freo_inside_50s", "opp_inside_50s"),
+    ("Contested poss", "freo_contested_poss", "opp_contested_poss"),
+    ("Clearances", "freo_clearances", "opp_clearances"),
+    ("Disposals", "freo_disposals", "opp_disposals"),
+    ("Tackles", "freo_tackles", "opp_tackles"),
+]
+STRIP_ROWS_EXT = [
+    ("Metres gained", "freo_metres_gained", "opp_metres_gained"),
+    ("Inside 50s", "freo_inside_50s", "opp_inside_50s"),
+    ("Contested poss", "freo_contested_poss", "opp_contested_poss"),
+    ("Centre clearances", "freo_centre_clearances", "opp_centre_clearances"),
+    ("Stoppage clearances", "freo_stoppage_clearances", "opp_stoppage_clearances"),
+    ("Pressure acts", "freo_pressure_acts", "opp_pressure_acts"),
+]
+
+
+def game_strip(tdf):
+    """Matrix for the game strip: one column per game, a margin row then one row
+    per stat. Returns (rows, z scaled to -1..1 per row, hover text, x labels).
+    Each row is scaled to its 90th percentile gap (and clipped), so one blowout
+    does not wash out the rest of the row."""
+    rows_spec = [("Margin", "freo_score", "opp_score")] + (
+        STRIP_ROWS_EXT if has_ext(tdf) else STRIP_ROWS)
+    labels = game_labels(tdf)
+    rows, z, hover = [], [], []
+    for label, fcol, ocol in rows_spec:
+        diff = tdf[fcol] - tdf[ocol]
+        top = diff.abs().quantile(0.9) or diff.abs().max() or 1
+        rows.append(label)
+        z.append((diff / top).clip(-1, 1).round(3).tolist())
+        hover.append([
+            f"<b>{lbl}</b> vs {opp} ({res})<br>{label}: Freo {f:,.0f}, opp {o:,.0f} ({d:+,.0f})"
+            for lbl, opp, res, f, o, d in zip(labels, tdf["opponent"], tdf["result"],
+                                               tdf[fcol], tdf[ocol], diff)])
+    return rows, z, hover, labels
+
+
+# Differentials tested against margin: label -> column stem (freo_/opp_ prefix).
+DRIVERS = [
+    ("Inside 50s", "inside_50s"), ("Disposals", "disposals"),
+    ("Contested poss", "contested_poss"), ("Marks", "marks"),
+    ("Clearances", "clearances"), ("Tackles", "tackles"),
+    ("Rebound 50s", "rebound_50s"), ("Clangers", "clangers"),
+    ("Frees for", "frees_for"),
+]
+DRIVERS_EXT = [
+    ("Metres gained", "metres_gained"), ("Inside 50s", "inside_50s"),
+    ("Disposals", "disposals"), ("Turnovers", "turnovers"),
+    ("Intercepts", "intercepts"), ("Contested poss", "contested_poss"),
+    ("Pressure acts", "pressure_acts"), ("Marks", "marks"),
+    ("Centre clearances", "centre_clearances"), ("Tackles", "tackles"),
+    ("Stoppage clearances", "stoppage_clearances"),
+]
+
+
+def margin_drivers(tdf):
+    """Pearson correlation of each Freo-minus-opposition differential with the
+    final margin, strongest first. Association only, not cause."""
+    rows = []
+    for label, stem in (DRIVERS_EXT if has_ext(tdf) else DRIVERS):
+        diff = tdf[f"freo_{stem}"] - tdf[f"opp_{stem}"]
+        rows.append({"stat": label, "r": diff.corr(tdf["margin"]), "games": len(tdf)})
+    out = pd.DataFrame(rows).dropna()
+    return out.reindex(out["r"].abs().sort_values(ascending=False).index).reset_index(drop=True)
+
+
+def running_margin(tdf):
+    """Average margin at each quarter break, in wins and in losses."""
+    f = pd.DataFrame(tdf["freo_qtrs"].map(_qtr_points).tolist(), columns=["Q1", "Q2", "Q3", "Q4"])
+    o = pd.DataFrame(tdf["opp_qtrs"].map(_qtr_points).tolist(), columns=["Q1", "Q2", "Q3", "Q4"])
+    cum = (f - o).cumsum(axis=1)
+    cum["result"] = tdf["result"].values
+    out = cum.groupby("result").mean()
+    out["games"] = cum.groupby("result").size()
+    return out

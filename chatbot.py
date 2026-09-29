@@ -115,6 +115,15 @@ def build_context(_team_df_token, _player_df_token):
         splits.columns = [f"{c}_{a}" for c, a in splits.columns]
         parts.append("Per-game averages and season totals in wins (W) vs losses (L) (CSV):")
         parts.append(splits.reset_index().to_csv(index=False).strip())
+        dr = D.margin_drivers(tdf)
+        parts.append("Correlation (Pearson r) of each Freo-minus-opposition differential with "
+                     "final margin, per game (association, not cause): "
+                     + ", ".join(f"{r.stat} {r.r:+.2f}" for r in dr.itertuples()) + ".")
+        rm = D.running_margin(tdf)
+        for res, name in (("W", "wins"), ("L", "losses")):
+            if res in rm.index:
+                parts.append(f"Average margin at quarter breaks in {name} ({int(rm.loc[res, 'games'])} "
+                             "games): " + ", ".join(f"{q} {rm.loc[res, q]:+.1f}" for q in ("Q1", "Q2", "Q3", "Q4")) + ".")
         for t in ("Home", "Away", "Final"):
             g = tdf[tdf["type"] == t]
             if len(g):

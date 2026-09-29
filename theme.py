@@ -104,7 +104,7 @@ def inject_css():
 
           /* Role leaders */
           .cv-lead { display:flex; justify-content:space-between; align-items:center;
-            padding:4px 0; border-bottom:1px solid #F3F0F9; }
+            padding:2px 0; border-bottom:1px solid #F3F0F9; }
           .cv-lead:last-child { border-bottom:none; }
           .cv-lead .role { color:#7C3AED; font-size:.6rem; text-transform:uppercase;
             letter-spacing:.06em; font-weight:700; }
@@ -244,10 +244,14 @@ def tiles_row(tiles, baseline):
 def leaders_list(leaders):
     rows = ""
     for r in leaders:
-        avg = "-" if r["avg"] is None else f'{r["avg"]:.1f}'
+        if "value" in r:  # a row with its own figure, e.g. top goalkicker
+            val, small = r["value"], r["sub"]
+        else:
+            val = "-" if r["avg"] is None else f'{r["avg"]:.1f}'
+            small = f'per game · led {r["led"]}/{r["games"]}'
         rows += (f'<div class="cv-lead"><div><div class="role">{html.escape(r["role"])}</div>'
                  f'<div class="name">{html.escape(r["player"])}</div></div>'
-                 f'<div class="num">{avg}<small>per game · led {r["led"]}/{r["games"]}</small>'
+                 f'<div class="num">{html.escape(val)}<small>{html.escape(small)}</small>'
                  f'</div></div>')
     st.markdown(rows, unsafe_allow_html=True)
 
