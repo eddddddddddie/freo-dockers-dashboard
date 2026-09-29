@@ -127,8 +127,7 @@ def inject_css():
           /* Wharf-ai panel */
           .wa-head { background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 70%,#6D28D9 100%);
             color:#fff; border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:9px; }
-          .wa-head .dot { width:26px; height:26px; border-radius:50%; background:#fff; color:#4C1D95;
-            display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.8rem; }
+          .wa-head .dot { width:30px; height:30px; border-radius:50%; border:1.5px solid #fff; }
           .wa-head b { font-size:1rem; letter-spacing:.2px; }
           .wa-head span { display:block; font-size:.64rem; color:#C4B5FD; }
           .wa-insight { background:#F5F1FB; border-left:4px solid #7C3AED; border-radius:8px;
@@ -253,8 +252,16 @@ def leaders_list(leaders):
     st.markdown(rows, unsafe_allow_html=True)
 
 
+def _svg_data_uri(name):
+    import base64, os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", name)
+    with open(path, "rb") as f:
+        return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode()
+
+
 def chat_header():
-    st.markdown('<div class="wa-head"><div class="dot">W</div><div><b>Wharf-ai</b>'
+    st.markdown(f'<div class="wa-head"><img class="dot" src="{_svg_data_uri("anchor.svg")}" alt="">'
+                '<div><b>Wharf-ai</b>'
                 '<span>Answers from the loaded match data only</span></div></div>',
                 unsafe_allow_html=True)
 

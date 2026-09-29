@@ -86,8 +86,9 @@ after any layout change.
   plain averages change in %. Accuracy is pooled (total goals / total scoring shots).
 - Middle row: margin by game, "where we win" (win rate when each side wins the count), quarter
   pattern (from the cumulative quarter score strings).
-- Bottom row: role leaders (most games led + per game avg), player form heatmap (last 6 games vs
-  the player's own season average, stat picker), top goalkickers.
+- Bottom row: role leaders (most games led + per game avg), player form heatmap (last 6 games,
+  one-hue light to dark purple by the game as a % of the player's own season average, 50% to 150%;
+  stat picker), top goalkickers.
 - Streamlit gives HTML markdown blocks a -1rem bottom margin; `inject_css` cancels it for the
   band, tiles and panel blocks. Narrow charts use legend keys in the card title
   (`card_title(keys=...)`) because Plotly legends stack vertically at that width.
@@ -98,6 +99,8 @@ after any layout change.
   games, home vs away, accuracy in wins vs losses, biggest change vs baseline, player in form,
   centre vs stoppage clearances), one picked at random per page open and per season. No LLM
   writes the insight, so it works without an API key. The shown insight is passed to the model.
+- Avatars are generic SVGs in `assets/` (no club marks): `supporter.svg` (user, purple on white,
+  bobble beanie) and `anchor.svg` (Wharf-ai, white on purple anchor with eyes).
 - Answers must be grounded in the loaded CSVs:
   compute numbers with code, then explain. Never state a stat that wasn't calculated.
 - Box-score data shows what happened, not structures or zones. The bot should say so

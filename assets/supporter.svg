@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Supporter in a bobble beanie: purple on white. Generic, no club marks. -->
+  <circle cx="32" cy="32" r="31" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2"/>
+  <circle cx="32" cy="42" r="13" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2.5"/>
+  <circle cx="27.5" cy="42.5" r="1.9" fill="#4C1D95"/>
+  <circle cx="36.5" cy="42.5" r="1.9" fill="#4C1D95"/>
+  <path d="M27 47.5 Q32 51.5 37 47.5" fill="none" stroke="#4C1D95" stroke-width="2" stroke-linecap="round"/>
+  <path d="M17.5 34 C17.5 17 46.5 17 46.5 34 Z" fill="#7C3AED"/>
+  <path d="M21 28 H43" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <rect x="15" y="31" width="34" height="7" rx="3.5" fill="#4C1D95"/>
+  <circle cx="32" cy="17" r="5.5" fill="#7C3AED"/>
+</svg>

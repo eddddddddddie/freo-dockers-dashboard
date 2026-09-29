@@ -73,7 +73,8 @@ def render(team_df, player_df, season, baseline):
     with b2, st.container(border=True):
         t, s = st.columns([2.6, 1], vertical_alignment="center")
         with t:
-            card_title("Player form", "last 6 games, blue above own season avg, red below")
+            card_title("Player form", "last 6 games vs own season avg",
+                       keys=[("below", "#DDD0F7"), ("above", "#5B21B6")])
         with s:
             stat = st.selectbox("Form stat", list(form_stats), key="form_stat",
                                 label_visibility="collapsed")

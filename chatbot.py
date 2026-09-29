@@ -102,7 +102,7 @@ def build_context(_team_df_token, _player_df_token):
                 f"({d['behind_games']} games)."
             )
         # Per-game team table.
-        cols = ["round", "opponent", "result", "margin", "freo_score", "opp_score",
+        cols = ["round", "type", "venue", "opponent", "result", "margin", "freo_score", "opp_score",
                 "freo_goals", "freo_behinds", "freo_disposals", "opp_disposals",
                 "freo_clearances", "opp_clearances", "freo_contested_poss",
                 "opp_contested_poss", "freo_inside_50s", "opp_inside_50s",
@@ -110,12 +110,17 @@ def build_context(_team_df_token, _player_df_token):
                 "freo_one_percenters", "freo_goal_assists"]
         cols += [c for c in EXT_TEAM_COLS if c in tdf.columns]
         # Pre-computed splits so the model does not have to add up rows itself.
-        split_cols = [c for c in cols if c not in ("round", "opponent", "result")]
+        split_cols = [c for c in cols if c not in ("round", "type", "venue", "opponent", "result")]
         splits = tdf.groupby("result")[split_cols].agg(["mean", "sum"]).round(1)
         splits.columns = [f"{c}_{a}" for c, a in splits.columns]
         parts.append("Per-game averages and season totals in wins (W) vs losses (L) (CSV):")
         parts.append(splits.reset_index().to_csv(index=False).strip())
-        parts.append("Per-game team totals (CSV):")
+        for t in ("Home", "Away", "Final"):
+            g = tdf[tdf["type"] == t]
+            if len(g):
+                w = int((g["result"] == "W").sum())
+                parts.append(f"{t} games: {w}-{len(g) - w}, avg margin {g['margin'].mean():+.1f}.")
+        parts.append("Per-game team totals (CSV; type is Home, Away or Final):")
         parts.append(tdf[cols].to_csv(index=False).strip())
         # Player season averages.
         pdf = D.players_season(players, season)

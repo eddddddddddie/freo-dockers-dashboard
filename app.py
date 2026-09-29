@@ -8,6 +8,8 @@ ANTHROPIC_API_KEY (environment or Streamlit secrets), plus
 ANTHROPIC_WORKSPACE_ID (wrkspc_...) for multi-workspace keys.
 """
 
+import os
+
 import streamlit as st
 
 st.set_page_config(page_title="Fremantle Dockers Coach View",
@@ -26,6 +28,9 @@ team_df = D.load_team()
 player_df = D.load_players()
 all_seasons = D.seasons(team_df)
 
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+AVATARS = {"user": os.path.join(ASSETS, "supporter.svg"),        # supporter in a bobble beanie
+           "assistant": os.path.join(ASSETS, "anchor.svg")}      # Wharf-ai's anchor
 PANEL_H = 722       # Wharf-ai panel height (px), level with the dashboard bottom
 HISTORY_H = 570     # scrolling area inside the panel
 
@@ -69,7 +74,7 @@ def chat_panel(season, baseline):
                              disabled=client is None):
                     clicked = q
         for msg in msgs:
-            with st.chat_message(msg["role"]):
+            with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
                 st.markdown(msg["content"])
         if client is None:
             st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
@@ -81,9 +86,9 @@ def chat_panel(season, baseline):
         return
     msgs.append({"role": "user", "content": prompt})
     with history:
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=AVATARS["user"]):
             st.markdown(prompt)
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             try:
                 reply = st.write_stream(C.stream_answer(
                     client, C.build_context("team", "player"), season, msgs,
@@ -98,8 +103,7 @@ def chat_panel(season, baseline):
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
     msgs.append({"role": "assistant", "content": reply})
-    if clicked:
-        st.rerun(scope="fragment")  # redraw without the example prompts
+    st.rerun(scope="fragment")  # redraw without the example prompts
 
 
 # ------------------------------------------------------------- layout

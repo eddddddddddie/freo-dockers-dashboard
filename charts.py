@@ -77,21 +77,26 @@ def quarter_bars(qp, height):
     return fig
 
 
+# One-hue sequential purple, light to dark.
+FORM_SCALE = [[0, "#F5F1FB"], [0.25, "#DDD0F7"], [0.5, "#B79AEE"],
+              [0.75, "#7C3AED"], [1, "#3B0F7A"]]
+
+
 def form_heatmap(vals, avgs, stat_label, height):
-    """Player form: each cell is the player's number in that game, coloured by
-    how far it sits above (blue) or below (red) their own season average."""
-    dev = vals.sub(avgs, axis=0)
-    lim = max(float(dev.abs().max().max() or 1), 1.0)
+    """Player form: each cell is the player's number in that game, shaded on a
+    light to dark purple scale by that number as a % of the player's own season
+    average (half the average or less is lightest, 1.5x or more darkest).
+    Plotly picks a contrasting text colour per cell."""
+    pct = vals.div(avgs.clip(lower=0.1), axis=0) * 100
     rows = [f"{p}  ({a:.1f})" for p, a in avgs.items()]
     text = vals.map(lambda v: "" if v != v else f"{v:.0f}").values
     fig = go.Figure(go.Heatmap(
-        z=dev.values, x=list(vals.columns), y=rows, text=text,
+        z=pct.values, x=list(vals.columns), y=rows, text=text,
         texttemplate="%{text}", textfont=dict(size=11),
-        colorscale=[[0, "#C53030"], [0.5, "#F0EFEC"], [1, "#2B6CB0"]],
-        zmin=-lim, zmax=lim, xgap=2, ygap=2, showscale=False,
+        colorscale=FORM_SCALE, zmin=50, zmax=150, xgap=2, ygap=2, showscale=False,
         customdata=vals.values,
         hovertemplate="%{y}<br>%{x}: <b>%{customdata:.0f}</b> " + stat_label.lower() +
-                      "<br>%{z:+.1f} vs season avg<extra></extra>",
+                      "<br>%{z:.0f}% of season avg<extra></extra>",
         hoverongaps=False,
     ))
     fig = style_fig(fig, "", unified=False, height=height)
