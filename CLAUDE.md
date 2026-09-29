@@ -5,7 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Fremantle Dockers Performance Dashboard
 
 ## Commands
-- Setup: `pip install requests beautifulsoup4` (the dashboard will also need streamlit, pandas, plotly, anthropic)
+- Setup: Python 3.12 (`.python-version`; anthropic 1.x needs 3.10+). `python3.12 -m venv .venv &&
+  .venv/bin/pip install -r requirements.txt`. requirements.txt pins tested major-version ranges
+  (Streamlit 1.64+, pandas 3, plotly 7, anthropic 1.9+); Streamlit Cloud should also run 3.12.
 - Scrape: `python freo_scraper.py 2025 2026` (no args defaults to 2025 and 2026). Takes about
   1.5 s per match, so plan for a minute or so per season. Writes both CSVs into the current directory.
 - Advanced stats: `python afl_api_scraper.py 2025 2026` (same defaults, about 3 minutes for both
@@ -89,7 +91,15 @@ panel height and player-form row count, tuned at 1440x790 and scaled from there 
 give up extra height because titles wrap). The first run uses the 1440x790 design size.
 Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`. After any layout
 change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
-- Header: season toggle (2025 / 2026), record, win rate, avg for/against/margin, last 5, data freshness.
+- Header: season toggle (2025 / 2026), Season/Match view switch, Deep dives dropdown, and a band
+  with record, win rate, avg for/against/margin, last 5, data freshness (the two averages hide
+  below 1380px wide).
+- Match mode (`views.render_match`): pick one game (most recent first); the band shows the score
+  line; tiles show this game against the season average (sparkline accents that game); tale of the
+  tape (Freo vs opposition share per stat, tick at Freo's season average share); game flow (running
+  margin at each break vs the season's average win and loss); game leaders + goals; every Freo
+  player's numbers shaded against their own season average (scrolls inside its card). Wharf-ai is
+  told which match is on screen.
 - 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
   accuracy change in absolute units (a % change of a value that can cross zero is meaningless);
   plain averages change in %. Accuracy is pooled (total goals / total scoring shots).
@@ -104,11 +114,20 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 - Deep dives menu in the header opens full-size dialogs (`deepdives.py`), keeping the main view on
   one screen: player map (per game averages on two chosen stats, median quadrants, dot size = time
   on ground), year on year (slope chart of per game averages, top 15 with 8+ games in both seasons),
-  opponents (every game vs each club, both seasons, toughest first). The opponents dialog can hand a
+  opponents (every game vs each club, both seasons, toughest first), quarter-time check (enter the
+  margin at a break: record, average final margin and net scoring after the break in games within
+  a +/- window, plus a scatter of margin at the break vs final margin; matched on score only, since
+  there are no quarter-by-quarter stats). Deep dives is a selectbox, not a popover: a popover stays
+  open on top of the dialog it launches. The opponents dialog can hand a
   question to Wharf-ai via `st.session_state["pending_prompt"]`; that arrives on a full-app run, so
   the chat panel must not call `st.rerun(scope="fragment")` then (Streamlit raises).
+- Cards are `views.card(name)` / keyed containers (`key="card_<name>"`); the card CSS targets the
+  `st-key-card_*` class, because Streamlit 1.64 removed the old bordered-container wrapper element.
+  In 1.64 segmented controls render as radio buttons (tests: `get_by_role("radio", ...)`).
+- The viewport component keeps the last size it sent on the parent window: every send reruns the
+  app, and an extra rerun mid-answer cuts off a streaming Wharf-ai reply.
 - Streamlit gives HTML markdown blocks a -1rem bottom margin; `inject_css` cancels it for the
-  band, tiles and panel blocks. Narrow charts use legend keys in the card title
+  band, tiles, panel, card-title, leader and tape blocks. Narrow charts use legend keys in the card title
   (`card_title(keys=...)`) because Plotly legends stack vertically at that width.
 
 ## Chatbot (Wharf-ai)
@@ -124,7 +143,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   manual streaming tool-use loop on `claude-sonnet-5-5` (adaptive thinking, effort `medium`,
   server-side refusal fallback `fallbacks: "default"`), and the model gets every number from
   `wharf_tools.py` (team_games, team_aggregate, correlate, quarter_breakdown, player_aggregate,
-  player_games): fixed pandas queries, no model-written code. Tool inputs stream eagerly, so
+  player_games, show_chart): fixed pandas queries, no model-written code. show_chart draws a small
+  team_trend / player_trend / player_bar chart under the answer from the data itself (the model
+  never supplies the numbers); charts are stored with the message as figure JSON and only role +
+  content go back to the API. Tool inputs stream eagerly, so
   `wharf_tools.run` validates them and returns errors the model can fix. Goal accuracy from
   `team_aggregate` is pooled, matching the dashboard.
 - Within one question the message list is append-only and assistant turns are passed back whole

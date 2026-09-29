@@ -232,3 +232,107 @@ def slope_chart(yoy, s0, s1, stat_label, height):
     # Season labels are categories, not numbers; pad so end labels fit.
     fig.update_xaxes(type="category", tickfont=dict(size=12), range=[-0.35, 1.05])
     return fig
+
+
+# ---- Match mode ---------------------------------------------------------------
+def game_flow_lines(game, avg, height):
+    """Running margin at each break in one game, against the season's average
+    running margin in wins and in losses (thin dashed reference lines)."""
+    qs = ["Start", "Q1", "Q2", "Q3", "Q4"]
+    fig = go.Figure()
+    for res, name, color in [("W", "Avg win", COLORS["win"]), ("L", "Avg loss", COLORS["loss"])]:
+        if res in avg.index:
+            fig.add_trace(go.Scatter(
+                x=qs, y=[0] + avg.loc[res].round(1).tolist(), name=name, mode="lines",
+                line=dict(color=color, width=1.5, dash="dash"),
+                hovertemplate=name + " at %{x}: %{y:+.1f}<extra></extra>"))
+    y = [0] + game.tolist()
+    fig.add_trace(go.Scatter(
+        x=qs, y=y, name="This game", mode="lines+markers+text",
+        line=dict(color=COLORS["freo"], width=3), marker=dict(size=8),
+        text=[""] + [f"{v:+.0f}" if v else "0" for v in game], textposition="top center",
+        textfont=dict(size=11, color=COLORS["ink"]),
+        hovertemplate="This game at %{x}: <b>%{y:+.0f}</b><extra></extra>"))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig = style_fig(fig, "Margin", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=10, t=14, b=4))
+    lo = min(min(y), float(avg.min().min()) if len(avg) else 0)
+    hi = max(max(y), float(avg.max().max()) if len(avg) else 0)
+    pad = (hi - lo) * 0.15 or 5
+    fig.update_yaxes(range=[lo - pad, hi + pad])
+    return fig
+
+
+def match_player_grid(vals, pct, labels, height):
+    """Every Freo player in one game: the number, shaded light to dark purple by
+    that number as a % of the player's own season average."""
+    text = vals.map(lambda v: "" if v != v else f"{v:.0f}").values
+    fig = go.Figure(go.Heatmap(
+        z=pct.values, x=labels, y=list(vals.index), text=text,
+        texttemplate="%{text}", textfont=dict(size=11),
+        colorscale=FORM_SCALE, zmin=50, zmax=150, xgap=2, ygap=2, showscale=False,
+        customdata=vals.values,
+        hovertemplate="%{y}<br>%{x}: <b>%{customdata:.0f}</b><br>%{z:.0f}% of season avg"
+                      "<extra></extra>",
+    ))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=4, t=4, b=4))
+    fig.update_xaxes(side="top", tickfont=dict(size=10))
+    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11))
+    return fig
+
+
+# ---- Quarter-time check ---------------------------------------------------------
+def break_scatter(bm, col, margin, window, brk_label, height):
+    """Every game: margin at the break (across) against the final margin (up),
+    W green / L red, with the chosen position shaded."""
+    fig = go.Figure()
+    fig.add_vrect(x0=margin - window, x1=margin + window, fillcolor=COLORS["freo"],
+                  opacity=0.10, line_width=0)
+    for res, name, color in [("W", "Won", COLORS["win"]), ("L", "Lost", COLORS["loss"])]:
+        g = bm[bm["result"] == res]
+        fig.add_trace(go.Scatter(
+            x=g[col], y=g["margin"], mode="markers", name=name,
+            marker=dict(size=9, color=color, line=dict(color="#FFFFFF", width=2)),
+            customdata=list(zip(g["season"], g["round"], g["opponent"])),
+            hovertemplate="%{customdata[0]} %{customdata[1]} v %{customdata[2]}<br>"
+                          f"{brk_label}: " + "%{x:+d}<br>Final: %{y:+d}<extra></extra>"))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig = style_fig(fig, "Final margin", unified=False, height=height)
+    fig.update_layout(margin=dict(l=8, r=12, t=24, b=8))
+    fig.update_xaxes(title=dict(text=f"Margin at {brk_label.lower()}",
+                                font=dict(color=COLORS["muted"], size=11)), showgrid=True,
+                     gridcolor=COLORS["grid"], zeroline=False)
+    return fig
+
+
+# ---- Wharf-ai answer charts -------------------------------------------------------
+def answer_chart(series, title, y_title, kind="line", height=210):
+    """A small chart for the Wharf-ai panel. series: [(name, x list, y list)].
+    Series colours follow a fixed order (Freo purple first)."""
+    order = [COLORS["freo"], COLORS["opp"], "#0D9488", "#BE185D"]
+    fig = go.Figure()
+    for i, (name, x, y) in enumerate(series):
+        color = order[i % len(order)]
+        if kind == "bar":
+            fig.add_trace(go.Bar(y=x, x=y, name=name, orientation="h",
+                                 marker=dict(color=color, cornerradius=3),
+                                 text=[f"{v:.1f}" for v in y], textposition="outside",
+                                 textfont=dict(size=10, color=COLORS["ink"]), cliponaxis=False,
+                                 hovertemplate="%{y}: <b>%{x:.1f}</b><extra></extra>"))
+        else:
+            fig.add_trace(go.Scatter(x=x, y=y, name=name, mode="lines+markers",
+                                     line=dict(color=color, width=2), marker=dict(size=6),
+                                     hovertemplate=name + " %{x}: <b>%{y:.1f}</b><extra></extra>"))
+    fig = style_fig(fig, y_title, unified=kind != "bar", height=height)
+    fig.update_layout(title=dict(text=title, font=dict(size=12, color=COLORS["ink"]), x=0, y=0.98),
+                      margin=dict(l=4, r=24, t=48 if len(series) > 1 else 30, b=4),
+                      showlegend=len(series) > 1,
+                      legend=dict(y=1.0, yanchor="bottom", font=dict(size=10)))
+    if kind == "bar":
+        fig.update_yaxes(autorange="reversed", tickfont=dict(size=10))
+        fig.update_xaxes(showticklabels=False, showgrid=False)
+    else:
+        fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
+    return fig

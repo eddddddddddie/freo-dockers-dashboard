@@ -8,6 +8,7 @@ and results are compact CSV capped at MAX_ROWS rows.
 
 import pandas as pd
 
+import charts as CH
 import data as D
 
 MAX_ROWS = 60
@@ -224,6 +225,54 @@ def player_games(players, stats, filters=None, limit=30):
     return _csv(p[cols].head(max(1, min(int(limit), MAX_ROWS))), "Most recent first.")
 
 
+def show_chart(kind, title, metrics=None, players=None, stat=None, filters=None,
+               min_games=5, top_n=10):
+    """Draw a chart under the answer from the data itself (the model never
+    supplies the numbers). Returns (summary text, plotly figure)."""
+    if kind == "team_trend":
+        _check_cols(metrics or [], _team_metrics(), "team metric")
+        if len(metrics) > 2:
+            raise ToolError("team_trend takes 1 or 2 metrics.")
+        t = _filter(_team(), filters).sort_values("game_dt")
+        if not len(t):
+            raise ToolError("No games match those filters.")
+        x = D.game_labels(t)
+        series = [(m, x, t[m].round(1).tolist()) for m in metrics]
+        fig = CH.answer_chart(series, title, "")
+        return f"Chart shown: {title} ({len(t)} games).", fig
+    if kind == "player_trend":
+        if not stat or not players or len(players) > 3:
+            raise ToolError("player_trend needs a stat and 1 to 3 players.")
+        _check_cols([stat], set(player_stats()), "player stat")
+        p = _filter(_players(), filters)
+        names = [_match_one(n, p["player"].unique(), "player") for n in players]
+        series = []
+        for n in names:
+            g = p[p["player"] == n].sort_values("game_dt")
+            x = (g["round"] + " " + g["opponent"].map(D.abbr)).tolist()
+            series.append((n, x, g[stat].round(1).tolist()))
+        fig = CH.answer_chart(series, title, stat.replace("_", " "))
+        return f"Chart shown: {title} ({', '.join(names)}).", fig
+    if kind == "player_bar":
+        if not stat:
+            raise ToolError("player_bar needs a stat.")
+        _check_cols([stat], set(player_stats()), "player stat")
+        p = _filter(_players(), filters)
+        if players:
+            p = p[p["player"].isin([_match_one(n, p["player"].unique(), "player")
+                                    for n in players])]
+        g = p.groupby("player")[stat].agg(["mean", "count"])
+        g = g[g["count"] >= int(min_games)].sort_values("mean", ascending=False)
+        g = g.head(max(1, min(int(top_n), 15)))
+        if not len(g):
+            raise ToolError("No players match (check min_games and filters).")
+        series = [(f"{stat.replace('_', ' ')} per game", g.index.tolist(),
+                   g["mean"].round(1).tolist())]
+        fig = CH.answer_chart(series, title, "", kind="bar", height=max(180, 26 * len(g) + 50))
+        return f"Chart shown: {title} ({len(g)} players, per game averages).", fig
+    raise ToolError("kind must be team_trend, player_trend or player_bar.")
+
+
 # ---- definitions --------------------------------------------------------------
 _FILTERS = {
     "type": "object",
@@ -291,28 +340,46 @@ TOOLS = [
            "filters": _FILTERS, "limit": {"type": "integer"}}, ["players", "stats"]),
 ]
 
+TOOLS.append(_tool(
+    "show_chart",
+    "Draw a small chart under your answer, built from the data by the app (you never supply "
+    "the numbers). Use it when a trend or ranking is easier to see than read, at most 2 per "
+    "answer. kind: team_trend (1-2 team metrics per game), player_trend (one player stat per "
+    "game for 1-3 players), player_bar (per game average of one stat, top players or the "
+    "players you name). Still quote the key numbers from the other tools in your text.",
+    {"kind": {"type": "string", "enum": ["team_trend", "player_trend", "player_bar"]},
+     "title": {"type": "string", "description": "Short chart title"},
+     "metrics": {"type": "array", "items": {"type": "string"}},
+     "players": {"type": "array", "items": {"type": "string"}},
+     "stat": {"type": "string"}, "filters": _FILTERS,
+     "min_games": {"type": "integer"}, "top_n": {"type": "integer"}},
+    ["kind", "title"]))
+
 _IMPL = {
     "team_games": team_games, "team_aggregate": team_aggregate, "correlate": correlate,
     "quarter_breakdown": quarter_breakdown, "player_aggregate": player_aggregate,
-    "player_games": player_games,
+    "player_games": player_games, "show_chart": show_chart,
 }
 
 
 def run(name, args):
-    """Run one tool call. Returns (text, is_error)."""
+    """Run one tool call. Returns (text, is_error, figure or None)."""
     fn = _IMPL.get(name)
     if fn is None:
-        return f"Unknown tool '{name}'.", True
+        return f"Unknown tool '{name}'.", True, None
     if not isinstance(args, dict):
-        return "Tool input must be a JSON object.", True
+        return "Tool input must be a JSON object.", True, None
     try:
-        return fn(**args), False
+        out = fn(**args)
     except ToolError as e:
-        return str(e), True
+        return str(e), True, None
     except TypeError as e:  # unexpected or missing argument names
-        return f"Bad arguments: {e}", True
+        return f"Bad arguments: {e}", True, None
     except (KeyError, ValueError) as e:
-        return f"Could not run that query: {e}", True
+        return f"Could not run that query: {e}", True, None
+    if isinstance(out, tuple):  # show_chart: (summary, figure)
+        return out[0], False, out[1]
+    return out, False, None
 
 
 def describe():

@@ -13,11 +13,14 @@
     var w = window.parent || window;
     return {w: w.innerWidth, h: w.innerHeight};
   }
-  var last = null, timer = null;
+  // The last size sent is kept on the parent window, so a remounted frame does
+  // not resend it: every send reruns the app and would cut off a streaming answer.
+  var store = (function () { try { return window.parent; } catch (e) { return window; } })();
+  var timer = null;
   function report() {
-    var s = size();
+    var s = size(), last = store.__freoViewportSent;
     if (last && Math.abs(s.w - last.w) < 16 && Math.abs(s.h - last.h) < 16) return;
-    last = s;
+    store.__freoViewportSent = s;
     send("streamlit:setComponentValue", {value: s, dataType: "json"});
   }
   window.addEventListener("message", function (e) {

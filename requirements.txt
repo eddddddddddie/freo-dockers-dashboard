@@ -1,7 +1,9 @@
-streamlit
-pandas
-plotly
-anthropic
-# The scraper also needs:
-requests
-beautifulsoup4
+# Tested on Python 3.12 with these major versions (2026-09-29). anthropic 1.x
+# needs Python 3.10+; on Streamlit Cloud choose Python 3.12 in the app settings.
+streamlit>=1.64,<2
+pandas>=3.0,<4
+plotly>=7.1,<8
+anthropic>=1.9,<2
+# The scrapers also need:
+requests>=2.32,<3
+beautifulsoup4>=4.15,<5

@@ -103,3 +103,54 @@ def opponents(team_df, all_seasons):
             f"How have we gone against {opp} across {all_seasons[0]} and "
             f"{all_seasons[-1]}, and what decided those games?")
         st.rerun()
+
+
+@st.dialog("Quarter-time check", width="large")
+def quarter_time(team_df, all_seasons):
+    """Enter the margin at a break; see how Freo have gone from similar positions.
+
+    Only quarter scores are in the data (AFL Tables has no quarter-by-quarter
+    stats), so positions are matched on the margin alone."""
+    c1, c2, c3, c4 = st.columns([1.3, 1, 1, 1.2], vertical_alignment="bottom")
+    brk = c1.selectbox("Break", list(D.BREAKS), index=1)
+    margin = c2.number_input("Freo margin", value=0, step=1,
+                             help="Freo score minus opposition score at the break")
+    window = c3.number_input("Within ± points", value=6, min_value=0, max_value=60, step=1)
+    scope = c4.selectbox("Games", ["Both seasons"] + [str(s) for s in reversed(all_seasons)])
+    game_type = st.radio("Venue", ["Any", "Home", "Away", "Final"], horizontal=True,
+                         label_visibility="collapsed")
+    seasons = None if scope == "Both seasons" else [int(scope)]
+    gt = None if game_type == "Any" else game_type
+    games, sm = D.similar_positions(team_df, brk, int(margin), int(window), seasons, gt)
+    col = sm["col"]
+
+    left, right = st.columns([1, 1.6])
+    with left:
+        if sm["games"]:
+            st.markdown(
+                f'<div class="qt-big">{sm["wins"]}-{sm["losses"]}</div>'
+                f'<div class="qt-sub">from {sm["games"]} games within ±{int(window)} of '
+                f'{int(margin):+d} at {brk.lower()} ({sm["win_pct"]:.0f}% won, of '
+                f'{sm["pool"]} games checked)</div>'
+                f'<div class="qt-line">Average final margin <b>{sm["avg_final"]:+.1f}</b></div>'
+                f'<div class="qt-line">Net scoring from the break to the siren '
+                f'<b>{sm["avg_after"]:+.1f}</b></div>',
+                unsafe_allow_html=True)
+        else:
+            st.info("No games from a position like that. Widen the ± window.")
+        st.caption("Matched on the score only: quarter-by-quarter stats (inside 50s, "
+                   "clearances) are not in the data. A small sample says little; check the count.")
+    with right:
+        bm = D.break_margins(team_df)
+        if seasons:
+            bm = bm[bm["season"].isin(seasons)]
+        if gt:
+            bm = bm[bm["type"] == gt]
+        st.plotly_chart(CH.break_scatter(bm, col, int(margin), int(window), brk, 300),
+                        use_container_width=True, config=PLOT_CONFIG)
+    if sm["games"]:
+        show = games[["season", "round", "type", "opponent", col, "margin", "result"]].rename(
+            columns={col: f"At {brk.lower()}", "margin": "Final", "result": "Result",
+                     "season": "Season", "round": "Round", "type": "Type",
+                     "opponent": "Opponent"})
+        st.dataframe(show, hide_index=True, use_container_width=True, height=180)

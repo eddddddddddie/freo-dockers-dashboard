@@ -61,12 +61,15 @@ def inject_css():
           div[data-testid="stHorizontalBlock"] { gap:8px; }
           div[data-testid="stElementContainer"]:has(> .stPlotlyChart) { margin:0; }
 
-          /* Cards (bordered containers) */
+          /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
+          div[class*="st-key-card_"],
           div[data-testid="stVerticalBlockBorderWrapper"] {
             background:#FFFFFF; border:1px solid #E7E3EF !important; border-radius:10px;
             box-shadow:0 1px 2px rgba(42,10,74,.06);
           }
+          div[class*="st-key-card_"] { gap:2px; }
           div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
+          .st-key-deep_dive [data-baseweb="select"] * { font-size:.8rem; }
           .card-title {
             text-transform:uppercase; letter-spacing:.07em; font-size:.66rem;
             font-weight:700; color:#6D28D9; margin:0; line-height:1.6;
@@ -80,12 +83,12 @@ def inject_css():
           .cv-band {
             background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 60%,#6D28D9 100%);
             color:#fff; border-radius:10px; padding:7px 14px; height:52px;
-            display:flex; align-items:center; gap:22px; overflow:hidden;
+            display:flex; align-items:center; gap:clamp(10px, 1.2vw, 22px); overflow:hidden;
           }
           .cv-band .ttl { font-weight:700; font-size:1.05rem; white-space:nowrap; }
           .cv-band .ttl small { display:block; font-weight:500; font-size:.66rem; color:#C4B5FD; }
           .cv-stat { line-height:1.05; white-space:nowrap; }
-          .cv-stat b { font-size:1.15rem; font-weight:700; }
+          .cv-stat b { font-size:1.08rem; font-weight:700; }
           .cv-stat span { display:block; font-size:.62rem; letter-spacing:.08em;
             text-transform:uppercase; color:#C4B5FD; }
           .cv-form { display:flex; gap:3px; }
@@ -122,7 +125,10 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .cv-band),
           div[data-testid="stMarkdownContainer"]:has(> .cv-tiles),
           div[data-testid="stMarkdownContainer"]:has(> .wa-head),
-          div[data-testid="stMarkdownContainer"]:has(> .wa-insight) { margin-bottom:0 !important; }
+          div[data-testid="stMarkdownContainer"]:has(> .wa-insight),
+          div[data-testid="stMarkdownContainer"]:has(> .card-title),
+          div[data-testid="stMarkdownContainer"]:has(> .cv-lead),
+          div[data-testid="stMarkdownContainer"]:has(> .tp) { margin-bottom:0 !important; }
 
           /* Opponents grid (deep dive) */
           .op-wrap { max-height:470px; overflow-y:auto; margin-bottom:12px; }
@@ -143,6 +149,25 @@ def inject_css():
           .login-head { margin:18vh 0 14px; text-align:center; }
           .login-head b { display:block; font-size:1.4rem; color:#2A0A4A; }
           .login-head span { color:#6B7280; font-size:.9rem; }
+
+          @media (max-width: 1380px) { .cv-band .opt { display:none; } }
+
+          /* Match mode */
+          .cv-res { font-style:normal; font-size:.8rem; padding:2px 8px; border-radius:5px; }
+          .tp { display:flex; flex-direction:column; gap:4px; margin-top:2px; }
+          .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px; }
+          .tp-f, .tp-o { font-weight:700; font-size:.85rem; color:#2A0A4A; }
+          .tp-f { text-align:right; } .tp-o { color:#9A4A0E; }
+          .tp-lbl { font-size:.72rem; color:#4B5563; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .tp-bar { position:relative; height:9px; border-radius:5px; background:#C25E12; overflow:visible; }
+          .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:#7C3AED; border-radius:5px 0 0 5px; }
+          .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:#1F2937; margin-left:-1px; }
+
+          /* Quarter-time check */
+          .qt-big { font-size:2.6rem; font-weight:800; color:#2A0A4A; line-height:1; margin-top:6px; }
+          .qt-sub { color:#6B7280; font-size:.85rem; margin:4px 0 10px; }
+          .qt-line { font-size:.9rem; color:#1F2937; margin:3px 0; }
+          .qt-line b { color:#4C1D95; }
 
           /* Wharf-ai panel */
           .wa-head { background:linear-gradient(100deg,#2A0A4A 0%,#4C1D95 70%,#6D28D9 100%);
@@ -187,12 +212,13 @@ def header_band(season, rec, form, data_note):
     stats = [
         (f'{rec["wins"]}-{rec["losses"]}', "Record"),
         (f'{rec["win_pct"]:.0f}%', "Win rate"),
-        (f'{rec["score_for"]:.1f}', "Avg for"),
+        (f'{rec["score_for"]:.1f}', "Avg for"),     # hidden on narrow windows
         (f'{rec["score_against"]:.1f}', "Avg against"),
         (f'{rec["margin"]:+.1f}', "Avg margin"),
     ]
-    stat_html = "".join(f'<div class="cv-stat"><b>{v}</b><span>{l}</span></div>'
-                        for v, l in stats)
+    stat_html = "".join(
+        f'<div class="cv-stat{" opt" if l.startswith("Avg ") and l != "Avg margin" else ""}">'
+        f'<b>{v}</b><span>{l}</span></div>' for v, l in stats)
     st.markdown(
         f'<div class="cv-band"><div class="ttl">Fremantle {season}'
         f'<small>{html.escape(data_note)}</small></div>{stat_html}'
@@ -202,9 +228,9 @@ def header_band(season, rec, form, data_note):
     )
 
 
-def _sparkline(values, labels):
-    """Inline SVG sparkline with a hover title on every point. The last game is
-    drawn in the accent colour."""
+def _sparkline(values, labels, highlight=None):
+    """Inline SVG sparkline with a hover title on every point. The game at index
+    `highlight` (default: the last) is drawn in the accent colour."""
     vals = [v for v in values if v == v]
     if len(vals) < 2:
         return ""
@@ -212,19 +238,18 @@ def _sparkline(values, labels):
     lo, hi = min(vals), max(vals)
     span = (hi - lo) or 1
     n = len(values)
-    pts = []
+    pts = {}  # index -> (x, y, value, label)
     for i, v in enumerate(values):
-        if v != v:
-            continue
-        x = pad + i * (w - 2 * pad) / (n - 1)
-        y = h - pad - (v - lo) / span * (h - 2 * pad)
-        pts.append((x, y, v, labels[i]))
-    line = " ".join(f"{x:.1f},{y:.1f}" for x, y, _, _ in pts)
+        if v == v:
+            pts[i] = (pad + i * (w - 2 * pad) / (n - 1),
+                      h - pad - (v - lo) / span * (h - 2 * pad), v, labels[i])
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y, _, _ in pts.values())
     dots = "".join(
         f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="transparent">'
         f'<title>{html.escape(lbl)}: {v:g}</title></circle>'
-        for x, y, v, lbl in pts)
-    lx, ly = pts[-1][0], pts[-1][1]
+        for x, y, v, lbl in pts.values())
+    target = n - 1 if highlight is None else highlight
+    lx, ly = (pts.get(target) or list(pts.values())[-1])[:2]
     return (f'<svg viewBox="0 0 {w} {h}" preserveAspectRatio="none">'
             f'<polyline points="{line}" fill="none" stroke="{COLORS["spark"]}" '
             f'stroke-width="1.5" vector-effect="non-scaling-stroke"/>'
@@ -257,7 +282,8 @@ def tiles_row(tiles, baseline):
                    f'title="{baseline}: {t["base"]:.1f}">{arrow} {c:+.1f}{t["unit"]}</span>')
         cells.append(
             f'<div class="cv-tile"><div class="lbl">{html.escape(t["label"])}</div>'
-            f'<div class="val">{val}{dlt}</div>{_sparkline(t["series"], t["games"])}</div>')
+            f'<div class="val">{val}{dlt}</div>'
+            f'{_sparkline(t["series"], t["games"], t.get("highlight"))}</div>')
     st.markdown(f'<div class="cv-tiles">{"".join(cells)}</div>', unsafe_allow_html=True)
 
 
@@ -299,3 +325,37 @@ def _md_bold(text):
 def insight_card(text):
     st.markdown(f'<div class="wa-insight"><div class="tag">Insight</div>{_md_bold(text)}</div>',
                 unsafe_allow_html=True)
+
+
+def match_band(game, venue_date):
+    """Header band for match mode: result, score line and margin."""
+    res = "Won" if game["result"] == "W" else "Lost"
+    color = COLORS["win"] if game["result"] == "W" else COLORS["loss"]
+    fq, oq = game["freo_qtrs"].split()[-1], game["opp_qtrs"].split()[-1]
+    st.markdown(
+        f'<div class="cv-band"><div class="ttl">{html.escape(game["round"])} v '
+        f'{html.escape(game["opponent"])}<small>{html.escape(venue_date)}</small></div>'
+        f'<div class="cv-stat"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
+        f'<span>{html.escape(game["type"])}</span></div>'
+        f'<div class="cv-stat"><b>{fq} ({game["freo_score"]})</b><span>Fremantle</span></div>'
+        f'<div class="cv-stat"><b>{oq} ({game["opp_score"]})</b><span>{html.escape(game["opponent"])}</span></div>'
+        f'<div class="cv-stat opt"><b>{int(game["margin"]):+d}</b><span>Margin</span></div></div>',
+        unsafe_allow_html=True)
+
+
+def tape(rows):
+    """Tale of the tape: one split bar per stat, Freo share (purple) against the
+    opposition (orange), numbers either side, and a tick at Freo's season
+    average share."""
+    out = ""
+    for r in rows:
+        f = f'{r["freo"]:,.0f}'
+        o = f'{r["opp"]:,.0f}'
+        tip = (f'{r["stat"]}: Freo {f}, opp {o}. Season average share '
+               f'{r["season_share"]:.0f}% (diff {r["season_diff"]:+.1f} a game)')
+        out += (f'<div class="tp-row" title="{html.escape(tip)}">'
+                f'<span class="tp-lbl">{html.escape(r["stat"])}</span><span class="tp-f">{f}</span>'
+                f'<div class="tp-bar"><i style="width:{r["share"]:.1f}%"></i>'
+                f'<em style="left:{r["season_share"]:.1f}%"></em></div>'
+                f'<span class="tp-o">{o}</span></div>')
+    st.markdown(f'<div class="tp">{out}</div>', unsafe_allow_html=True)

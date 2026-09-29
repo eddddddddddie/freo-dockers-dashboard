@@ -11,13 +11,14 @@ ANTHROPIC_WORKSPACE_ID (wrkspc_...) for multi-workspace keys.
 
 import os
 
+import plotly.io as pio
 import streamlit as st
 
 st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import inject_css, header_band, chat_header, insight_card
+from theme import inject_css, header_band, match_band, chat_header, insight_card
 import auth
 import layout
 import data as D
@@ -44,6 +45,7 @@ TOOL_LABELS = {
     "team_games": "listing games", "team_aggregate": "averaging team stats",
     "correlate": "checking a correlation", "quarter_breakdown": "breaking down quarters",
     "player_aggregate": "comparing players", "player_games": "pulling player games",
+    "show_chart": "drawing a chart",
 }
 
 
@@ -59,9 +61,24 @@ def example_prompts(season, baseline):
 
 
 # ------------------------------------------------------------ Wharf-ai
+DEEP_DIVES = ["Player map", "Year on year", "Opponents", "Quarter-time check"]
+
+
+def _pick_deep_dive():
+    """Open the chosen deep dive on this run and reset the dropdown."""
+    st.session_state["open_deep_dive"] = st.session_state.get("deep_dive")
+    st.session_state["deep_dive"] = None
+
+
+def _show_chart(fig_json):
+    st.plotly_chart(pio.from_json(fig_json), use_container_width=True,
+                    config={"displayModeBar": False})
+
+
 @st.fragment
-def chat_panel(season, baseline):
-    """Runs as a fragment: asking a question reruns only this panel."""
+def chat_panel(season, baseline, focus=None):
+    """Runs as a fragment: asking a question reruns only this panel.
+    focus: the match on screen in match mode, passed to Wharf-ai."""
     key = f"insight_{season}"
     if key not in st.session_state:
         st.session_state[key] = I.pick(team_df, player_df, season, baseline)
@@ -88,6 +105,8 @@ def chat_panel(season, baseline):
         for msg in msgs:
             with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
                 st.markdown(msg["content"])
+                for fig_json in msg.get("charts", []):
+                    _show_chart(fig_json)
         if client is None:
             st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
                        "for multi-workspace keys) in the environment or app secrets.")
@@ -103,7 +122,7 @@ def chat_panel(season, baseline):
             st.markdown(prompt)
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             status = st.empty()
-            steps = []
+            steps, charts = [], []
 
             def on_tool(name, args):
                 steps.append(TOOL_LABELS.get(name, name))
@@ -111,7 +130,10 @@ def chat_panel(season, baseline):
 
             try:
                 reply = st.write_stream(C.stream_answer(
-                    client, season, msgs, opening=st.session_state[key], on_tool=on_tool))
+                    client, season, msgs, opening=st.session_state[key], on_tool=on_tool,
+                    on_chart=lambda fig: charts.append(fig.to_json()), focus=focus))
+                for fig_json in charts:  # drawn under the answer text
+                    _show_chart(fig_json)
             except Exception as exc:  # show API errors instead of crashing the app
                 msgs.pop()  # keep failed turns out of the history sent next time
                 if "anthropic-workspace-id" in str(exc):
@@ -121,7 +143,7 @@ def chat_panel(season, baseline):
                 else:
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
-    msgs.append({"role": "assistant", "content": reply})
+    msgs.append({"role": "assistant", "content": reply, "charts": charts})
     # Redraw without the example prompts. A question handed over from a deep
     # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
     st.rerun() if pending and not (typed or clicked) else st.rerun(scope="fragment")
@@ -129,32 +151,60 @@ def chat_panel(season, baseline):
 
 # ------------------------------------------------------------- layout
 main, side = st.columns([3.55, 1])
+focus = None
 
 with main:
-    h1, h2, h3 = st.columns([5.6, 1, 0.95], vertical_alignment="center")
+    h1, h2, h3, h4 = st.columns([5.4, 0.88, 1.02, 1.0], vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")
+    with h3:
+        view = st.segmented_control("View", ["Season", "Match"], default="Season",
+                                    key="view", label_visibility="collapsed") or "Season"
     season = season or all_seasons[-1]
     baseline = D.baseline_season(season, all_seasons)
     tdf = D.team_season(team_df, season)
+    pos = None
     with h1:
-        last = tdf.tail(5)
-        form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
-                for r in last.itertuples()]
-        note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]} "
-                f"({tdf['game_dt'].iloc[-1]:%d %b %Y})") if len(tdf) else "No games"
-        if baseline is not None:
-            note += f" · changes vs {baseline}"
-        header_band(season, D.record(tdf), form, note)
-    with h3, st.popover("Deep dives", use_container_width=True):
-        if st.button("Player map", use_container_width=True):
-            DD.player_map(player_df, season)
-        if st.button("Year on year", use_container_width=True):
-            DD.year_on_year(player_df, all_seasons)
-        if st.button("Opponents", use_container_width=True):
-            DD.opponents(team_df, all_seasons)
-    V.render(team_df, player_df, season, baseline, SZ)
+        if view == "Match" and len(tdf):
+            pick, band = st.columns([1.4, 3.0], vertical_alignment="center")
+            choices = D.game_choices(tdf)
+            with pick:
+                label = st.selectbox("Game", [c[0] for c in choices], key=f"game_{season}",
+                                     label_visibility="collapsed")
+            pos = dict(choices)[label]
+            game = tdf.iloc[pos]
+            with band:
+                match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
+            focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
+                     f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}")
+        else:
+            last = tdf.tail(5)
+            form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
+                    for r in last.itertuples()]
+            note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]} "
+                    f"({tdf['game_dt'].iloc[-1]:%d %b %Y})") if len(tdf) else "No games"
+            if baseline is not None:
+                note += f" · changes vs {baseline}"
+            header_band(season, D.record(tdf), form, note)
+    with h4:
+        # A dropdown rather than a popover: it closes itself on a pick, so it
+        # never sits on top of the dialog it opens.
+        st.selectbox("Deep dives", list(DEEP_DIVES), index=None, placeholder="Deep dives",
+                     key="deep_dive", label_visibility="collapsed", on_change=_pick_deep_dive)
+    dive = st.session_state.pop("open_deep_dive", None)
+    if dive == "Player map":
+        DD.player_map(player_df, season)
+    elif dive == "Year on year":
+        DD.year_on_year(player_df, all_seasons)
+    elif dive == "Opponents":
+        DD.opponents(team_df, all_seasons)
+    elif dive == "Quarter-time check":
+        DD.quarter_time(team_df, all_seasons)
+    if pos is not None:
+        V.render_match(team_df, player_df, season, pos, SZ)
+    else:
+        V.render(team_df, player_df, season, baseline, SZ)
 
-with side, st.container(border=True, height=PANEL_H):
-    chat_panel(season, baseline)
+with side, st.container(border=True, height=PANEL_H, key="card_wharfai"):
+    chat_panel(season, baseline, focus)

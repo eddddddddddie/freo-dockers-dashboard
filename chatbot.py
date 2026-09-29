@@ -61,6 +61,9 @@ How to answer:
   do not infer subs from low game time; ruckmen routinely play around 45 percent.
 - Neither season has a Round 1, and round labels are the source's own (finals are
   EF, QF, SF, PF, GF).
+- When a trend or ranking is easier to see than read, call show_chart (at most 2 per
+  answer); the app draws it from the data below your answer text, so refer to it as
+  "the chart below".
 - Keep answers short for a coach reading a side panel: lead with the answer, then the few
   numbers that support it. Use short bullet lists rather than tables. Do not use em dashes.
 """
@@ -113,16 +116,20 @@ def _tool_input(block):
     return args if isinstance(args, dict) else None
 
 
-def stream_answer(client, current_season, history, opening=None, on_tool=None):
+def stream_answer(client, current_season, history, opening=None, on_tool=None,
+                  on_chart=None, focus=None):
     """Yield answer text as it streams, running tool calls in between.
 
     history: prior turns as plain text ({"role", "content"}), ending with the
     user's question. Within one question the message list is append-only and
     each assistant turn is passed back whole (thinking and tool_use blocks
     included), as preserved thinking requires. on_tool(name, args) is called
-    before each tool runs, for a progress line in the UI.
+    before each tool runs, for a progress line in the UI; on_chart(fig) receives
+    each chart the model asks for. focus: what the user is looking at (a match).
     """
     note = f"The user is currently viewing the {current_season} season."
+    if focus:
+        note += f" They are looking at one match: {focus}."
     if opening:
         note += (" The panel opened with this insight (computed from the data), which "
                  f"the user may ask about: {opening}")
@@ -131,7 +138,8 @@ def stream_answer(client, current_season, history, opening=None, on_tool=None):
         {"type": "text", "text": system_text(), "cache_control": {"type": "ephemeral"}},
         {"type": "text", "text": note},
     ]
-    messages = list(history)
+    # Only role and content go to the API (history entries may also carry charts).
+    messages = [{"role": m["role"], "content": m["content"]} for m in history]
     wrote_text = False
     for _ in range(MAX_STEPS):
         with client.beta.messages.stream(
@@ -172,7 +180,9 @@ def stream_answer(client, current_season, history, opening=None, on_tool=None):
             else:
                 if on_tool:
                     on_tool(block.name, args)
-                text, is_error = W.run(block.name, args)
+                text, is_error, fig = W.run(block.name, args)
+                if fig is not None and on_chart:
+                    on_chart(fig)
             results.append({"type": "tool_result", "tool_use_id": block.id,
                             "content": text, "is_error": is_error})
         # All results for this step go back in one user message.

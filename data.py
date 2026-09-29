@@ -294,12 +294,11 @@ def _tile_value(tdf, kind, fcol, ocol):
     return float(_tile_series(tdf, kind, fcol, ocol).mean())
 
 
-def tiles(team_df, season, baseline):
-    """Values for the headline tiles, with change vs the baseline season.
+def _compare_tiles(team_df, cur, base, series_df, highlight):
+    """Tile values for `cur` compared with `base`, with a per game sparkline
+    drawn from `series_df` and the point at index `highlight` accented.
     Differentials and accuracy change in absolute units (a % change of a
     number that can cross zero is meaningless); plain averages change in %."""
-    cur = team_season(team_df, season)
-    base = team_season(team_df, baseline) if baseline is not None else None
     out = []
     specs = [PRESSURE_TILE if has_ext(team_df) and t[0] == "Rebound 50s" else t for t in TILES]
     for label, kind, fcol, ocol, better in specs:
@@ -316,10 +315,139 @@ def tiles(team_df, season, baseline):
         out.append({
             "label": label, "kind": kind, "value": val, "base": bval,
             "change": change, "unit": unit, "better": better,
-            "series": _tile_series(cur, kind, fcol, ocol).round(1).tolist(),
-            "games": game_labels(cur),
+            "series": _tile_series(series_df, kind, fcol, ocol).round(1).tolist(),
+            "games": game_labels(series_df), "highlight": highlight,
         })
     return out
+
+
+def tiles(team_df, season, baseline):
+    """Headline tiles for a season, with change vs the baseline season."""
+    cur = team_season(team_df, season)
+    base = team_season(team_df, baseline) if baseline is not None else None
+    return _compare_tiles(team_df, cur, base, cur, len(cur) - 1)
+
+
+# ---- Match mode --------------------------------------------------------------
+def game_choices(tdf):
+    """(label, row position) for each game in a season, most recent first."""
+    return [(f"{tdf['round'].iloc[i]} v {tdf['opponent'].iloc[i]} "
+             f"({tdf['result'].iloc[i]} {int(tdf['margin'].iloc[i]):+d})", i)
+            for i in range(len(tdf) - 1, -1, -1)]
+
+
+def match_tiles(team_df, season, pos):
+    """Tiles for one game (row `pos` of the season) against the season average."""
+    tdf = team_season(team_df, season)
+    return _compare_tiles(team_df, tdf.iloc[[pos]], tdf, tdf, pos)
+
+
+# Head-to-head rows for one game: label -> column stem (freo_/opp_ prefix).
+TAPE = [
+    ("Disposals", "disposals"), ("Contested poss", "contested_poss"),
+    ("Clearances", "clearances"), ("Inside 50s", "inside_50s"),
+    ("Marks", "marks"), ("Tackles", "tackles"), ("Rebound 50s", "rebound_50s"),
+    ("Scoring shots", "scoring_shots"),
+]
+TAPE_EXT = [
+    ("Metres gained", "metres_gained"), ("Inside 50s", "inside_50s"),
+    ("Contested poss", "contested_poss"), ("Centre clearances", "centre_clearances"),
+    ("Stoppage clearances", "stoppage_clearances"), ("Pressure acts", "pressure_acts"),
+    ("Intercepts", "intercepts"), ("Turnovers", "turnovers"),
+    ("Scoring shots", "scoring_shots"),
+]
+
+
+def tale_of_the_tape(tdf, pos):
+    """Freo vs opposition on key stats in one game, with Freo's season average
+    share of each stat for comparison."""
+    g = tdf.iloc[pos]
+    rows = []
+    for label, stem in (TAPE_EXT if has_ext(tdf) else TAPE):
+        f, o = float(g[f"freo_{stem}"]), float(g[f"opp_{stem}"])
+        season_share = (tdf[f"freo_{stem}"].sum()
+                        / (tdf[f"freo_{stem}"] + tdf[f"opp_{stem}"]).sum() * 100)
+        rows.append({"stat": label, "freo": f, "opp": o,
+                     "share": f / (f + o) * 100 if f + o else 50.0,
+                     "season_share": season_share,
+                     "season_diff": float((tdf[f"freo_{stem}"] - tdf[f"opp_{stem}"]).mean())})
+    return rows
+
+
+def game_flow(tdf, pos):
+    """Running margin at each break for one game, plus the season's average
+    running margin in wins and in losses, for comparison."""
+    f = tdf["freo_qtrs"].map(_qtr_points)
+    o = tdf["opp_qtrs"].map(_qtr_points)
+    run = pd.DataFrame([pd.Series(a) - pd.Series(b) for a, b in zip(f, o)]).cumsum(axis=1)
+    run.columns = ["Q1", "Q2", "Q3", "Q4"]
+    run["result"] = tdf["result"].values
+    avg = run.groupby("result")[["Q1", "Q2", "Q3", "Q4"]].mean()
+    return run.iloc[pos][["Q1", "Q2", "Q3", "Q4"]].astype(float), avg
+
+
+def match_players(pdf_season, game_row, stats):
+    """Every Freo player in one game with the chosen stats, and each value as a
+    % of that player's own season average."""
+    g = pdf_season[(pdf_season["round"] == game_row["round"])
+                   & (pdf_season["opponent"] == game_row["opponent"])]
+    have = [s for s in stats if s in pdf_season.columns]
+    avgs = pdf_season.groupby("player")[have].mean()
+    vals = g.set_index("player")[have]
+    sort_col = "rating_points" if "rating_points" in g.columns else "disposals"
+    vals = vals.loc[g.sort_values(sort_col, ascending=False)["player"]]
+    pct = vals / avgs.loc[vals.index].clip(lower=0.1) * 100
+    return vals, pct, avgs.loc[vals.index]
+
+
+def match_leaders(pdf_season, game_row):
+    """Who led each role in one game."""
+    g = pdf_season[(pdf_season["round"] == game_row["round"])
+                   & (pdf_season["opponent"] == game_row["opponent"])]
+    out = []
+    for label, col in ROLES:
+        top = g.loc[g[col].idxmax()]
+        out.append({"role": label, "player": top["player"] if top[col] > 0 else "-",
+                    "value": f"{int(top[col])}", "sub": col.replace("_", " ")})
+    kickers = g[g["goals"] > 0].sort_values("goals", ascending=False)
+    goals = ", ".join(f"{r.player.split()[-1]} {int(r.goals)}" for r in kickers.itertuples())
+    return out, goals or "none"
+
+
+# ---- Quarter-time check ---------------------------------------------------------
+BREAKS = {"Quarter time": "Q1", "Half time": "Q2", "Three quarter time": "Q3"}
+
+
+def break_margins(team_df):
+    """Every game with Freo's running margin at each break and the result."""
+    f = team_df["freo_qtrs"].map(_qtr_points)
+    o = team_df["opp_qtrs"].map(_qtr_points)
+    run = pd.DataFrame([pd.Series(a) - pd.Series(b) for a, b in zip(f, o)],
+                       index=team_df.index).cumsum(axis=1)
+    run.columns = ["Q1", "Q2", "Q3", "Q4"]
+    cols = ["season", "round", "type", "opponent", "venue", "result", "margin"]
+    return team_df[cols].join(run)
+
+
+def similar_positions(team_df, brk, margin, window, seasons=None, game_type=None):
+    """Games where Freo's margin at a break was within `window` points of
+    `margin`. Returns (matching games, summary dict)."""
+    q = BREAKS[brk]
+    bm = break_margins(team_df)
+    if seasons:
+        bm = bm[bm["season"].isin(seasons)]
+    if game_type:
+        bm = bm[bm["type"] == game_type]
+    m = bm[(bm[q] - margin).abs() <= window].copy()
+    m["after_break"] = m["Q4"] - m[q]   # net scoring from the break to the siren
+    w = int((m["result"] == "W").sum())
+    return m.sort_values(q), {
+        "games": len(m), "wins": w, "losses": len(m) - w,
+        "win_pct": w / len(m) * 100 if len(m) else None,
+        "avg_final": m["margin"].mean() if len(m) else None,
+        "avg_after": m["after_break"].mean() if len(m) else None,
+        "pool": len(bm), "col": q,
+    }
 
 
 def _qtr_points(qtrs):
