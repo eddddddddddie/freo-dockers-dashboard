@@ -198,8 +198,15 @@ Python + Streamlit + pandas + Plotly (simple to run locally), unless a better op
 - Styled after fremantlefc.com.au's look: flat deep purple #331C54 header / nav / Wharf-ai head,
   #F7F7F7 page, white cards (8px radius, soft shadow), Inter (Google Fonts) with bold
   sentence-case titles, purple-to-maroon match band with a pill for the result. Palette in CSS
-  variables at the top of `theme.inject_css`. Data colours (Freo #7C3AED, opp #C25E12) stay the
-  validated pair; #331C54 is too dark for data marks. Do NOT use the Fremantle club logo, crest,
+  variables at the top of `theme.inject_css`.
+- Chart colours come from the site too, all in `theme.COLORS` / `RAMP` / `DIVERGE` / `SERIES`
+  (nothing hard-coded elsewhere) and checked with the dataviz validator: Freo #61359C (the site
+  purple's hue lifted to OKLCH L 0.44; #331C54 itself is L 0.29, below the 0.43 floor for marks),
+  opposition #008CA2 (site cyan; CVD dE 17 vs Freo), extra series #CC4C77 (site maroon) and
+  #2E5FB7 (site navy), win #288B2C / loss #D42325 (site green and FULL TIME red), player-form ramp
+  #BEACE4 -> #331C54, game strip cyan <- #EDEDEF -> purple. Maroon cannot be the opposition colour:
+  it is too close to the loss red for anyone (dE 9.8). Green vs red fails red-green colour
+  vision (dE 2.9), so every win/loss mark also carries a W/L letter or a bar direction. Do NOT use the Fremantle club logo, crest,
   photos, fonts files or other trademarks.
 - Sanity-check every displayed number (e.g. kicks + handballs = disposals; % change maths).
 - In written text and UI copy, don't use em dashes.

@@ -3,7 +3,7 @@ fixed heights, minimal chrome, detail on hover. One y axis only; a legend for
 two or more series."""
 
 import plotly.graph_objects as go
-from theme import COLORS, style_fig
+from theme import COLORS, DIVERGE, RAMP, SERIES, style_fig
 
 import data as D
 
@@ -71,8 +71,7 @@ def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None):
 
 
 # One-hue sequential purple, light to dark.
-FORM_SCALE = [[0, "#F5F1FB"], [0.25, "#DDD0F7"], [0.5, "#B79AEE"],
-              [0.75, "#7C3AED"], [1, "#3B0F7A"]]
+FORM_SCALE = [[i / (len(RAMP) - 1), c] for i, c in enumerate(RAMP)]
 
 
 def form_heatmap(vals, avgs, stat_label, height):
@@ -101,8 +100,7 @@ def form_heatmap(vals, avgs, stat_label, height):
 
 # Diverging: opposition orange <- neutral grey -> Freo purple. The poles are the
 # two entity colours, so "purple = Freo won it" reads the same as everywhere else.
-DIVERGING = [[0, COLORS["opp"]], [0.25, "#E9B48A"], [0.5, "#F0EFEC"],
-             [0.75, "#B79AEE"], [1, COLORS["freo"]]]
+DIVERGING = [[i / (len(DIVERGE) - 1), c] for i, c in enumerate(DIVERGE)]
 
 
 def game_strip(rows, z, hover, labels, results, height):
@@ -132,7 +130,7 @@ def game_strip(rows, z, hover, labels, results, height):
 def drivers_bar(dr, height):
     """Correlation of each differential with margin, strongest first. Positive
     (goes with winning) in Freo purple, negative in muted grey."""
-    colors = [COLORS["freo"] if r > 0 else "#9CA3AF" for r in dr["r"]]
+    colors = [COLORS["freo"] if r > 0 else COLORS["neutral"] for r in dr["r"]]
     fig = go.Figure(go.Bar(
         y=dr["stat"], x=dr["r"], orientation="h",
         marker=dict(color=colors, cornerradius=3),
@@ -229,7 +227,7 @@ def slope_chart(yoy, s0, s1, stat_label, height):
     y_left = _spread(yoy["before"], gap)
     for name, r in yoy.iterrows():
         up = r["change"] >= 0
-        color = COLORS["freo"] if up else "#9CA3AF"
+        color = COLORS["freo"] if up else COLORS["neutral"]
         fig.add_trace(go.Scatter(
             x=[str(s0), str(s1)], y=[r["before"], r["after"]], mode="lines+markers",
             line=dict(color=color, width=2), marker=dict(size=8, color=color),
@@ -325,7 +323,7 @@ def break_scatter(bm, col, margin, window, brk_label, height):
 def answer_chart(series, title, y_title, kind="line", height=210):
     """A small chart for the Wharf-ai panel. series: [(name, x list, y list)].
     Series colours follow a fixed order (Freo purple first)."""
-    order = [COLORS["freo"], COLORS["opp"], "#0D9488", "#BE185D"]
+    order = SERIES  # fixed order, never cycled
     fig = go.Figure()
     for i, (name, x, y) in enumerate(series):
         color = order[i % len(order)]

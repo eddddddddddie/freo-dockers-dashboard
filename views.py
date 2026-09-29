@@ -10,7 +10,7 @@ import streamlit as st
 
 import data as D
 import charts as CH
-from theme import (COLORS, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
+from theme import (COLORS, RAMP, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
                    h2h_table)
 
 # Chart heights come from layout.sizes() (sized to the browser window).
@@ -101,7 +101,7 @@ def render(team_df, player_df, season, baseline, sz):
         t, s = st.columns([2.6, 1], vertical_alignment="center")
         with t:
             card_title("Player form", "last 6 games vs own season avg",
-                       keys=[("below", "#DDD0F7"), ("above", "#5B21B6")])
+                       keys=[("below", RAMP[0]), ("above", RAMP[-1])])
         with s:
             stat = st.selectbox("Form stat", list(form_stats), key="form_stat",
                                 label_visibility="collapsed")
@@ -145,7 +145,7 @@ def render_match(team_df, player_df, season, pos, sz):
     c1, c2, c3 = st.columns([1.5, 1.25, 1])
     with c1, card("tape", height=MID_H + 40):
         card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"]),
-                                             ("season avg share", "#1F2937")])
+                                             ("season avg share", COLORS["ink"])])
         tape(D.tale_of_the_tape(tdf, pos))
     with c2, card("flow"):
         card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg win", COLORS["win"]),
@@ -162,7 +162,7 @@ def render_match(team_df, player_df, season, pos, sz):
 
     with card("players", height=BOT_H + 40):
         card_title("Players this game", "shaded against each player's own season average",
-                   keys=[("below", "#DDD0F7"), ("above", "#5B21B6")])
+                   keys=[("below", RAMP[0]), ("above", RAMP[-1])])
         stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns]
         vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
         grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
@@ -178,7 +178,7 @@ def render_scout(team_df, lg, season, opp, sz):
     Row 3: their recent form | every Freo game against them.
     """
     MID_H, BOT_H = sz["mid"], sz["bot"]
-    grey = "#9CA3AF"
+    grey = COLORS["neutral"]
     scout_tiles_row(D.scout_tiles(lg, opp, season))
 
     c1, c2, c3 = st.columns([1.45, 1.35, 1.2])

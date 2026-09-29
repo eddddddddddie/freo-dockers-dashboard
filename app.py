@@ -247,7 +247,7 @@ main, side = st.columns([3.55, 1])
 focus = None
 
 with main:
-    h1, h2, h3, h4 = st.columns([5.15, 0.88, 1.38, 0.95], vertical_alignment="center")
+    h1, h2, h3, h4 = st.columns([5.05, 0.86, 1.34, 1.07], vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")

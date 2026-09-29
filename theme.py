@@ -13,17 +13,32 @@ import html
 
 import streamlit as st
 
+# Chart palette, derived from fremantlefc.com.au's colours and checked with the
+# dataviz validator (OKLCH lightness band, chroma floor, colour-vision separation,
+# contrast on white). The site purple #331C54 is too dark for a data mark
+# (L 0.29, below the 0.43 floor), so Freo uses its exact hue lifted into the band;
+# the opposition uses the site's cyan. Maroon (the site's match card) could not
+# be the opposition: it is too close to the loss red (normal-vision dE 9.8).
 COLORS = {
-    "freo": "#7C3AED",     # Fremantle (categorical slot 1)
-    "opp": "#C25E12",      # Opposition (categorical slot 2)
-    "win": "#15803D",
-    "loss": "#DC2626",
-    "ink": "#1F2937",
-    "muted": "#6B7280",
-    "grid": "#E7E3EF",
-    "brand": "#331C54",    # deep Freo purple, as on the club site (header band, nav)
-    "spark": "#B8A6DC",    # sparkline de-emphasis hue
+    "freo": "#61359C",     # Fremantle: site purple hue at OKLCH L 0.44 (categorical slot 1)
+    "opp": "#008CA2",      # Opposition: site cyan hue at L 0.58 (slot 2; CVD dE 17 vs Freo)
+    "series3": "#CC4C77",  # site maroon hue (slot 3, extra chart series only)
+    "series4": "#2E5FB7",  # site navy hue (slot 4)
+    "win": "#288B2C",      # site green, darkened for white text (4.4:1)
+    "loss": "#D42325",     # site "FULL TIME" red, adjusted (5.2:1 with white text)
+    "ink": "#1A1A1A",      # site text
+    "muted": "#525252",    # site secondary text
+    "neutral": "#A3A3A3",  # de-emphasis marks (negative bars, "their opponent")
+    "grid": "#E6E6E6",     # site rule lines
+    "brand": "#331C54",    # site purple (header band, nav, darkest ramp step)
+    "spark": "#B7A8D8",    # sparkline line, light step of the brand hue
 }
+# One-hue sequential ramp, light to dark, ending at the site purple (validated:
+# monotone lightness, visible steps, light end >= 2:1 on white).
+RAMP = ["#BEACE4", "#9F86CF", "#8061B5", "#5E3E8F", "#331C54"]
+# Diverging: opposition cyan <- neutral grey -> Freo purple.
+DIVERGE = [COLORS["opp"], "#81C4D1", "#EDEDEF", "#B8A6DD", COLORS["freo"]]
+SERIES = [COLORS["freo"], COLORS["opp"], COLORS["series3"], COLORS["series4"]]
 
 FONT = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
 
@@ -55,8 +70,9 @@ def inject_css():
         """
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-          :root { --brand:#331C54; --brand-2:#4A2A78; --maroon:#5E1A3F; --ink:#1A1A1A;
-                  --muted:#525252; --line:#E6E6E6; --canvas:#F7F7F7; }
+          :root { --brand:#331C54; --brand-2:#4A2A78; --maroon:#8B0042; --ink:#1A1A1A;
+                  --muted:#525252; --line:#E6E6E6; --canvas:#F7F7F7;
+                  --freo:#61359C; --opp:#008CA2; }
           html, body, .stApp, .stApp button, .stApp input, .stApp textarea, .stApp select,
           .stApp [data-testid="stMarkdownContainer"], .stApp [data-baseweb] {
             font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -148,7 +164,7 @@ def inject_css():
           .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
           .op-grid th { text-align:left; font-size:.64rem; text-transform:uppercase; letter-spacing:.07em;
             color:var(--brand); padding:4px 6px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
-          .op-grid td { padding:4px 6px; border-bottom:1px solid #F3F0F9; vertical-align:middle; }
+          .op-grid td { padding:4px 6px; border-bottom:1px solid #EFEFEF; vertical-align:middle; }
           .op-name { font-weight:600; white-space:nowrap; }
           .op-num { font-weight:700; color:var(--ink); white-space:nowrap; }
           .op-chip { display:inline-block; color:#fff; border-radius:4px; padding:1px 6px; margin:1px 3px 1px 0;
@@ -164,7 +180,8 @@ def inject_css():
           .login-head b { display:block; font-size:1.5rem; font-weight:800; letter-spacing:-.5px; color:var(--ink); }
           .login-head span { color:var(--muted); font-size:.9rem; }
 
-          @media (max-width: 1500px) { .cv-band .opt { display:none; }
+          @media (max-width: 1760px) { .cv-band .opt { display:none; } }
+          @media (max-width: 1500px) {
             .cv-band.match { gap:12px; padding:7px 11px; }
             .cv-band.match .cv-stat b { font-size:.98rem; } .cv-band.match .ttl { font-size:1rem; } }
           @media (max-width: 1380px) { .cv-band { gap:9px; padding:7px 10px; }
@@ -177,11 +194,12 @@ def inject_css():
           .tp { display:flex; flex-direction:column; gap:4px; margin-top:2px; }
           .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px; }
           .tp-f, .tp-o { font-weight:800; font-size:.85rem; color:var(--ink); }
-          .tp-f { text-align:right; } .tp-o { color:#9A4A0E; }
+          .tp-f { text-align:right; }
           .tp-lbl { font-size:.72rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-          .tp-bar { position:relative; height:9px; border-radius:5px; background:#C25E12; overflow:visible; }
-          .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:#7C3AED; border-radius:5px 0 0 5px; }
-          .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:#1F2937; margin-left:-1px; }
+          .tp-bar { position:relative; height:9px; border-radius:5px; background:var(--opp); overflow:visible; }
+          .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:var(--freo); border-radius:5px 0 0 5px;
+            border-right:2px solid #fff; }
+          .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:var(--ink); margin-left:-1px; }
 
           /* Scout report */
           .cv-tile .rk { font-size:.62rem; font-weight:700; color:#fff; background:var(--brand);
@@ -190,8 +208,8 @@ def inject_css():
 
           /* Quarter-time check */
           .qt-big { font-size:2.6rem; font-weight:800; letter-spacing:-1px; color:var(--ink); line-height:1; margin-top:6px; }
-          .qt-sub { color:#6B7280; font-size:.85rem; margin:4px 0 10px; }
-          .qt-line { font-size:.9rem; color:#1F2937; margin:3px 0; }
+          .qt-sub { color:var(--muted); font-size:.85rem; margin:4px 0 10px; }
+          .qt-line { font-size:.9rem; color:var(--ink); margin:3px 0; }
           .qt-line b { color:var(--brand); }
 
           /* Wharf-ai panel */
@@ -201,7 +219,7 @@ def inject_css():
           .wa-head b { font-size:1rem; font-weight:800; letter-spacing:-.2px; }
           .wa-head span { display:block; font-size:.64rem; color:rgba(255,255,255,.72); }
           .wa-insight { background:#F4F1F8; border-left:4px solid var(--brand); border-radius:8px;
-            padding:9px 11px; font-size:.82rem; line-height:1.4; color:#1F2937; }
+            padding:9px 11px; font-size:.82rem; line-height:1.4; color:var(--ink); }
           .wa-insight .tag { font-size:.6rem; font-weight:700; letter-spacing:.08em;
             text-transform:uppercase; color:var(--brand); margin-bottom:3px; }
           .wa-insight b { color:var(--ink); }
