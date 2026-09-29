@@ -1,0 +1,10 @@
+# Fremantle Dockers purple and white theme. No club logo or trademarks used.
+[theme]
+primaryColor = "#7C3AED"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F1FB"
+textColor = "#1F2937"
+font = "sans serif"
+
+[server]
+headless = true

@@ -1,0 +1,7 @@
+streamlit
+pandas
+plotly
+anthropic
+# The scraper also needs:
+requests
+beautifulsoup4
