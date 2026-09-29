@@ -1,17 +1,62 @@
 """Data loading and derived metrics for the Fremantle Dockers dashboard.
 
-Reads the two CSVs produced by freo_scraper.py and adds only derived values
-(scoring shots, accuracy, chronological ordering, per game averages). Team
-totals are used for goal accuracy because team behinds include rushed behinds
-that summed player behinds do not.
+Reads the two CSVs produced by freo_scraper.py (AFL Tables) and, when present,
+merges the advanced stats from afl_api_scraper.py (AFL match centre) onto
+them. AFL Tables stays the source for every stat both sources have; the API
+only adds new columns. Derived values: scoring shots, accuracy, chronological
+ordering, per game averages. Team totals are used for goal accuracy because
+team behinds include rushed behinds that summed player behinds do not.
 """
+
+import os
+import re
 
 import pandas as pd
 import streamlit as st
 
 PLAYER_CSV = "freo_player_games.csv"
 TEAM_CSV = "freo_team_games.csv"
+PLAYER_EXT_CSV = "freo_player_games_ext.csv"
+TEAM_EXT_CSV = "freo_team_games_ext.csv"
 DATE_FMT = "%a %d-%b-%Y %I:%M %p"
+EXT_META = ["api_round", "date_local", "freo_side", "match_id", "player_id"]
+# API names for stats AFL Tables already has (AFL Tables name on the right).
+# These are used for the cross-check only, never merged in.
+API_DUPES = {
+    "kicks": "kicks", "handballs": "handballs", "disposals": "disposals", "marks": "marks",
+    "goals": "goals", "behinds": "behinds", "tackles": "tackles", "hitouts": "hitouts",
+    "inside50s": "inside_50s", "rebound50s": "rebound_50s", "clangers": "clangers",
+    "contested_possessions": "contested_poss", "uncontested_possessions": "uncontested_poss",
+    "contested_marks": "contested_marks", "marks_inside50": "marks_inside_50",
+    "one_percenters": "one_percenters", "bounces": "bounces", "goal_assists": "goal_assists",
+    "frees_for": "frees_for", "frees_against": "frees_against",
+    "total_clearances": "clearances", "total_possessions": None, "goal_accuracy": None,
+}
+
+
+def _match_games(base, ext):
+    """Map each ext game to an AFL Tables game: same season and opponent, local
+    dates within a day. Returns ext with a `game_key` column (the base index)."""
+    b = base[["season", "opponent", "game_dt"]].copy()
+    b["game_key"] = b.index
+    e = ext.copy()
+    e["_d"] = pd.to_datetime(e["date_local"])
+    m = e.reset_index().merge(b, on=["season", "opponent"], how="left")
+    m = m[(m["game_dt"].dt.normalize() - m["_d"]).abs() <= pd.Timedelta(days=1)]
+    return ext.join(m.set_index("index")["game_key"])
+
+
+def _new_cols(ext, base):
+    """API columns worth adding: not metadata, not already in AFL Tables."""
+    def stem(c):
+        return c.split("_", 1)[1] if c.startswith(("freo_", "opp_")) else c
+    return [c for c in ext.columns
+            if c not in base.columns and c not in EXT_META and c != "game_key"
+            and stem(c) not in API_DUPES and c not in ("season", "opponent", "jumper", "player")]
+
+
+def _surname(name):
+    return re.sub(r"[^a-z]", "", str(name).split()[-1].lower()) if str(name).strip() else ""
 
 
 @st.cache_data
@@ -24,6 +69,10 @@ def load_team():
     df["freo_accuracy"] = df["freo_goals"] / df["freo_scoring_shots"].replace(0, pd.NA) * 100
     df["opp_accuracy"] = df["opp_goals"] / df["opp_scoring_shots"].replace(0, pd.NA) * 100
     df = df.sort_values("game_dt").reset_index(drop=True)
+    if os.path.exists(TEAM_EXT_CSV):
+        ext = _match_games(df, pd.read_csv(TEAM_EXT_CSV)).dropna(subset=["game_key"])
+        ext = ext.drop_duplicates("game_key").set_index("game_key")
+        df = df.join(ext[_new_cols(ext, df)])
     return df
 
 
@@ -33,7 +82,72 @@ def load_players():
     df["game_dt"] = pd.to_datetime(df["date"], format=DATE_FMT, errors="coerce")
     df["forward_threat"] = df["goals"] + df["goal_assists"]
     df = df.sort_values("game_dt").reset_index(drop=True)
+    if os.path.exists(PLAYER_EXT_CSV):
+        df = _merge_player_ext(df, pd.read_csv(PLAYER_EXT_CSV))
     return df
+
+
+def _player_game_keys(df):
+    """Give every player row the index of its game (one row per game)."""
+    games = df.drop_duplicates(["season", "opponent", "game_dt"])[["season", "opponent", "game_dt"]]
+    keyed = df.merge(games.assign(game_key=games.index),
+                     on=["season", "opponent", "game_dt"], how="left")
+    return keyed, games
+
+
+def _player_join(df, ext):
+    """AFL Tables player rows joined to API rows by game and jumper."""
+    keyed, games = _player_game_keys(df)
+    ext = _match_games(games, ext).dropna(subset=["game_key"])
+    return keyed.merge(ext.rename(columns={"player": "_api_player"}),
+                       on=["game_key", "jumper"], how="left", suffixes=("", "_api"))
+
+
+def _merge_player_ext(df, ext):
+    """Attach API player stats by game and jumper. A row only merges when the
+    surnames also agree, so a jumper mix-up cannot swap two players' stats."""
+    cols = _new_cols(ext, df)
+    m = _player_join(df, ext[["season", "opponent", "date_local", "jumper", "player"] + cols])
+    bad = m["_api_player"].notna() & (m["player"].map(_surname) != m["_api_player"].map(_surname))
+    m.loc[bad, cols] = pd.NA
+    return m.drop(columns=["_api_player", "game_key"])
+
+
+def ext_check():
+    """Sanity check the API merge: coverage, surname disagreements, and any
+    difference on stats both sources carry. Run: python -c "import data; data.ext_check()" """
+    team = load_team()
+    base = pd.read_csv(PLAYER_CSV)
+    base["game_dt"] = pd.to_datetime(base["date"], format=DATE_FMT, errors="coerce")
+    ext = pd.read_csv(PLAYER_EXT_CSV)
+    m = _player_join(base, ext)
+    print(f"Team games with API stats: {team['freo_pressure_acts'].notna().sum()} of {len(team)}")
+    print(f"Player rows matched by jumper: {m['_api_player'].notna().sum()} of {len(base)}")
+    names = m[m["_api_player"].notna() & (m["player"].map(_surname) != m["_api_player"].map(_surname))]
+    for _, r in names.iterrows():
+        print(f"  surname differs, not merged: {r.season} {r['round']} #{r.jumper} {r.player} vs {r._api_player}")
+    both = m[m["_api_player"].notna()]
+    for api_col, col in API_DUPES.items():
+        if col is None or api_col not in both.columns:
+            continue
+        other = api_col + "_api" if api_col == col else api_col
+        diff = both[both[col] != both[other]]
+        if len(diff):
+            print(f"  {col}: {len(diff)} rows differ, e.g. "
+                  + "; ".join(f"{r.season} {r['round']} {r.player} {r[col]} vs {r[other]}"
+                              for _, r in diff.head(3).iterrows()))
+    tb = team.join(_match_games(team, pd.read_csv(TEAM_EXT_CSV)).dropna(subset=["game_key"])
+                   .set_index("game_key"), rsuffix="_api")
+    for side in ("freo_", "opp_"):
+        for api_col, col in API_DUPES.items():
+            a, b = side + col if col else None, side + api_col
+            if a is None or a not in tb.columns:
+                continue
+            b = b + "_api" if b in team.columns else b
+            if b in tb.columns:
+                n = int((tb[a] != tb[b]).sum())
+                if n:
+                    print(f"  team {a}: {n} games differ")
 
 
 def seasons(df):
@@ -150,6 +264,14 @@ TILES = [
     ("Rebound 50s", "avg", "freo_rebound_50s", None, None),
     ("Opp score", "opp", "opp_score", None, False),
 ]
+# With AFL match centre stats loaded, pressure replaces rebound 50s.
+# Direction is neutral: pressure acts pile up for the side without the ball, so
+# out-pressuring the opposition does not track with winning in this data.
+PRESSURE_TILE = ("Pressure acts diff", "diff", "freo_pressure_acts", "opp_pressure_acts", None)
+
+
+def has_ext(team_df):
+    return "freo_pressure_acts" in team_df.columns and team_df["freo_pressure_acts"].notna().any()
 
 
 def _tile_series(tdf, kind, fcol, ocol):
@@ -179,7 +301,8 @@ def tiles(team_df, season, baseline):
     cur = team_season(team_df, season)
     base = team_season(team_df, baseline) if baseline is not None else None
     out = []
-    for label, kind, fcol, ocol, better in TILES:
+    specs = [PRESSURE_TILE if has_ext(team_df) and t[0] == "Rebound 50s" else t for t in TILES]
+    for label, kind, fcol, ocol, better in specs:
         val = _tile_value(cur, kind, fcol, ocol)
         bval = _tile_value(base, kind, fcol, ocol) if base is not None else None
         change, unit = None, ""
@@ -228,9 +351,22 @@ WIN_STATS = [
 ]
 
 
+# With AFL match centre stats: clearances split centre vs stoppage, plus
+# pressure acts and metres gained.
+WIN_STATS_EXT = [
+    ("Centre clearances", "freo_centre_clearances", "opp_centre_clearances"),
+    ("Stoppage clearances", "freo_stoppage_clearances", "opp_stoppage_clearances"),
+    ("Contested poss", "freo_contested_poss", "opp_contested_poss"),
+    ("Inside 50s", "freo_inside_50s", "opp_inside_50s"),
+    ("Pressure acts", "freo_pressure_acts", "opp_pressure_acts"),
+    ("Metres gained", "freo_metres_gained", "opp_metres_gained"),
+    ("Disposals", "freo_disposals", "opp_disposals"),
+]
+
+
 def win_conditions(tdf):
     rows = []
-    for label, fcol, ocol in WIN_STATS:
+    for label, fcol, ocol in (WIN_STATS_EXT if has_ext(tdf) else WIN_STATS):
         d = differential(tdf, fcol, ocol)
         rows.append({"stat": label, **d})
     return pd.DataFrame(rows)

@@ -24,6 +24,17 @@ FORM_STATS = {
     "Marks": "marks",
     "Goals+assists": "forward_threat",
 }
+# With AFL match centre stats loaded (marks makes way).
+FORM_STATS_EXT = {
+    "Disposals": "disposals",
+    "Metres": "metres_gained",
+    "Score inv.": "score_involvements",
+    "Contested": "contested_poss",
+    "Clearances": "clearances",
+    "Pressure": "pressure_acts",
+    "Tackles": "tackles",
+    "Goals+assists": "forward_threat",
+}
 
 PLOT_CONFIG = {"displayModeBar": False}
 
@@ -35,6 +46,7 @@ def _plot(fig):
 def render(team_df, player_df, season, baseline):
     tdf = D.team_season(team_df, season)
     pdf = D.players_season(player_df, season)
+    form_stats = FORM_STATS_EXT if "pressure_acts" in pdf.columns else FORM_STATS
 
     tiles_row(D.tiles(team_df, season, baseline), baseline)
 
@@ -56,14 +68,14 @@ def render(team_df, player_df, season, baseline):
         card_title("Role leaders", "most games led")
         leaders_list(D.role_leaders(pdf))
     with b2, st.container(border=True):
-        t, s = st.columns([1, 2.2], vertical_alignment="center")
+        t, s = st.columns([2.6, 1], vertical_alignment="center")
         with t:
-            card_title("Player form", "last 6 games vs own avg")
+            card_title("Player form", "last 6 games, blue above own season avg, red below")
         with s:
-            stat = st.segmented_control("Form stat", list(FORM_STATS), default="Disposals",
-                                        key="form_stat", label_visibility="collapsed")
+            stat = st.selectbox("Form stat", list(form_stats), key="form_stat",
+                                label_visibility="collapsed")
         stat = stat or "Disposals"
-        vals, avgs, _ = D.form_matrix(pdf, FORM_STATS[stat])
+        vals, avgs, _ = D.form_matrix(pdf, form_stats.get(stat, "disposals"))
         if len(vals):
             _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38))
         else:

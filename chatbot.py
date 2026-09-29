@@ -19,16 +19,23 @@ import data as D
 
 MODEL = os.environ.get("FREO_CHAT_MODEL", "claude-opus-4-8")
 
+HAS_EXT = os.path.exists(D.TEAM_EXT_CSV) and os.path.exists(D.PLAYER_EXT_CSV)
 UNAVAILABLE = (
-    "metres gained, pressure acts, score involvements, shot locations, "
-    "expected score (xG), player positions or zones, and anything about team "
-    "structure or set-ups"
+    ("" if HAS_EXT else "metres gained, pressure acts, score involvements, ")
+    + "shot locations, expected score (xG), player positions or zones, and "
+    "anything about team structure or set-ups"
+)
+SOURCES = (
+    "afltables.com box scores, plus Champion Data advanced stats from the AFL match "
+    "centre (pressure acts, metres gained, score involvements, centre vs stoppage "
+    "clearances, intercepts, disposal efficiency, turnovers)"
+    if HAS_EXT else "afltables.com box scores"
 )
 
 SYSTEM_INTRO = f"""You are the analyst for a Fremantle Dockers (AFL) performance dashboard.
 You answer tactical and statistical questions using ONLY the data provided below,
-which was computed from the dashboard's two CSV files (afltables.com box scores for
-the 2025 and 2026 seasons).
+which was computed from the dashboard's CSV files ({SOURCES}) for the 2025 and 2026
+seasons. Where both sources carry a stat, the AFL Tables figure is used.
 
 Rules:
 - Every number you state must come from, or be directly computed from, the data below.
@@ -44,6 +51,22 @@ Rules:
   EF, QF, SF, PF, GF).
 - Be concise and concrete. Lead with the answer. Do not use em dashes.
 """
+
+
+EXT_TEAM_COLS = [
+    "freo_centre_clearances", "opp_centre_clearances", "freo_stoppage_clearances",
+    "opp_stoppage_clearances", "freo_pressure_acts", "opp_pressure_acts",
+    "freo_def_half_pressure_acts", "opp_def_half_pressure_acts", "freo_metres_gained",
+    "opp_metres_gained", "freo_intercepts", "opp_intercepts", "freo_turnovers",
+    "opp_turnovers", "freo_disposal_efficiency", "opp_disposal_efficiency",
+    "freo_tackles_inside50", "opp_tackles_inside50", "freo_ground_ball_gets",
+    "opp_ground_ball_gets", "freo_score_launches", "opp_score_launches",
+]
+EXT_PLAYER_COLS = [
+    "metres_gained", "score_involvements", "pressure_acts", "centre_clearances",
+    "stoppage_clearances", "intercepts", "turnovers", "disposal_efficiency",
+    "ground_ball_gets", "spoils", "centre_bounce_attendances", "time_on_ground_pct",
+]
 
 
 @st.cache_data
@@ -85,6 +108,7 @@ def build_context(_team_df_token, _player_df_token):
                 "opp_contested_poss", "freo_inside_50s", "opp_inside_50s",
                 "freo_marks", "freo_tackles", "freo_rebound_50s", "opp_rebound_50s",
                 "freo_one_percenters", "freo_goal_assists"]
+        cols += [c for c in EXT_TEAM_COLS if c in tdf.columns]
         parts.append("Per-game team totals (CSV):")
         parts.append(tdf[cols].to_csv(index=False).strip())
         # Player season averages.
@@ -92,6 +116,7 @@ def build_context(_team_df_token, _player_df_token):
         stat_cols = ["kicks", "marks", "handballs", "disposals", "goals", "behinds",
                      "tackles", "clearances", "contested_poss", "inside_50s",
                      "rebound_50s", "one_percenters", "goal_assists", "hitouts"]
+        stat_cols += [c for c in EXT_PLAYER_COLS if c in pdf.columns]
         agg = pdf.groupby("player").agg(
             games=("round", "count"),
             **{c: (c, "mean") for c in stat_cols}

@@ -113,6 +113,8 @@ def inject_css():
           div[data-testid="stButtonGroup"] button { min-height:28px; padding:2px 9px; }
           div[data-testid="stButtonGroup"] button p { font-size:.74rem; }
 
+          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:30px; font-size:.8rem; }
+
           /* Header controls */
           div[data-testid="stButton"] button { height:52px; border-radius:10px; }
         </style>

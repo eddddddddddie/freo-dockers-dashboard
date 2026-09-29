@@ -8,7 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Setup: `pip install requests beautifulsoup4` (the dashboard will also need streamlit, pandas, plotly, anthropic)
 - Scrape: `python freo_scraper.py 2025 2026` (no args defaults to 2025 and 2026). Takes about
   1.5 s per match, so plan for a minute or so per season. Writes both CSVs into the current directory.
-- There are no tests, linter config, or git repo yet.
+- Advanced stats: `python afl_api_scraper.py 2025 2026` (same defaults, about 3 minutes for both
+  seasons). Writes `freo_player_games_ext.csv` and `freo_team_games_ext.csv`. Optional: the
+  dashboard runs on the AFL Tables CSVs alone and hides the extra stats.
+- Check the merge: `python -c "import data; data.ext_check()"` (coverage, surname mismatches,
+  and where the two sources disagree on shared stats).
+- Run: `streamlit run app.py`. There are no tests or linter config.
 
 ## Goal
 Build a player-by-player, game-by-game stats dashboard for the Fremantle Dockers (AFL),
@@ -33,9 +38,24 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   - Team `freo_behinds`/`opp_behinds` include rushed behinds; summed player behinds don't. Use team totals for goal accuracy.
   - AFL Tables doesn't mark substitutes on 2026 pages, so `sub` is blank for all of 2026. Don't infer subs
     from low `pct_played` (ruckmen routinely play around 45%).
-  - Round labels are AFL Tables' own, and neither season has an R1.
-- Not available from AFL Tables: metres gained, pressure acts, score involvements, shot
-  locations, xG. Footywire could add some advanced stats later. Do not invent these.
+  - Round labels are AFL Tables' own, and neither season has an R1. They run one ahead of the
+    AFL's numbering (AFL Tables R2 = AFL "Round 1"), so never join sources on round.
+- Advanced stats come from the AFL match centre API (`afl_api_scraper.py`), which is unpublished and
+  undocumented: a token from a POST to `api.afl.com.au/cfs/afl/WMCTok`, the fixture from
+  `aflapi.afl.com.au/afl/v2/matches`, then `cfs/afl/playerStats/match/{id}` and `teamStats/match/{id}`.
+  URLs and fields can change without notice. The data is Champion Data's.
+  - Adds pressure acts, metres gained, score involvements, centre vs stoppage clearances,
+    intercepts, disposal efficiency, turnovers, contest one-on-ones, ground ball gets and more.
+  - The team endpoint returns no extended stats and leaves metres gained empty, so those team
+    totals are summed from player rows (both sides). Rates and score involvements are never summed.
+    The scraper checks summed kicks, handballs and tackles against the team endpoint.
+  - `data.py` merges by season + opponent + local date (within a day), players by jumper, and only
+    when surnames agree. AFL Tables stays the source for every stat both have; the API only adds
+    columns. As of 2026-09-29 all 51 games and 1173 player rows match; shared stats differ in a
+    handful of rows (e.g. one Erasmus handball in 2026 R5, rebound 50s in 4 games).
+  - Pressure acts track with not having the ball: Freo win more often when the opposition wins the
+    pressure count, so the pressure tile has no good/bad colour.
+- Still not available anywhere we use: shot locations, xG, player positions or zones. Do not invent these.
 
 ## Scraper internals (freo_scraper.py)
 - Two-stage flow: `get_match_list` reads Freo's `teams/fremantle/allgames.html` and takes game
