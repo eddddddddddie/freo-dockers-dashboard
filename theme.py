@@ -238,7 +238,8 @@ def inject_css():
           div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
           div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
-          .wa-sub { font-size:.7rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
+          .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
+          .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }
         </style>
         """,
         unsafe_allow_html=True,

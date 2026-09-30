@@ -160,6 +160,12 @@ def chat_panel(season, baseline, focus=None):
         st.session_state[key] = I.pick(team_df, player_df, season, baseline)
     msgs = st.session_state.setdefault("messages", [])
     client = C.get_client()
+    # Which page the chat is about: the view and what is on it. Each message
+    # records the page it was asked on, so moving to another page can offer
+    # that page's questions above the earlier chat.
+    page = focus or f"the {season} season"
+    asked_before = {m["content"] for m in msgs if m["role"] == "user"}
+    moved = bool(msgs) and msgs[-1].get("page") != page
 
     asked, limit = U.questions_today(), U.cap()
     chat_header(f"Answers from the match data only · {asked}/{limit} questions today")
@@ -183,13 +189,25 @@ def chat_panel(season, baseline, focus=None):
                 if st.button(q, key=f"ex_{i}", use_container_width=True,
                              disabled=client is None):
                     clicked = q
+        elif moved:
+            # A chat has started on another page: this page's questions go first,
+            # and the earlier chat moves down underneath.
+            st.markdown('<div class="wa-sub">Questions for this page</div>', unsafe_allow_html=True)
+            fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
+            for i, q in enumerate(fresh[:4]):
+                if st.button(q, key=f"pq_{i}", use_container_width=True,
+                             disabled=client is None):
+                    clicked = q
+            st.markdown('<div class="wa-sub wa-earlier">Earlier chat</div>', unsafe_allow_html=True)
         for n, msg in enumerate(msgs):
             with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
                 st.markdown(msg["content"])
                 for fig_json in msg.get("charts", []):
                     _show_chart(fig_json)
-            # Follow-ups under the latest answer only.
-            if msg["role"] == "assistant" and n == len(msgs) - 1 and msg.get("followups"):
+            # Follow-ups under the latest answer only, and only on the page they
+            # were asked on (after a move, this page's questions sit above instead).
+            if (msg["role"] == "assistant" and n == len(msgs) - 1 and msg.get("followups")
+                    and not moved):
                 st.markdown('<div class="wa-sub">Ask next</div>', unsafe_allow_html=True)
                 for j, q in enumerate(msg["followups"]):
                     if st.button(q, key=f"fu_{n}_{j}", use_container_width=True,
@@ -212,7 +230,7 @@ def chat_panel(season, baseline, focus=None):
                     "It resets at midnight Perth time.")
         return
     tally = U.Tally()
-    msgs.append({"role": "user", "content": prompt})
+    msgs.append({"role": "user", "content": prompt, "page": page})
     with history:
         with st.chat_message("user", avatar=AVATARS["user"]):
             st.markdown(prompt)
@@ -244,10 +262,10 @@ def chat_panel(season, baseline, focus=None):
                 return
     U.record(prompt, tally)
     if not followups:  # the model left them out: offer unasked suggestions instead
-        asked = {m["content"] for m in msgs if m["role"] == "user"}
-        followups = [q for q in example_prompts(season, baseline, focus) if q not in asked][:3]
+        asked_now = {m["content"] for m in msgs if m["role"] == "user"}
+        followups = [q for q in example_prompts(season, baseline, focus) if q not in asked_now][:3]
     msgs.append({"role": "assistant", "content": reply, "charts": charts,
-                 "followups": followups})
+                 "followups": followups, "page": page})
     # Redraw without the example prompts. A question handed over from a deep
     # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
     st.rerun() if pending and not (typed or clicked) else st.rerun(scope="fragment")

@@ -177,7 +177,12 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   panel width, calibrated at 1440 and 1920 wide); match mode leads with match questions. Every
   answer ends with a hidden `FOLLOWUPS: q | q | q` line that `chatbot._hold_back_marker` strips
   from the streamed text; the three show as "Ask next" buttons under the latest answer (unasked
-  suggestions are used if the model leaves the line out). It opens with an insight from
+  suggestions are used if the model leaves the line out).
+- Each chat message records the page it was asked on (`focus`, or "the <season> season"). If a chat
+  has started and the user moves to another page (view, game, player or club), the panel shows up
+  to four of that page's questions ("Questions for this page", ones already asked are skipped)
+  above the earlier chat, and hides the old answer's follow-ups. Asking one continues the same
+  conversation on the new page. It opens with an insight from
   `insights.py`: a pool of facts computed with pandas (win-rate swing by stat, best quarter, close
   games, home vs away, accuracy in wins vs losses, biggest change vs baseline, player in form,
   centre vs stoppage clearances), one picked at random per page open and per season. No LLM
