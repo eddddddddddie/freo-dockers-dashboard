@@ -32,6 +32,14 @@ def server():
             time.sleep(0.5)
     yield f"http://127.0.0.1:{port}"
     proc.terminate()
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:  # never leave a server running after the tests
+        proc.kill()
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:  # never leave a server running after the tests
+        proc.kill()
 
 
 @pytest.fixture(scope="module")

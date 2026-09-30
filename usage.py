@@ -10,9 +10,9 @@ not kept across restarts or redeploys, so the log and today's count start
 again after one; for permanent history, point USAGE_DB at persistent storage.
 
 Settings (environment or Streamlit secrets): WHARF_DAILY_CAP (default 50, shared
-by everyone), WHARF_LOGIN_CAP (default 10 questions per sign-in; a refresh or new
-tab keeps the same sign-in, a fresh sign-in starts again), USAGE_DB (default
-wharf_usage.sqlite).
+by everyone), WHARF_USER_CAP (default 10 questions per person per day; with the
+username/password fallback a "person" is one sign-in), USAGE_DB (default
+wharf_usage.sqlite). WHARF_LOGIN_CAP is read as a fallback for WHARF_USER_CAP.
 """
 
 import json
@@ -41,6 +41,8 @@ def _db():
     cols = {r[1] for r in con.execute("PRAGMA table_info(questions)")}
     if "sid" not in cols:  # logs from before the per sign-in cap
         con.execute("ALTER TABLE questions ADD COLUMN sid TEXT")
+    if "user_email" not in cols:  # logs from before Google sign-in
+        con.execute("ALTER TABLE questions ADD COLUMN user_email TEXT")
     return con
 
 
@@ -61,17 +63,21 @@ def questions_today():
 
 
 def login_cap():
+    """Questions per person per day."""
+    raw = settings.get("WHARF_USER_CAP") or settings.get("WHARF_LOGIN_CAP")
     try:
-        return max(0, int(settings.get("WHARF_LOGIN_CAP") or DEFAULT_LOGIN_CAP))
+        return max(0, int(raw or DEFAULT_LOGIN_CAP))
     except ValueError:
         return DEFAULT_LOGIN_CAP
 
 
 def questions_this_login(sid):
+    """Questions this person (or sign-in) has asked today."""
     if not sid:
         return 0
     with _db() as con:
-        return con.execute("SELECT COUNT(*) FROM questions WHERE sid = ?", (sid,)).fetchone()[0]
+        return con.execute("SELECT COUNT(*) FROM questions WHERE sid = ? AND day = ?",
+                           (sid, today())).fetchone()[0]
 
 
 def can_ask(sid=None):
@@ -98,15 +104,16 @@ class Tally:
                 + self.cache_write * PRICES["cache_write"]) / 1e6
 
 
-def record(question, tally, ok=True, sid=None):
+def record(question, tally, ok=True, sid=None, user_email=None):
     """Log one question (answered or failed: both count towards the caps)."""
     with _db() as con:
         con.execute("INSERT INTO questions (ts, day, question, tools, steps, input_tokens, "
-                    "output_tokens, cache_read, cache_write, cost_usd, ok, sid) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (
+                    "output_tokens, cache_read, cache_write, cost_usd, ok, sid, user_email) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (
                         datetime.now(TZ).isoformat(timespec="seconds"), today(), question,
                         json.dumps(tally.tools), tally.steps, tally.input, tally.output,
-                        tally.cache_read, tally.cache_write, round(tally.cost(), 5), int(ok), sid))
+                        tally.cache_read, tally.cache_write, round(tally.cost(), 5), int(ok), sid,
+                        user_email))
 
 
 def recent(limit=200):

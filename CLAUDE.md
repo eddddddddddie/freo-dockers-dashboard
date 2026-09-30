@@ -95,7 +95,15 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   Freo table, are collected and printed as warnings at the end instead of stopping the run.
 
 ## Dashboard layout (single Coach View, no other pages)
-The whole app sits behind a login (`auth.require_login`, username/password from secrets,
+Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
+redirect_uri, cookie_secret, client_id, client_secret, server_metadata_url): anyone with a
+verified Google account signs in through Streamlit's `st.login`; the app never sees a password;
+Streamlit keeps the sign-in in its own HttpOnly identity cookie; each person is `person_id(email)`
+(a hash), so Wharf-ai limits (`WHARF_USER_CAP`, default 10 a day) and saved chats are per person,
+and the usage log records their email. Google OAuth client: web application, redirect URIs
+`https://<app>.streamlit.app/oauth2callback` and `http://localhost:8501/oauth2callback`, consent
+screen External and In production. `[auth]` must be the last section in secrets.toml.
+The fallback (no `[auth]`: local dev, CI) is a login (`auth.require_login`, username/password from secrets,
 compared in constant time, 30 s pause after 5 failed tries). "Keep me signed in for 7 days"
 (ticked by default) stores a signed token (HMAC-SHA256 over a random session id, the username and
 an expiry) in the `freo_coach_session` cookie, set from JavaScript by `components/cookie` because

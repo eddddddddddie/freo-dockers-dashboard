@@ -183,7 +183,7 @@ def chat_panel(season, baseline, focus=None):
     sid = st.session_state.get("sid")
     asked, limit = U.questions_today(), U.cap()
     mine, mine_limit = U.questions_this_login(sid), U.login_cap()
-    chat_header(f"Answers from the match data only · {mine}/{mine_limit} questions this sign-in")
+    chat_header(f"Answers from the match data only · {mine}/{mine_limit} of your questions today")
     day_capped, login_capped = asked >= limit, mine >= mine_limit
     capped = day_capped or login_capped
     history = st.container(height=HISTORY_H, border=False, key="wa_history")
@@ -236,7 +236,7 @@ def chat_panel(season, baseline, focus=None):
                        "for multi-workspace keys) in the environment or app secrets.")
 
     placeholder = ("Daily question limit reached; resets at midnight Perth time" if day_capped
-                   else f"{mine_limit} question limit reached for this sign-in" if login_capped
+                   else f"You've used your {mine_limit} questions for today" if login_capped
                    else "Ask Wharf-ai about the data")
     typed = st.chat_input(placeholder, disabled=client is None or capped)
     pending = st.session_state.pop("pending_prompt", None)  # sent from a deep dive
@@ -249,8 +249,8 @@ def chat_panel(season, baseline, focus=None):
                 st.info(f"Wharf-ai has answered {limit} questions today, the daily limit. "
                         "It resets at midnight Perth time.")
             else:
-                st.info(f"This sign-in has used its {mine_limit} Wharf-ai questions. "
-                        "The dashboard still works as normal.")
+                st.info(f"You've used your {mine_limit} Wharf-ai questions for today; more "
+                        "tomorrow (midnight Perth time). The dashboard still works as normal.")
         return
     tally = U.Tally()
     msgs.append({"role": "user", "content": prompt, "page": page})
@@ -274,7 +274,8 @@ def chat_panel(season, baseline, focus=None):
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
             except Exception as exc:  # show API errors instead of crashing the app
-                U.record(prompt, tally, ok=False, sid=sid)
+                U.record(prompt, tally, ok=False, sid=sid,
+                         user_email=(auth.current_user() or {}).get("email"))
                 msgs.pop()  # keep failed turns out of the history sent next time
                 if "anthropic-workspace-id" in str(exc):
                     st.error("This API key is not tied to one workspace. Set "
@@ -283,7 +284,7 @@ def chat_panel(season, baseline, focus=None):
                 else:
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
-    U.record(prompt, tally, sid=sid)
+    U.record(prompt, tally, sid=sid, user_email=(auth.current_user() or {}).get("email"))
     if not followups:  # the model left them out: offer unasked suggestions instead
         asked_now = {m["content"] for m in msgs if m["role"] == "user"}
         followups = [q for q in example_prompts(season, baseline, focus) if q not in asked_now][:3]
@@ -390,7 +391,9 @@ with main:
             tour.replay()
             st.rerun()
     with h6:
-        if st.button("", icon=":material/logout:", key="signout_btn", help="Sign out"):
+        who = (auth.current_user() or {}).get("email")
+        if st.button("", icon=":material/logout:", key="signout_btn",
+                     help=f"Sign out ({who})" if who else "Sign out"):
             auth.sign_out()
     nav.write_url(season, view, game=game_round, player=player, opp=scout)
     dive = st.session_state.pop("open_deep_dive", None)

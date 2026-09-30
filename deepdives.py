@@ -183,11 +183,13 @@ def usage_log():
     if not rows:
         st.info("No questions logged yet.")
         return
-    df = pd.DataFrame(rows)[["ts", "question", "tools", "steps", "input_tokens", "output_tokens",
-                             "cache_read", "cost_usd", "ok"]]
+    df = pd.DataFrame(rows)
+    df["user_email"] = df.get("user_email", pd.Series([None] * len(df))).fillna("")
+    df = df[["ts", "user_email", "question", "tools", "steps", "input_tokens", "output_tokens",
+             "cache_read", "cost_usd", "ok"]]
     df["tools"] = df["tools"].str.replace(r'[\[\]"]', "", regex=True)
     df["ok"] = df["ok"].map({1: "yes", 0: "failed"})
-    st.dataframe(df.rename(columns={"ts": "When", "question": "Question", "tools": "Tools",
+    st.dataframe(df.rename(columns={"ts": "When", "user_email": "Who", "question": "Question", "tools": "Tools",
                                     "steps": "Steps", "input_tokens": "Input", "output_tokens": "Output",
                                     "cache_read": "Cache read", "cost_usd": "US$", "ok": "OK"}),
                  hide_index=True, use_container_width=True, height=380)

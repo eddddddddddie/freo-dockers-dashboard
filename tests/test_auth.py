@@ -54,3 +54,23 @@ def test_an_explicit_cookie_secret_is_used_when_set(config):
     token = auth.make_token("coach")
     config["APP_COOKIE_SECRET"] = "different"
     assert auth.verify_token(token) is None
+
+
+def test_person_id_is_stable_case_insensitive_and_not_the_email():
+    a = auth.person_id("Coach.Name@Example.com")
+    assert a == auth.person_id(" coach.name@example.com ")
+    assert a != auth.person_id("other@example.com")
+    assert "example" not in a and a.startswith("g:")
+
+
+def test_google_mode_needs_a_complete_auth_section(monkeypatch):
+    import streamlit as st
+
+    class Secrets(dict):
+        def get(self, k, default=None):
+            return dict.get(self, k, default)
+    monkeypatch.setattr(st, "secrets", Secrets(auth={"client_id": "x"}))
+    assert not auth.google_configured()
+    full = {k: "x" for k in auth.GOOGLE_KEYS}
+    monkeypatch.setattr(st, "secrets", Secrets(auth=full))
+    assert auth.google_configured()

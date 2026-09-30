@@ -1,8 +1,19 @@
-"""Login gate for the whole app, with an optional 7-day "keep me signed in".
+"""Login gate for the whole app.
 
-The username and password come from APP_USERNAME / APP_PASSWORD (environment
-or Streamlit secrets), never from the code: the repo is public. If they are
-not configured the app stays locked.
+Two modes, picked from the secrets:
+
+Google (when an [auth] section with Google's client_id etc. is configured):
+anyone with a Google account can sign in, through Streamlit's built-in
+st.login. Google verifies the email address and handles the password, 2FA
+and resets, so the app never sees or stores a password; only a Google email
+marked verified is accepted. Streamlit keeps the sign-in in its own signed,
+HttpOnly identity cookie. Each person is identified by a hash of their email,
+so Wharf-ai limits and saved chats are per person.
+
+Username and password (the fallback, e.g. local development and CI): the
+username and password come from APP_USERNAME / APP_PASSWORD (environment or
+Streamlit secrets), never from the code: the repo is public. If neither mode
+is configured the app stays locked.
 
 Staying signed in: after a successful sign-in the browser gets a cookie
 holding a signed token (a random session id, the username and an expiry,
@@ -97,9 +108,72 @@ def _sign_in(payload):
     st.session_state.pop("tries", None)
 
 
+# ---- Google ---------------------------------------------------------------------
+GOOGLE_KEYS = ("redirect_uri", "cookie_secret", "client_id", "client_secret",
+               "server_metadata_url")
+
+
+def google_configured():
+    """True when the secrets hold a complete [auth] section for st.login."""
+    try:
+        section = st.secrets.get("auth") or {}
+        return all(section.get(k) for k in GOOGLE_KEYS)
+    except Exception:  # no secrets file
+        return False
+
+
+def person_id(email):
+    """A stable, non-reversible id for one person (their email, hashed)."""
+    return "g:" + hashlib.sha256(email.strip().lower().encode()).hexdigest()[:24]
+
+
+def current_user():
+    """{"email", "name"} for the signed-in person, or None (password mode)."""
+    return st.session_state.get("user")
+
+
+def _require_google():
+    if st.user.is_logged_in:
+        email = st.user.get("email")
+        if not email or st.user.get("email_verified") is False:
+            _login_page("Your Google account's email address isn't verified, so it can't be "
+                        "used here. Verify it with Google, then sign in again.", google=True,
+                        error=True)
+        if st.session_state.get("user", {}).get("email") != email:
+            st.session_state["user"] = {"email": email, "name": st.user.get("name") or email}
+            st.session_state["authed"] = True
+            st.session_state["sid"] = person_id(email)
+            st.session_state["restored"] = True  # carry on this person's saved chat
+        return
+    _login_page(google=True)
+
+
+def _login_page(message=None, google=False, error=False):
+    _, mid, _ = st.columns([1, 1.1, 1])
+    with mid:
+        st.markdown('<div class="login-head"><b>Fremantle Coach View</b>'
+                    '<span>Sign in to continue</span></div>', unsafe_allow_html=True)
+        if message:
+            (st.error if error else st.info)(message)
+        if google:
+            if st.user.is_logged_in:
+                if st.button("Sign out", use_container_width=True):
+                    st.logout()
+            elif st.button("Sign in with Google", type="primary", use_container_width=True,
+                           icon=":material/login:"):
+                st.login()
+            st.caption("Anyone with a Google account can sign in. The app uses your name and "
+                       "email only to keep your Wharf-ai questions and chat separate; Google "
+                       "handles your password.")
+    st.stop()
+
+
 def require_login():
-    """Sign in from a valid cookie, or show the login form and stop the script
-    until the user is signed in."""
+    """Sign in with Google (if configured), from a valid cookie, or with the
+    username and password; otherwise show the sign-in page and stop the script."""
+    if google_configured():
+        _require_google()
+        return
     if st.session_state.get("authed"):
         return
     if not st.session_state.get("signed_out"):
@@ -145,7 +219,12 @@ def require_login():
 
 
 def sign_out():
-    """End this session and clear the cookie; the login page shows next."""
+    """End this session; the sign-in page shows next."""
+    if google_configured():
+        for k in ("authed", "sid", "messages", "restored", "user"):
+            st.session_state.pop(k, None)
+        st.logout()  # clears Streamlit's identity cookie and reruns
+        return
     for k in ("authed", "sid", "messages", "restored"):
         st.session_state.pop(k, None)
     st.session_state["signed_out"] = True  # the old cookie is ignored until it's cleared
