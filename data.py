@@ -258,9 +258,7 @@ TILES = [
     ("Clearance diff", "diff", "freo_clearances", "opp_clearances", True),
     ("Contested poss diff", "diff", "freo_contested_poss", "opp_contested_poss", True),
     ("Inside 50 diff", "diff", "freo_inside_50s", "opp_inside_50s", True),
-    ("Disposals", "avg", "freo_disposals", None, True),
     ("Goal accuracy", "acc", None, None, True),
-    ("Tackles", "avg", "freo_tackles", None, True),
     ("Rebound 50s", "avg", "freo_rebound_50s", None, None),
     ("Opp score", "opp", "opp_score", None, False),
 ]
@@ -733,8 +731,6 @@ def scout_tiles(lg, team, season, freo="Fremantle"):
         ("Contested poss diff", per["diff_contested_possessions"].mean(), True, "{:+.1f}"),
         ("Clearance diff", per["diff_total_clearances"].mean(), True, "{:+.1f}"),
         ("Metres gained diff", per["diff_metres_gained"].mean(), True, "{:+.0f}"),
-        ("Pressure acts diff", per["diff_pressure_acts"].mean(), None, "{:+.1f}"),
-        ("Goal accuracy", per["goals_for"].sum() / per["scoring_shots"].sum() * 100, True, "{:.1f}%"),
         ("Points against", per["score_against"].mean(), False, "{:.1f}"),
     ]
     out = []
@@ -783,3 +779,76 @@ def head_to_head(team_df, team):
     cols = ["season", "round", "type", "venue", "result", "freo_score", "opp_score", "margin",
             "freo_inside_50s", "opp_inside_50s", "freo_contested_poss", "opp_contested_poss"]
     return g[[c for c in cols if c in g.columns]]
+
+
+# ---- Player profile -----------------------------------------------------------
+PLAYER_TILES = [
+    ("Disposals", "disposals"), ("Contested poss", "contested_poss"),
+    ("Clearances", "clearances"), ("Metres gained", "metres_gained"),
+    ("Tackles", "tackles"), ("Goals + assists", "forward_threat"),
+]
+# Stats on the squad-rank card: label -> column (higher is better for all).
+PROFILE_STATS = [
+    ("Disposals", "disposals"), ("Contested poss", "contested_poss"),
+    ("Uncontested poss", "uncontested_poss"), ("Clearances", "clearances"),
+    ("Inside 50s", "inside_50s"), ("Metres gained", "metres_gained"),
+    ("Score involvements", "score_involvements"), ("Tackles", "tackles"),
+    ("Pressure acts", "pressure_acts"), ("Intercepts", "intercepts"),
+    ("Rebound 50s", "rebound_50s"), ("Goals", "goals"),
+]
+MIN_GAMES = 5
+
+
+def player_list(pdf_season):
+    """Players in a season, most games first (then by name)."""
+    g = pdf_season.groupby("player").size()
+    return sorted(g.index, key=lambda p: (-g[p], p))
+
+
+def player_tiles(player_df, player, season, baseline):
+    """Per game average of each tile stat for one player, with squad rank
+    (players with MIN_GAMES+ games), change vs the baseline season, and a per
+    game series for the sparkline."""
+    cur = players_season(player_df, season)
+    me = cur[cur["player"] == player].sort_values("game_dt")
+    base = players_season(player_df, baseline) if baseline is not None else None
+    squad = cur.groupby("player").filter(lambda g: len(g) >= MIN_GAMES)
+    out = []
+    for label, col in PLAYER_TILES:
+        if col not in cur.columns:
+            continue
+        val = me[col].mean()
+        avgs = squad.groupby("player")[col].mean()
+        rank = int(avgs.rank(ascending=False, method="min")[player]) if player in avgs else None
+        bval = None
+        if base is not None:
+            b = base[base["player"] == player]
+            bval = b[col].mean() if len(b) >= MIN_GAMES else None
+        change = (val - bval) / abs(bval) * 100 if bval else None
+        out.append({"label": label, "kind": "avg", "value": val, "base": bval, "change": change,
+                    "unit": "%" if change is not None else "", "better": True,
+                    "series": me[col].round(1).tolist(),
+                    "games": (me["round"] + " " + me["opponent"].map(abbr)).tolist(),
+                    "highlight": len(me) - 1, "rank": rank, "squad": len(avgs)})
+    return out
+
+
+def player_squad_ranks(pdf_season, player):
+    """The player's per game average and squad rank on each profile stat."""
+    squad = pdf_season.groupby("player").filter(lambda g: len(g) >= MIN_GAMES)
+    rows = []
+    for label, col in PROFILE_STATS:
+        if col not in squad.columns:
+            continue
+        avgs = squad.groupby("player")[col].mean()
+        if player not in avgs:
+            continue
+        rows.append({"stat": label, "value": avgs[player],
+                     "rank": int(avgs.rank(ascending=False, method="min")[player]),
+                     "squad": len(avgs)})
+    return pd.DataFrame(rows)
+
+
+def player_log(pdf_season, player):
+    """Every game one player played in a season, most recent first."""
+    return pdf_season[pdf_season["player"] == player].sort_values("game_dt", ascending=False)

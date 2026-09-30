@@ -18,7 +18,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, header_band, match_band, scout_band, chat_header,
+from theme import (inject_css, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card)
 import auth
 import layout
@@ -29,6 +29,7 @@ import insights as I
 import deepdives as DD
 import usage as U
 import tour
+import nav
 
 inject_css()
 auth.require_login()          # stops here until signed in
@@ -55,6 +56,16 @@ TOOL_LABELS = {
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
+    if focus and focus.startswith("the player profile for "):
+        who = focus.split(" for ", 1)[1].split(",")[0]
+        first = who.split()[0]
+        return [f"How is {who} going this season?",
+                f"Is {first} in form over the last five games?",
+                f"How does {first} compare with last season?",
+                f"Where does {first} rank in the squad?",
+                f"What does {first} do in wins versus losses?",
+                f"Which games were {first}'s best?"] + [
+            q for q in example_prompts(season, baseline) if "players" in q.lower()]
     if focus and focus.startswith("the opponent scout report for "):
         club = focus.split(" for ", 1)[1].split(",")[0]
         scout = [f"What wins {club} games?",
@@ -245,29 +256,46 @@ def chat_panel(season, baseline, focus=None):
 # ------------------------------------------------------------- layout
 main, side = st.columns([3.55, 1])
 focus = None
+league = D.load_league()
+CLUBS = sorted(t for t in league["team"].unique() if t != "Fremantle") if league is not None else []
+
+
+def _game_label(season, rnd):
+    """The game picker's label for a round in a season (for links like ?game=GF)."""
+    tdf_ = D.team_season(team_df, season)
+    for label, i in D.game_choices(tdf_):
+        if tdf_["round"].iloc[i] == rnd:
+            return label
+    return None
+
+
+# A queued move from a click, or the web address on a visit's first run.
+nav.apply_pending(all_seasons, _game_label,
+                  lambda s: D.player_list(D.players_season(player_df, s)), lambda: CLUBS)
 
 with main:
-    h1, h2, h3, h4 = st.columns([5.05, 0.86, 1.34, 1.07], vertical_alignment="center")
+    h1, h2, h3, h4 = st.columns([4.75, 0.84, 1.66, 1.02], vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")
-    league = D.load_league()
     with h3:
-        views = ["Season", "Match"] + (["Scout"] if league is not None else [])
+        views = [v for v in nav.VIEWS if v != "Scout" or league is not None]
         view = st.segmented_control("View", views, default="Season",
                                     key="view", label_visibility="collapsed") or "Season"
     season = season or all_seasons[-1]
     baseline = D.baseline_season(season, all_seasons)
     tdf = D.team_season(team_df, season)
-    pos = scout = None
+    pdf_season = D.players_season(player_df, season)
+    pos = scout = player = game_round = None
     with h1:
-        if view == "Scout":
+        if view == "Scout" and league is not None:
             pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
-            clubs = sorted(t for t in league["team"].unique() if t != "Fremantle")
-            last_opp = tdf["opponent"].iloc[-1] if len(tdf) else clubs[0]
+            if st.session_state.get("scout_team") not in CLUBS:
+                last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
+                st.session_state["scout_team"] = last_opp if last_opp in CLUBS else CLUBS[0]
             with pick:
-                scout = st.selectbox("Opponent", clubs, index=clubs.index(last_opp),
-                                     key="scout_team", label_visibility="collapsed")
+                scout = st.selectbox("Opponent", CLUBS, key="scout_team",
+                                     label_visibility="collapsed")
             with band:
                 lad = D.ladder(league, season)
                 games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
@@ -275,6 +303,17 @@ with main:
                          for r in games.itertuples()]
                 scout_band(scout, season, lad.loc[scout], last5)
             focus = f"the opponent scout report for {scout}, {season} season"
+        elif view == "Player":
+            names = D.player_list(pdf_season)
+            if st.session_state.get("player_pick") not in names:
+                st.session_state["player_pick"] = names[0]
+            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
+            with pick:
+                player = st.selectbox("Player", names, key="player_pick",
+                                      label_visibility="collapsed")
+            with band:
+                player_band(player, season, pdf_season[pdf_season["player"] == player])
+            focus = f"the player profile for {player}, {season} season"
         elif view == "Match" and len(tdf):
             pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
             choices = D.game_choices(tdf)
@@ -283,6 +322,7 @@ with main:
                                      label_visibility="collapsed")
             pos = dict(choices)[label]
             game = tdf.iloc[pos]
+            game_round = game["round"]
             with band:
                 match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
             focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
@@ -301,6 +341,7 @@ with main:
         # never sits on top of the dialog it opens.
         st.selectbox("Deep dives", list(DEEP_DIVES), index=None, placeholder="Deep dives",
                      key="deep_dive", label_visibility="collapsed", on_change=_pick_deep_dive)
+    nav.write_url(season, view, game=game_round, player=player, opp=scout)
     dive = st.session_state.pop("open_deep_dive", None)
     if dive == "Player map":
         DD.player_map(player_df, season)
@@ -317,6 +358,8 @@ with main:
         st.rerun()
     if scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
+    elif player is not None:
+        V.render_player(player_df, season, baseline, player, SZ)
     elif pos is not None:
         V.render_match(team_df, player_df, season, pos, SZ)
     else:

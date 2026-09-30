@@ -42,6 +42,7 @@ def sizes(height, width=1440):
         "bot": bot,
         "panel": int(722 + extra + wrap),
         "history": int(570 + extra + wrap),
-        # Player form rows that fit the bottom card (about 16px each).
-        "form_rows": max(8, min(26, int((bot - 68) / 16))),
+        # Player form rows that fit the bottom card at 12px labels, after the
+        # card's takeaway line (about 18px a row).
+        "form_rows": max(7, min(24, int((bot - 18 - 68) / 18))),
     }

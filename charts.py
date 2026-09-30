@@ -33,6 +33,20 @@ def win_conditions_bars(wc, height, names=("Freo won it", "Opp won it"), colors=
     return fig
 
 
+def _click_layer(fig, xs, ys, hover, size=26):
+    """Invisible markers over heatmap cells. Streamlit only reports clicks on
+    point marks, not heatmap cells, so these carry the click (and the hover
+    text) for each cell. hover: text per (y, x), row-major. The axes are pinned
+    to the cells, or the markers would pad them and leave an empty band."""
+    fig.add_trace(go.Scatter(
+        x=[x for _ in ys for x in xs], y=[y for y in ys for _ in xs], mode="markers",
+        marker=dict(symbol="square", size=size, opacity=0.001), customdata=hover,
+        hovertemplate="%{customdata}<extra></extra>", showlegend=False))
+    fig.update_xaxes(range=[-0.5, len(xs) - 0.5])
+    fig.update_yaxes(range=[len(ys) - 0.5, -0.5], autorange=False)  # top row first
+    return fig
+
+
 def _inline_key(fig, items):
     """A one-line colour key drawn inside the chart (top left), for cards whose
     title row has no room for one."""
@@ -86,15 +100,20 @@ def form_heatmap(vals, avgs, stat_label, height):
         z=pct.values, x=list(vals.columns), y=rows, text=text,
         texttemplate="%{text}", textfont=dict(size=11),
         colorscale=FORM_SCALE, zmin=50, zmax=150, xgap=2, ygap=2, showscale=False,
-        customdata=vals.values,
-        hovertemplate="%{y}<br>%{x}: <b>%{customdata:.0f}</b> " + stat_label.lower() +
-                      "<br>%{z:.0f}% of season avg<extra></extra>",
-        hoverongaps=False,
+        hoverinfo="skip",
     ))
+    tips = []
+    for (p, a), row, prow in zip(avgs.items(), vals.values, pct.values):
+        for g, v, pc in zip(vals.columns, row, prow):
+            tips.append(f"<b>{p}</b> · {g}: " + ("did not play" if v != v else
+                        f"{v:.0f} {stat_label.lower()} ({pc:.0f}% of season avg)")
+                        + "<br>Click for the player profile")
+    _click_layer(fig, list(vals.columns), rows, tips, size=20)
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=4, b=4))
-    fig.update_xaxes(side="top", tickfont=dict(size=10))
-    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11))
+    fig.update_xaxes(side="top", tickfont=dict(size=11))
+    fig.update_yaxes(showgrid=False, tickfont=dict(size=12),
+                     tickmode="array", tickvals=rows, ticktext=rows)  # never thin row labels
     return fig
 
 
@@ -110,7 +129,7 @@ def game_strip(rows, z, hover, labels, results, height):
     fig.add_trace(go.Heatmap(
         z=[z_row for z_row in z], x=labels, y=rows, customdata=hover,
         colorscale=DIVERGING, zmin=-1, zmax=1, xgap=1.5, ygap=2, showscale=False,
-        hovertemplate="%{customdata}<extra></extra>",
+        hoverinfo="skip",
     ))
     # Result row: its own trace so it can use win/loss colours and a letter.
     fig.add_trace(go.Heatmap(
@@ -119,10 +138,13 @@ def game_strip(rows, z, hover, labels, results, height):
         colorscale=[[0, COLORS["loss"]], [1, COLORS["win"]]], zmin=0, zmax=1,
         xgap=1.5, ygap=2, showscale=False, hoverinfo="skip",
     ))
+    tips = [[f"<b>{x}</b>: {r} · click to open this game" for x, r in zip(labels, results)]] + \
+        [[f"{h}<br>Click to open this game" for h in row] for row in hover]
+    _click_layer(fig, labels, ["Result"] + rows, [t for row in tips for t in row], size=18)
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=8, b=4))
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=9), showgrid=False)
-    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11),
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10), showgrid=False)
+    fig.update_yaxes(showgrid=False, tickfont=dict(size=11),
                      categoryorder="array", categoryarray=["Result"] + rows)
     return fig
 
@@ -283,14 +305,17 @@ def match_player_grid(vals, pct, labels, height):
         z=pct.values, x=labels, y=list(vals.index), text=text,
         texttemplate="%{text}", textfont=dict(size=11),
         colorscale=FORM_SCALE, zmin=50, zmax=150, xgap=2, ygap=2, showscale=False,
-        customdata=vals.values,
-        hovertemplate="%{y}<br>%{x}: <b>%{customdata:.0f}</b><br>%{z:.0f}% of season avg"
-                      "<extra></extra>",
+        hoverinfo="skip",
     ))
+    tips = [f"<b>{p}</b> · {lbl}: {v:.0f} ({pc:.0f}% of season avg)<br>Click for the player profile"
+            for p, row, prow in zip(vals.index, vals.values, pct.values)
+            for lbl, v, pc in zip(labels, row, prow)]
+    _click_layer(fig, labels, list(vals.index), tips, size=20)
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=4, b=4))
-    fig.update_xaxes(side="top", tickfont=dict(size=10))
-    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11))
+    fig.update_xaxes(side="top", tickfont=dict(size=11))
+    fig.update_yaxes(showgrid=False, tickfont=dict(size=12),
+                     tickmode="array", tickvals=list(vals.index), ticktext=list(vals.index))
     return fig
 
 
@@ -390,4 +415,44 @@ def form_bars(games, height):
     fig.update_layout(showlegend=False, bargap=0.2, margin=dict(l=4, r=6, t=6, b=4))
     fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
     fig.update_yaxes(zeroline=True, zerolinecolor=COLORS["grid"])
+    return fig
+
+
+# ---- Player profile ---------------------------------------------------------------
+def player_trend(me, col, label, height):
+    """One player's number in every game of the season, with the season
+    average as a dashed line."""
+    x = (me["round"] + " " + me["opponent"].map(D.abbr)).tolist()
+    avg = me[col].mean()
+    colors = [COLORS["win"] if r == "W" else COLORS["loss"] for r in me["result"]]
+    fig = go.Figure(go.Scatter(
+        x=x, y=me[col], mode="lines+markers", line=dict(color=COLORS["freo"], width=2),
+        marker=dict(size=8, color=colors, line=dict(color="#FFFFFF", width=2)),
+        customdata=me[["opponent", "result", "margin"]].values,
+        hovertemplate="%{x} v %{customdata[0]} (%{customdata[1]} %{customdata[2]:+})<br>"
+                      + label + ": <b>%{y:.0f}</b><extra></extra>", showlegend=False))
+    fig.add_hline(y=avg, line=dict(color=COLORS["muted"], width=1, dash="dash"),
+                  annotation_text=f"season avg {avg:.1f}", annotation_position="top left",
+                  annotation_font=dict(size=11, color=COLORS["muted"]))
+    fig = style_fig(fig, label, unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=8, t=10, b=4))
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10))
+    return fig
+
+
+def squad_rank_bars(pr, height):
+    """Squad rank on each stat as a bar (longer = better rank), value labelled."""
+    score = pr["squad"] - pr["rank"] + 1
+    fig = go.Figure(go.Bar(
+        y=pr["stat"], x=score, orientation="h", marker=dict(color=COLORS["freo"], cornerradius=3),
+        text=[f"{int(r)}{'st' if r == 1 else 'nd' if r == 2 else 'rd' if r == 3 else 'th'} · {v:.1f}"
+              for r, v in zip(pr["rank"], pr["value"])],
+        textposition="outside", textfont=dict(size=11, color=COLORS["ink"]), cliponaxis=False,
+        customdata=pr[["rank", "squad", "value"]].values,
+        hovertemplate="%{y}: %{customdata[2]:.1f} a game<br>Rank %{customdata[0]} of "
+                      "%{customdata[1]} in the squad<extra></extra>"))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=70, t=4, b=4), bargap=0.3)
+    fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, pr["squad"].max() + 0.5])
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=12))
     return fig

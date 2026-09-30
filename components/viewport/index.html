@@ -34,6 +34,19 @@
       clearTimeout(timer);
       timer = setTimeout(report, 250);
     });
+    // Streamlit doesn't rerun on the browser's Back/Forward, so tell Python the
+    // address changed; nav.apply_pending then moves to the view in the address.
+    // Streamlit only listens to the frame it currently shows, so each new copy
+    // of this frame replaces the previous copy's listener.
+    if (store.__freoPopstate) window.parent.removeEventListener("popstate", store.__freoPopstate);
+    store.__freoPopstate = function () {
+      var s = size();
+      // Streamlit's own record of the address isn't updated on Back/Forward,
+      // so send the new one with the message.
+      send("streamlit:setComponentValue", {value: {w: s.w, h: s.h, pop: Date.now(),
+        search: window.parent.location.search}, dataType: "json"});
+    };
+    window.parent.addEventListener("popstate", store.__freoPopstate);
   } catch (err) { /* parent not reachable: keep the first reading */ }
   send("streamlit:componentReady", {apiVersion: 1});
 })();

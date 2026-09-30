@@ -13,6 +13,7 @@ import streamlit as st
 
 import data as D
 import charts as CH
+import nav
 from theme import COLORS
 
 CHART_H = 520
@@ -43,11 +44,15 @@ def player_map(player_df, season):
     y_default = "Metres gained" if "Metres gained" in stats else "Uncontested poss"
     y = c2.selectbox("Up", labels, index=labels.index(y_default))
     c3.caption(f"{season}, players with 5+ games. Dot size is time on ground. "
-               "Dotted lines are the team median, so the top right is above the median on both.")
+               "Dotted lines are the team median. Click a dot for the player's profile.")
     size_col = "time_on_ground_pct" if "time_on_ground_pct" in pdf.columns else "pct_played"
     pa = D.player_averages(pdf, [stats[x], stats[y], size_col])
-    st.plotly_chart(CH.player_map(pa, stats[x], stats[y], x, y, size_col, CHART_H),
-                    use_container_width=True, config=PLOT_CONFIG)
+    ev = st.plotly_chart(CH.player_map(pa, stats[x], stats[y], x, y, size_col, CHART_H),
+                         use_container_width=True, config=PLOT_CONFIG, on_select="rerun",
+                         selection_mode="points", key="pmap_click")
+    point = nav.clicked(ev)
+    if point is not None and point.get("point_index") is not None:
+        nav.go(view="Player", season=season, player=pa.index[point["point_index"]])
 
 
 @st.dialog("Year on year", width="large")
@@ -61,13 +66,18 @@ def year_on_year(player_df, all_seasons):
     c1, c2 = st.columns([1, 2.6], vertical_alignment="bottom")
     stat = c1.selectbox("Stat", labels, index=0)
     c2.caption(f"Per game average, {s0} to {s1}, for the 15 players highest in {s1} "
-               "with 8+ games in both seasons. Purple went up, grey went down.")
+               "with 8+ games in both seasons. Purple went up, grey went down. "
+               "Click a line for the player's profile.")
     yoy = D.year_on_year(player_df, s0, s1, stats[stat])
     if not len(yoy):
         st.info("No players with enough games in both seasons.")
         return
-    st.plotly_chart(CH.slope_chart(yoy, s0, s1, stat, CHART_H),
-                    use_container_width=True, config=PLOT_CONFIG)
+    ev = st.plotly_chart(CH.slope_chart(yoy, s0, s1, stat, CHART_H),
+                         use_container_width=True, config=PLOT_CONFIG, on_select="rerun",
+                         selection_mode="points", key="yoy_click")
+    point = nav.clicked(ev)
+    if point is not None and point.get("curve_number") is not None:
+        nav.go(view="Player", season=s1, player=yoy.index[point["curve_number"]])
 
 
 def _chip(g):
@@ -96,9 +106,11 @@ def opponents(team_df, all_seasons):
         f'<div class="op-wrap"><table class="op-grid"><thead><tr><th>Opponent</th>{head}'
         f'<th>Record</th><th>Avg margin</th></tr></thead><tbody>{rows}</tbody></table></div>',
         unsafe_allow_html=True)
-    c1, c2 = st.columns([1, 1.4], vertical_alignment="bottom")
+    c1, c2, c3 = st.columns([1, 1, 1.3], vertical_alignment="bottom")
     opp = c1.selectbox("Club", [r["opponent"] for r in grid])
-    if c2.button(f"Ask Wharf-ai about {opp}", type="primary"):
+    if D.load_league() is not None and c2.button(f"Open the scout report", type="primary"):
+        nav.go(view="Scout", season=all_seasons[-1], opp=opp)
+    if c3.button(f"Ask Wharf-ai about {opp}"):
         st.session_state["pending_prompt"] = (
             f"How have we gone against {opp} across {all_seasons[0]} and "
             f"{all_seasons[-1]}, and what decided those games?")

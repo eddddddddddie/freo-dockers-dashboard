@@ -83,3 +83,39 @@ def test_every_view_fits_one_screen(browser, server, w, h):
         assert f["scroll"] <= f["client"] + 1, (view, w, h, f)
         assert f["cards"] and f["white"] == f["cards"], (view, f)
     pg.close()
+
+
+def _click_cell(pg, card, n):
+    """Press on the n-th clickable cell of a card's chart (the invisible layer)."""
+    box = pg.locator(f".st-key-card_{card} .js-plotly-plot g.points path").nth(n).bounding_box()
+    pg.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    pg.mouse.down()
+    pg.wait_for_timeout(60)
+    pg.mouse.up()
+    pg.wait_for_timeout(4000)
+
+
+def test_clicks_links_and_back_button(browser, server):
+    pg = open_app(browser, server, 1440, 790)
+    band = lambda: pg.locator(".cv-band .ttl").inner_text().split("\n")[0]  # noqa: E731
+    _click_cell(pg, "strip", 5)                       # first row, 6th game
+    assert "view=Match" in pg.evaluate("location.search") and " v " in band()
+    game = band()
+    pg.get_by_role("radio", name="Player", exact=True).click()
+    pg.wait_for_timeout(3500)
+    assert "view=Player" in pg.evaluate("location.search")
+    pg.go_back()
+    pg.wait_for_timeout(4000)
+    assert band() == game, "browser Back should return to the match"
+    pg.close()
+    pg2 = browser.new_page(viewport={"width": 1440, "height": 790})
+    pg2.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    pg2.goto(server + "/?season=2025&view=Match&game=EF")
+    pg2.wait_for_selector("input[type=password]", timeout=60000)
+    pg2.get_by_label("Username").fill(os.environ["APP_USERNAME"])
+    pg2.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
+    pg2.get_by_role("button", name="Sign in").click()
+    pg2.wait_for_selector(".js-plotly-plot", timeout=60000)
+    pg2.wait_for_timeout(3000)
+    assert pg2.locator(".cv-band .ttl").inner_text().startswith("EF v"), "deep link opens the game"
+    pg2.close()

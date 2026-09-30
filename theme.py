@@ -100,8 +100,11 @@ def inject_css():
             font-size:.82rem; font-weight:700; letter-spacing:-.2px; color:var(--ink);
             margin:0; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
           }
-          .card-title span { color:var(--muted); font-weight:400; font-size:.7rem; letter-spacing:0; }
-          .card-title .key { color:var(--muted); margin-left:8px; white-space:nowrap; font-size:.66rem; font-weight:500; }
+          .card-title span { color:var(--muted); font-weight:400; font-size:.75rem; letter-spacing:0; }
+          .card-title .key { color:var(--muted); margin-left:8px; white-space:nowrap; font-size:.75rem; font-weight:500; }
+          .card-take, .card-title .take { display:block; font-size:.8rem; font-weight:600; color:var(--brand);
+            line-height:1.35; margin:0 0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            letter-spacing:0; }
           .card-title .key i { display:inline-block; width:9px; height:9px; border-radius:2px;
             margin-right:4px; vertical-align:-1px; }
 
@@ -112,40 +115,42 @@ def inject_css():
             display:flex; align-items:center; gap:clamp(10px, 1.2vw, 22px); overflow:hidden;
           }
           .cv-band .ttl { font-weight:800; font-size:1.08rem; letter-spacing:-.3px; white-space:nowrap; }
-          .cv-band .ttl small { display:block; font-weight:500; font-size:.66rem; letter-spacing:0;
+          .cv-band .ttl small { display:block; font-weight:500; font-size:.75rem; letter-spacing:0;
             color:rgba(255,255,255,.72); }
           .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
           .cv-stat { line-height:1.05; white-space:nowrap; }
           .cv-stat b { font-size:1.08rem; font-weight:700; }
-          .cv-stat span { display:block; font-size:.62rem; letter-spacing:.04em;
-            text-transform:uppercase; color:rgba(255,255,255,.72); }
+          .cv-stat span { display:block; font-size:.75rem; letter-spacing:0;
+            color:rgba(255,255,255,.75); }
+          .cv-stat.hero b { font-size:1.75rem; font-weight:800; letter-spacing:-.8px; line-height:1; }
           .cv-form { display:flex; gap:3px; }
-          .cv-form i { font-style:normal; font-size:.66rem; font-weight:700; width:20px;
+          .cv-form i { font-style:normal; font-size:.75rem; font-weight:700; width:20px;
             height:20px; border-radius:4px; display:flex; align-items:center;
             justify-content:center; color:#fff; }
 
           /* Headline tiles */
-          .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
+          .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:8px; }
           .cv-tile { background:#fff; border:1px solid var(--line); border-radius:8px;
             padding:6px 8px 4px; min-width:0; box-shadow:0 1px 3px rgba(0,0,0,.07); }
-          .cv-tile .lbl { font-size:.68rem; font-weight:600; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-          .cv-tile .val { font-size:1.15rem; font-weight:800; letter-spacing:-.4px; color:var(--ink); line-height:1.15; }
-          .cv-tile .dlt { font-size:.64rem; font-weight:600; margin-left:3px; white-space:nowrap; }
+          .cv-tile .lbl { font-size:.75rem; font-weight:600; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .cv-tile .val { font-size:1.4rem; font-weight:800; letter-spacing:-.4px; color:var(--ink); line-height:1.15; }
+          .cv-tile .dlt { font-size:.75rem; font-weight:600; margin-left:3px; white-space:nowrap; }
           .cv-tile svg { display:block; width:100%; height:22px; margin-top:1px; }
 
           /* Role leaders */
-          .cv-lead { display:flex; justify-content:space-between; align-items:center;
-            padding:2px 0; border-bottom:1px solid #EFEFEF; }
+          .cv-lead { display:grid; grid-template-columns:auto 1fr auto; align-items:baseline; gap:8px;
+            padding:4px 0; border-bottom:1px solid #EFEFEF; }
+          .cv-lead .role { white-space:nowrap; }
+          .cv-lead .name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .cv-lead:last-child { border-bottom:none; }
-          .cv-lead .role { color:var(--brand); font-size:.6rem; text-transform:uppercase;
-            letter-spacing:.05em; font-weight:700; }
+          .cv-lead .role { color:var(--brand); font-size:.75rem; font-weight:700; letter-spacing:0; }
           .cv-lead .name { font-weight:700; font-size:.84rem; color:var(--ink); line-height:1.2; letter-spacing:-.1px; }
           .cv-lead .num { text-align:right; font-weight:800; color:var(--ink); font-size:.95rem; line-height:1.1; }
-          .cv-lead .num small { display:block; color:var(--muted); font-weight:400; font-size:.62rem; }
+          .cv-lead .num small { display:block; color:var(--muted); font-weight:400; font-size:.75rem; white-space:nowrap; }
 
           /* Compact segmented controls */
-          div[data-testid="stButtonGroup"] button { min-height:28px; padding:2px 9px; }
-          div[data-testid="stButtonGroup"] button p { font-size:.74rem; }
+          div[data-testid="stButtonGroup"] button { min-height:28px; padding:2px 7px; }
+          div[data-testid="stButtonGroup"] button p { font-size:.75rem; }
 
           div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:30px; font-size:.8rem; }
 
@@ -162,7 +167,7 @@ def inject_css():
           /* Opponents grid (deep dive) */
           .op-wrap { max-height:470px; overflow-y:auto; margin-bottom:12px; }
           .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
-          .op-grid th { text-align:left; font-size:.64rem; text-transform:uppercase; letter-spacing:.07em;
+          .op-grid th { text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.07em;
             color:var(--brand); padding:4px 6px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
           .op-grid td { padding:4px 6px; border-bottom:1px solid #EFEFEF; vertical-align:middle; }
           .op-name { font-weight:600; white-space:nowrap; }
@@ -189,22 +194,22 @@ def inject_css():
             .cv-band.match .ttl small { display:none; } }
 
           /* Match mode */
-          .cv-res { font-style:normal; font-size:.72rem; font-weight:700; padding:2px 9px; border-radius:999px;
+          .cv-res { font-style:normal; font-size:.75rem; font-weight:700; padding:2px 9px; border-radius:999px;
             text-transform:uppercase; letter-spacing:.04em; }
-          .tp { display:flex; flex-direction:column; gap:4px; margin-top:2px; }
+          .tp { display:flex; flex-direction:column; gap:2px; margin-top:0; }
           .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px; }
           .tp-f, .tp-o { font-weight:800; font-size:.85rem; color:var(--ink); }
           .tp-f { text-align:right; }
-          .tp-lbl { font-size:.72rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .tp-lbl { font-size:.75rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .tp-bar { position:relative; height:9px; border-radius:5px; background:var(--opp); overflow:visible; }
           .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:var(--freo); border-radius:5px 0 0 5px;
             border-right:2px solid #fff; }
           .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:var(--ink); margin-left:-1px; }
 
           /* Scout report */
-          .cv-tile .rk { font-size:.62rem; font-weight:700; color:#fff; background:var(--brand);
+          .cv-tile .rk { font-size:.75rem; font-weight:700; color:#fff; background:var(--brand);
             border-radius:999px; padding:1px 7px; margin-left:6px; vertical-align:2px; letter-spacing:0; }
-          .cv-tile .fr { font-size:.66rem; color:var(--muted); margin-top:3px; }
+          .cv-tile .fr { font-size:.75rem; color:var(--muted); margin-top:3px; }
 
           /* Quarter-time check */
           .qt-big { font-size:2.6rem; font-weight:800; letter-spacing:-1px; color:var(--ink); line-height:1; margin-top:6px; }
@@ -217,10 +222,10 @@ def inject_css():
             color:#fff; border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:9px; }
           .wa-head .dot { width:30px; height:30px; border-radius:50%; border:1.5px solid #fff; }
           .wa-head b { font-size:1rem; font-weight:800; letter-spacing:-.2px; }
-          .wa-head span { display:block; font-size:.64rem; color:rgba(255,255,255,.72); }
+          .wa-head span { display:block; font-size:.75rem; color:rgba(255,255,255,.72); }
           .wa-insight { background:#F4F1F8; border-left:4px solid var(--brand); border-radius:8px;
             padding:9px 11px; font-size:.82rem; line-height:1.4; color:var(--ink); }
-          .wa-insight .tag { font-size:.6rem; font-weight:700; letter-spacing:.08em;
+          .wa-insight .tag { font-size:.75rem; font-weight:700; letter-spacing:.08em;
             text-transform:uppercase; color:var(--brand); margin-bottom:3px; }
           .wa-insight b { color:var(--ink); }
           [data-testid="stChatMessage"] { padding:6px 4px; }
@@ -240,14 +245,17 @@ def inject_css():
     )
 
 
-def card_title(text, note="", keys=None):
+def card_title(text, note="", keys=None, takeaway=""):
     """Card heading. keys: optional [(label, colour)] drawn as a legend, for
-    charts too narrow for a Plotly legend."""
+    charts too narrow for a Plotly legend. takeaway: the card's main point in
+    one line, shown under the title."""
     note_html = f" <span>{html.escape(note)}</span>" if note else ""
     key_html = "".join(
         f'<span class="key"><i style="background:{c}"></i>{html.escape(l)}</span>'
         for l, c in (keys or []))
-    st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}{key_html}</div>',
+    take_html = f'<b class="take" title="{html.escape(takeaway)}">{html.escape(takeaway)}</b>' \
+        if takeaway else ""
+    st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}{key_html}{take_html}</div>',
                 unsafe_allow_html=True)
 
 
@@ -258,14 +266,15 @@ def header_band(season, rec, form, data_note):
         f'{COLORS["win"] if r == "W" else COLORS["loss"]}">{r}</i>'
         for r, t in form)
     stats = [
-        (f'{rec["wins"]}-{rec["losses"]}', "Record"),
+        (f'{rec["wins"]}-{rec["losses"]}', "Record"),        # the lead number
         (f'{rec["win_pct"]:.0f}%', "Win rate"),
         (f'{rec["score_for"]:.1f}', "Avg for"),     # hidden on narrow windows
         (f'{rec["score_against"]:.1f}', "Avg against"),
         (f'{rec["margin"]:+.1f}', "Avg margin"),
     ]
     stat_html = "".join(
-        f'<div class="cv-stat{" opt" if l.startswith("Avg ") and l != "Avg margin" else ""}">'
+        f'<div class="cv-stat{" hero" if l == "Record" else ""}'
+        f'{" opt" if (l.startswith("Avg ") and l != "Avg margin") or l == "Win rate" else ""}">'
         f'<b>{v}</b><span>{l}</span></div>' for v, l in stats)
     st.markdown(
         f'<div class="cv-band"><div class="ttl">Fremantle {season}'
@@ -305,7 +314,8 @@ def _sparkline(values, labels, highlight=None):
             f'{dots}</svg>')
 
 
-def tiles_row(tiles, baseline):
+def tiles_row(tiles, baseline, rank_label=None):
+    """Headline tiles. rank_label: show each tile's rank chip (player tiles)."""
     cells = []
     for t in tiles:
         v = t["value"]
@@ -328,25 +338,32 @@ def tiles_row(tiles, baseline):
                 color = COLORS["win"] if good else COLORS["loss"]
             dlt = (f'<span class="dlt" style="color:{color}" '
                    f'title="{baseline}: {t["base"]:.1f}">{arrow} {c:+.1f}{t["unit"]}</span>')
+        rk = ""
+        if rank_label and t.get("rank"):
+            rk = (f'<span class="rk" title="{rank_label}: {t["rank"]} of {t["squad"]}">'
+                  f'{_ordinal(t["rank"])}</span>')
         cells.append(
             f'<div class="cv-tile"><div class="lbl">{html.escape(t["label"])}</div>'
-            f'<div class="val">{val}{dlt}</div>'
+            f'<div class="val">{val}{rk}{dlt}</div>'
             f'{_sparkline(t["series"], t["games"], t.get("highlight"))}</div>')
-    st.markdown(f'<div class="cv-tiles">{"".join(cells)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="cv-tiles" style="--n:{len(cells)}">{"".join(cells)}</div>',
+                unsafe_allow_html=True)
 
 
 def leaders_list(leaders):
+    """One compact line per leader: role, name, number. The detail (a game,
+    games led) is in the hover so the list fits its card at 12px."""
     rows = ""
     for r in leaders:
         if "value" in r:  # a row with its own figure, e.g. top goalkicker
             val, small = r["value"], r["sub"]
         else:
             val = "-" if r["avg"] is None else f'{r["avg"]:.1f}'
-            small = f'per game · led {r["led"]}/{r["games"]}'
-        rows += (f'<div class="cv-lead"><div><div class="role">{html.escape(r["role"])}</div>'
-                 f'<div class="name">{html.escape(r["player"])}</div></div>'
-                 f'<div class="num">{html.escape(val)}<small>{html.escape(small)}</small>'
-                 f'</div></div>')
+            small = f'{val} a game · led {r["led"]} of {r["games"]} games'
+        rows += (f'<div class="cv-lead" title="{html.escape(r["role"])}: {html.escape(r["player"])}, '
+                 f'{html.escape(small)}"><span class="role">{html.escape(r["role"])}</span>'
+                 f'<span class="name">{html.escape(r["player"])}</span>'
+                 f'<span class="num">{html.escape(val)}</span></div>')
     st.markdown(rows, unsafe_allow_html=True)
 
 
@@ -382,11 +399,11 @@ def match_band(game, venue_date):
     st.markdown(
         f'<div class="cv-band match"><div class="ttl">{html.escape(game["round"])} v '
         f'{html.escape(game["opponent"])}<small>{html.escape(venue_date)}</small></div>'
-        f'<div class="cv-stat"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
+        f'<div class="cv-stat opt"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
         f'<span>{html.escape(game["type"])}</span></div>'
         f'<div class="cv-stat"><b>{fq} ({game["freo_score"]})</b><span>Fremantle</span></div>'
         f'<div class="cv-stat"><b>{oq} ({game["opp_score"]})</b><span>{html.escape(game["opponent"])}</span></div>'
-        f'<div class="cv-stat opt"><b>{int(game["margin"]):+d}</b><span>Margin</span></div></div>',
+        f'<div class="cv-stat hero"><b>{int(game["margin"]):+d}</b><span>Margin</span></div></div>',
         unsafe_allow_html=True)
 
 
@@ -422,7 +439,8 @@ def scout_band(team, season, lad_row, last5):
          (f'-{int(lad_row["draws"])}' if lad_row["draws"] else ""), "H&A"),
         (_ordinal(int(lad_row["position"])), "Ladder"),
     ]
-    stat_html = "".join(f'<div class="cv-stat"><b>{v}</b><span>{l}</span></div>' for v, l in stats)
+    stat_html = "".join(f'<div class="cv-stat{" hero" if l == "Ladder" else " opt"}"><b>{v}</b>'
+                        f'<span>{l}</span></div>' for v, l in stats)
     st.markdown(
         f'<div class="cv-band match"><div class="ttl">Scout: {html.escape(team)}'
         f'<small>{season} · percentage {lad_row["pct"]:.1f} (home and away)</small></div>{stat_html}'
@@ -455,3 +473,20 @@ def h2h_table(rows):
     st.markdown('<table class="op-grid"><thead><tr><th>Game</th><th>Venue</th><th>Result</th>'
                 '<th>Score</th><th>I50 diff</th><th>CP diff</th></tr></thead>'
                 f'<tbody>{body}</tbody></table>', unsafe_allow_html=True)
+
+
+def player_band(player, season, me, hero_label="Disposals", hero_col="disposals"):
+    """Header band for a player: games, the lead average, goals and time on ground."""
+    games = len(me)
+    goals = int(me["goals"].sum()) if "goals" in me else 0
+    tog = me["time_on_ground_pct"].mean() if "time_on_ground_pct" in me else None
+    jumper = int(me["jumper"].iloc[-1]) if games and "jumper" in me else None
+    stats = [(f"{me[hero_col].mean():.1f}" if games else "-", f"{hero_label} a game", True),
+             (str(games), "Games", False), (str(goals), "Goals", False)]
+    if tog is not None and tog == tog:
+        stats.append((f"{tog:.0f}%", "Time on ground", False))
+    stat_html = "".join(f'<div class="cv-stat{" hero" if hero else ""}{" opt" if l == "Time on ground" else ""}">'
+                        f'<b>{v}</b><span>{l}</span></div>' for v, l, hero in stats)
+    sub_line = f"#{jumper} · {season} season" if jumper else f"{season} season"
+    st.markdown(f'<div class="cv-band"><div class="ttl">{html.escape(player)}<small>'
+                f'{html.escape(sub_line)}</small></div>{stat_html}</div>', unsafe_allow_html=True)

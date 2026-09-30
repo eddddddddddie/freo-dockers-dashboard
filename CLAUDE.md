@@ -104,6 +104,24 @@ panel height and player-form row count, tuned at 1440x790 and scaled from there 
 give up extra height because titles wrap). The first run uses the 1440x790 design size.
 Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`. After any layout
 change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
+- Four views: Season, Match, Player, Scout (`views.render*`). Each band leads with one big number
+  (record, margin, the player's main average, ladder spot); secondary figures hide below 1760px.
+  Tiles are 6 per view (grid sized from the count). Text is 12px minimum. Every card has a
+  computed one-line takeaway under its title (`takeaways.py`, `card_title(takeaway=...)`).
+- Navigation (`nav.py`): the web address holds season / view / game / player / opp
+  (`?season=2026&view=Match&game=GF`), so views can be bookmarked and sent. Clicking a game in the
+  game strip opens it in Match; clicking a player in Player form, the match player grid, the player
+  map or year on year opens their Player view; Opponents can open a club's Scout view. Clicks go
+  through `nav.go()`, which queues the move and reruns, because a control can't change after it is
+  drawn. Heatmap cells aren't clickable in Streamlit, so `charts._click_layer` adds invisible
+  point markers (and pins the axes so they don't pad). Browser Back/Forward: Streamlit doesn't
+  rerun on popstate and `st.query_params` keeps the old address on that rerun, so the viewport
+  component sends the new address and `nav._back_forward` applies it.
+- Player view: band (main average, games, goals, time on ground), tiles with squad rank and change
+  on last season, game-by-game trend (pick a stat), squad rank on 12 stats, every game shaded
+  against the player's own average.
+- Coach research: `docs/coach_sessions.md` is a 30-minute task script (five timed tasks with the
+  correct answers, what to watch for, note sheet, debrief). Re-run it after each design round.
 - Header: season toggle (2025 / 2026), Season/Match view switch, Deep dives dropdown, and a band
   with record, win rate, avg for/against/margin, last 5, data freshness (the two averages hide
   below 1380px wide).
