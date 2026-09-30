@@ -22,8 +22,9 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    initial_sidebar_state="collapsed")
 
 from theme import (inject_css, header_band, match_band, scout_band, player_band, chat_header,
-                   insight_card)
+                   insight_card, insight_rotator)
 import auth
+import settings
 import layout
 import data as D
 import views as V
@@ -163,6 +164,33 @@ def _pick_deep_dive():
     st.session_state["deep_dive"] = None
 
 
+AFL_PHOTO = ("https://s.afl.com.au/staticfile/AFL%20Tenant/AFL/Players/ChampIDImages/AFL/"
+             "{season}014/{number}.png")
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _photo_exists(url):
+    try:
+        import requests
+        return requests.head(url, timeout=4, headers={"User-Agent": "Mozilla/5.0"}).ok
+    except Exception:
+        return False
+
+
+def player_photo(player_id, season):
+    """The AFL's headshot URL for a player, only when PLAYER_PHOTOS = "afl" is set
+    in secrets (the photos are the AFL's; they're loaded from afl.com.au, never
+    stored in the repo) and the photo exists. Otherwise None (initials)."""
+    if (settings.get("PLAYER_PHOTOS") or "").lower() != "afl" or not player_id:
+        return None
+    number = str(player_id).replace("CD_I", "")
+    for yr in (season, season - 1):
+        url = AFL_PHOTO.format(season=yr, number=number)
+        if _photo_exists(url):
+            return url
+    return None
+
+
 def wait_line(phrase, doing=None):
     """The waiting message: an AFL phrase with animated dots, and what Wharf-ai
     is calculating, if anything."""
@@ -189,7 +217,8 @@ def chat_panel(season, baseline, focus=None):
     """Runs as a fragment: asking a question reruns only this panel.
     focus: the match on screen in match mode, passed to Wharf-ai."""
     key = f"insight_{season}"
-    if key not in st.session_state:
+    pool = I.candidates(team_df, player_df, season, baseline)
+    if key not in st.session_state or st.session_state[key] not in pool:
         st.session_state[key] = I.pick(team_df, player_df, season, baseline)
     msgs = st.session_state.setdefault("messages", [])
     client = C.get_client()
@@ -215,16 +244,19 @@ def chat_panel(season, baseline, focus=None):
     with history:
         insight = st.session_state[key]
         if insight:
-            insight_card(insight)
+            # Every insight for the season, rotating every 30 s in the browser,
+            # starting with the chosen one; the button moves on straight away.
+            start = pool.index(insight) if insight in pool else 0
+            insight_rotator(pool, start=start, seconds=30)
             if st.button("↻ Another insight", key="more_insight", type="tertiary"):
-                st.session_state[key] = I.pick(team_df, player_df, season, baseline,
-                                               avoid=insight)
+                st.session_state[key] = pool[(start + 1) % len(pool)]
                 st.rerun(scope="fragment")
         clicked = None
         if not msgs:
             # Fill the panel to the bottom: as many suggestions as fit under the insight.
             st.markdown('<div class="wa-sub">Try asking</div>', unsafe_allow_html=True)
-            shown = fitting_prompts(example_prompts(season, baseline, focus), insight,
+            longest = max(pool, key=len) if pool else insight  # the card is as tall as this
+            shown = fitting_prompts(example_prompts(season, baseline, focus), longest,
                                     win_w, HISTORY_H)
             for i, q in enumerate(shown):
                 if st.button(q, key=f"ex_{i}", use_container_width=True,
@@ -298,7 +330,8 @@ def chat_panel(season, baseline, focus=None):
 
             try:
                 reply = st.write_stream(C.stream_answer(
-                    client, season, msgs, opening=st.session_state[key], on_tool=on_tool,
+                    client, season, msgs, opening="\n".join(pool) or st.session_state[key],
+                    on_tool=on_tool,
                     on_chart=lambda fig: charts.append(fig.to_json()), focus=focus,
                     on_followups=followups.extend, on_usage=tally.add_usage))
                 for fig_json in charts:  # drawn under the answer text
@@ -390,7 +423,9 @@ with main:
                 player = st.selectbox("Player", names, key="player_pick",
                                       label_visibility="collapsed")
             with band:
-                player_band(player, season, pdf_season[pdf_season["player"] == player])
+                details = D.player_details(player_df, player, season)
+                player_band(player, season, pdf_season[pdf_season["player"] == player],
+                            details=details, photo_url=player_photo(details.get("player_id"), season))
             focus = f"the player profile for {player}, {season} season"
         elif view == "Match" and len(tdf):
             pick, band = st.columns([1.12, 3.3], vertical_alignment="center")

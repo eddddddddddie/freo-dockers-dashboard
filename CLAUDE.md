@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Setup: Python 3.12 (`.python-version`; anthropic 1.x needs 3.10+). `python3.12 -m venv .venv &&
   .venv/bin/pip install -r requirements.txt`. requirements.txt pins tested major-version ranges
   (Streamlit 1.64+, pandas 3, plotly 7, anthropic 1.9+); Streamlit Cloud should also run 3.12.
+- Squad details: `afl_api_scraper.py` also writes `freo_squad.csv` (Champion Data id, date of birth,
+  height, position per season; `scrape_squads`). Player photos are off by default (initials badge);
+  `PLAYER_PHOTOS = "afl"` in secrets loads the AFL's headshots from afl.com.au (they are the AFL's
+  photos, never stored in the repo; a cached HEAD check falls back to initials if one is missing).
 - Scrape: `python freo_scraper.py 2025 2026` (no args defaults to 2025 and 2026). Takes about
   1.5 s per match, so plan for a minute or so per season. Writes both CSVs into the current directory.
 - Advanced stats: `python afl_api_scraper.py 2025 2026` (same defaults, about 3 minutes for both
@@ -133,7 +137,8 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   point markers (and pins the axes so they don't pad). Browser Back/Forward: Streamlit doesn't
   rerun on popstate and `st.query_params` keeps the old address on that rerun, so the viewport
   component sends the new address and `nav._back_forward` applies it.
-- Player view: band (main average, games, goals, time on ground), tiles with squad rank and change
+- Player view: band (photo or initials, #, position, age, height from `freo_squad.csv`, and the
+  player's best squad ranking as the lead number, e.g. "1st · Metres gained in squad"), tiles with squad rank and change
   on last season, game-by-game trend (pick a stat), squad rank on 12 stats, every game shaded
   against the player's own average.
 - Coach research: `docs/coach_sessions.md` is a 30-minute task script (five timed tasks with the
@@ -153,7 +158,8 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   blue). Collingwood charts in charcoal with a lighter grey for their opponents.
 - First-visit tour (`tour.py`, `components/tour`): driver.js 1.8.0 from jsDelivr, loaded into the
   app page; 13 steps spotlighting each part; runs once per browser (localStorage
-  `freoCoachTourDone_v1`), replay with the ? button at the right of the header. It waits until every target card
+  `freoCoachTourDone_v1`): on a first visit a "New here?" prompt points at the pulsing ? button
+(Take the tour / close); the tour runs from there or from the ? button any time. It waits until every target card
   has rendered, and never starts over a running tour. The CSS that hides Streamlit's footer must
   not match `footer` generally: driver.js draws its buttons in a `<footer>`.
 - Match mode (`views.render_match`): pick one game (most recent first); the band shows the score
@@ -193,6 +199,9 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (`card_title(keys=...)`) because Plotly legends stack vertically at that width.
 
 ## Chatbot (Wharf-ai)
+- The insight card rotates through all of the season's insights every 30 s, in the browser with
+  CSS (no reruns, so it can't interrupt a streaming answer; pauses on hover); "Another insight"
+  moves on straight away. Wharf-ai is told the whole rotation.
 - Named Wharf-ai; right-hand panel. With no messages it shows as many suggested prompts as fit
   under the insight (`app.fitting_prompts` estimates each button's height from its length and the
   panel width, calibrated at 1440 and 1920 wide); match mode leads with match questions. Every

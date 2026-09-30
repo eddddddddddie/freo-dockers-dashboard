@@ -195,6 +195,7 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .cv-tiles),
           div[data-testid="stMarkdownContainer"]:has(> .wa-head),
           div[data-testid="stMarkdownContainer"]:has(> .wa-insight),
+          div[data-testid="stMarkdownContainer"]:has(> .wa-rot),
           div[data-testid="stMarkdownContainer"]:has(> .card-title),
           div[data-testid="stMarkdownContainer"]:has(> .cv-lead),
           div[data-testid="stMarkdownContainer"]:has(> .tp),
@@ -265,6 +266,14 @@ def inject_css():
           .wa-insight .tag { font-size:.75rem; font-weight:700; letter-spacing:.08em;
             text-transform:uppercase; color:var(--brand); margin-bottom:3px; }
           .wa-insight b { color:var(--ink); }
+          .wa-rot { display:grid; }
+          .wa-rot-item { grid-area:1 / 1; opacity:0; }
+          .wa-rot:hover .wa-rot-item { animation-play-state:paused; }
+          .pl-photo { width:42px; height:42px; border-radius:50%; flex:none; object-fit:cover;
+            object-position:top; background:#fff; border:2px solid rgba(255,255,255,.85); }
+          .pl-initials { display:flex; align-items:center; justify-content:center; background:var(--brand-2);
+            color:#fff; font-weight:800; font-size:.95rem; letter-spacing:.5px; }
+          .cv-band.player { gap:clamp(9px, 1vw, 18px); }
           [data-testid="stChatMessage"] { padding:6px 4px; }
           [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li { font-size:.84rem; }
 
@@ -530,18 +539,67 @@ def h2h_table(rows):
                 f'<tbody>{body}</tbody></table>', unsafe_allow_html=True)
 
 
-def player_band(player, season, me, hero_label="Disposals", hero_col="disposals"):
-    """Header band for a player: games, the lead average, goals and time on ground."""
+def _avatar(player, photo_url=None):
+    """A round headshot, or the player's initials in the club purple."""
+    if photo_url:
+        return f'<img class="pl-photo" src="{html.escape(photo_url)}" alt="" loading="lazy">'
+    return f'<span class="pl-photo pl-initials">{_initials(player)}</span>'
+
+
+def _initials(player):
+    parts = [p for p in str(player).replace("'", "").split() if p]
+    return html.escape("".join(p[0] for p in parts[:2]).upper())
+
+
+def player_band(player, season, me, details=None, photo_url=None,
+                hero_label="Disposals", hero_col="disposals"):
+    """Header band for a player: photo or initials, name, number, position, age,
+    height, and their best squad ranking this season as the lead number (games
+    and goals on wider screens)."""
+    details = details or {}
     games = len(me)
     goals = int(me["goals"].sum()) if "goals" in me else 0
-    tog = me["time_on_ground_pct"].mean() if "time_on_ground_pct" in me else None
     jumper = int(me["jumper"].iloc[-1]) if games and "jumper" in me else None
-    stats = [(f"{me[hero_col].mean():.1f}" if games else "-", f"{hero_label} a game", True),
-             (str(games), "Games", False), (str(goals), "Goals", False)]
-    if tog is not None and tog == tog:
-        stats.append((f"{tog:.0f}%", "Time on ground", False))
-    stat_html = "".join(f'<div class="cv-stat{" hero" if hero else ""}{" opt" if l == "Time on ground" else ""}">'
-                        f'<b>{v}</b><span>{l}</span></div>' for v, l, hero in stats)
-    sub_line = f"#{jumper} · {season} season" if jumper else f"{season} season"
-    st.markdown(f'<div class="cv-band"><div class="ttl">{html.escape(player)}<small>'
-                f'{html.escape(sub_line)}</small></div>{stat_html}</div>', unsafe_allow_html=True)
+    # The lead number is the player's best squad ranking; averages are in the tiles below.
+    stats = [(str(games), "Games", "opt"), (str(goals), "Goals", "opt")]
+    top = details.get("top")
+    if top:
+        stats.insert(0, (_ordinal(top["rank"]), f"{top['stat']} in squad", "hero"))
+    else:
+        stats.insert(0, (f"{me[hero_col].mean():.1f}" if games else "-", f"{hero_label} a game", "hero"))
+    stat_html = "".join(f'<div class="cv-stat {cls}"><b>{v}</b><span>{html.escape(l)}</span></div>'
+                        for v, l, cls in stats)
+    bits = [f"#{jumper}" if jumper else None, details.get("position"),
+            f"{details['age']} yrs" if details.get("age") else None,
+            f"{details['height_cm']} cm" if details.get("height_cm") else None]
+    sub_line = " · ".join(b for b in bits if b) or f"{season} season"
+    st.markdown(f'<div class="cv-band player">{_avatar(player, photo_url)}<div class="ttl">'
+                f'{html.escape(player)}<small>{html.escape(sub_line)}</small></div>{stat_html}</div>',
+                unsafe_allow_html=True)
+
+
+def insight_rotator(texts, start=0, seconds=30):
+    """Insight card that fades to the next insight every `seconds`, in the
+    browser (no reruns, so it can't interrupt a streaming answer). Pauses on
+    hover. All insights share one grid cell, so the card is as tall as the
+    longest and doesn't jump."""
+    texts = texts[start:] + texts[:start]
+    n = len(texts)
+    if n == 0:
+        return
+    if n == 1:
+        insight_card(texts[0])
+        return
+    cycle = n * seconds
+    show = 100 / n
+    fade = min(1.5, show / 6)
+    items = "".join(
+        f'<div class="wa-rot-item" style="animation-delay:-{((n - i) % n) * seconds}s">'
+        f'<div class="tag">Insight {i + 1} of {n}</div>{_md_bold(t)}</div>'
+        for i, t in enumerate(texts))
+    st.markdown(
+        f'<style>@keyframes wa-rot-{n} {{ 0% {{opacity:0; visibility:visible}} '
+        f'{fade:.2f}% {{opacity:1}} {show - fade:.2f}% {{opacity:1}} '
+        f'{show:.2f}% {{opacity:0; visibility:hidden}} 100% {{opacity:0; visibility:hidden}} }}'
+        f'.wa-rot-item {{ animation: wa-rot-{n} {cycle}s linear infinite; }}</style>'
+        f'<div class="wa-insight wa-rot">{items}</div>', unsafe_allow_html=True)

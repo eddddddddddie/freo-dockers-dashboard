@@ -3,10 +3,12 @@
 <head><meta charset="utf-8"><title>tour</title></head>
 <body style="margin:0">
 <script>
-// First-visit guided tour of the Coach View (driver.js, loaded into the app page).
-// Runs once per browser (remembered in localStorage) and again whenever Python
-// passes a new `force` value (the ? button in the header). Sends nothing back, so it
-// never reruns the app.
+// Guided tour of the Coach View (driver.js, loaded into the app page).
+// First visit in a browser: a small prompt points at the ? button ("New here?")
+// and the button pulses; "Take the tour" starts it, closing the prompt dismisses
+// it. Either way it is remembered (localStorage) and not shown again. The full
+// tour runs whenever Python passes a new `force` value (the ? button). Sends
+// nothing back, so it never reruns the app.
 (function () {
   var DONE_KEY = "freoCoachTourDone_v1";
   var LIB = "https://cdn.jsdelivr.net/npm/driver.js@1.8.0/dist/";
@@ -60,7 +62,10 @@
         ".driver-popover-progress-text{color:#525252;font-size:12px}" +
         ".driver-popover-footer button{font-family:Inter,system-ui,sans-serif;border-radius:6px;" +
         "font-size:12px;text-shadow:none;padding:5px 10px}" +
-        ".driver-popover-next-btn{background:#331C54!important;color:#fff!important;border-color:#331C54!important}";
+        ".driver-popover-next-btn{background:#331C54!important;color:#fff!important;border-color:#331C54!important}" +
+        "@keyframes freo-pulse{0%{box-shadow:0 0 0 0 rgba(51,28,84,.55)}70%{box-shadow:0 0 0 10px rgba(51,28,84,0)}" +
+        "100%{box-shadow:0 0 0 0 rgba(51,28,84,0)}}" +
+        ".freo-pulse{animation:freo-pulse 1.6s ease-out infinite}";
       doc.head.appendChild(st);
     }
     var s = doc.createElement("script");
@@ -82,7 +87,36 @@
       steps: steps,
       onDestroyed: function () {
         P.__freoTourActive = false;
-        try { P.localStorage.setItem(DONE_KEY, "1"); } catch (e) {}
+        markSeen();
+      }
+    });
+    P.__freoTourActive = true;
+    d.drive();
+  }
+
+  function markSeen() {
+    try { P.localStorage.setItem(DONE_KEY, "1"); } catch (e) {}
+    var b = doc.querySelector(".st-key-tour_btn button");
+    if (b) b.classList.remove("freo-pulse");
+  }
+
+  // First visit: a one-step prompt anchored on the ? button instead of the tour.
+  function prompt() {
+    var btn = doc.querySelector(".st-key-tour_btn button");
+    if (btn) btn.classList.add("freo-pulse");
+    var take = false;
+    var d = P.driver.js.driver({
+      allowClose: true, overlayOpacity: 0.35, stagePadding: 6, stageRadius: 20,
+      showButtons: ["next", "close"], doneBtnText: "Take the tour",
+      steps: [{element: ".st-key-tour_btn", popover: {
+        title: "New here?",
+        description: "Take a one-minute tour of the Coach View. You can start it any time with this ? button.",
+        side: "left", align: "start"}}],
+      onNextClick: function () { take = true; d.destroy(); },
+      onDestroyed: function () {
+        P.__freoTourActive = false;
+        markSeen();
+        if (take) start();
       }
     });
     P.__freoTourActive = true;
@@ -104,7 +138,8 @@
       var ready = targets.every(function (sel) { return doc.querySelector(sel); });
       if ((ready && doc.querySelector(".js-plotly-plot")) || ++tries > 40) {
         clearInterval(timer);
-        load(function () { P.__freoTourRunning = false; start(); });
+        // A first visit gets the prompt; the ? button (forced) gets the tour.
+        load(function () { P.__freoTourRunning = false; if (forced) { start(); } else { prompt(); } });
       }
     }, 250);
   }

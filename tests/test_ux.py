@@ -59,3 +59,15 @@ def test_clicked_reads_the_first_point():
         selection = {"points": [{"x": "R7 WCE", "y": "Margin"}]}
     assert nav.clicked(Event())["x"] == "R7 WCE"
     assert nav.clicked(None) is None
+
+
+def test_player_details_age_height_and_best_ranking(season):
+    _, _, players = season
+    d = D.player_details(players, "Jordan Clark", 2026, today="2026-09-30")
+    squad = D.load_squad()
+    row = squad[(squad["player_id"] == d["player_id"]) & (squad["season"] == 2026)].iloc[0]
+    dob = pd.Timestamp(row["date_of_birth"])
+    assert d["age"] == 2026 - dob.year - ((9, 30) < (dob.month, dob.day))
+    assert d["height_cm"] == row["height_cm"]
+    ranks = D.player_squad_ranks(D.players_season(players, 2026), "Jordan Clark")
+    assert d["top"]["rank"] == ranks["rank"].min()

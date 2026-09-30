@@ -17,6 +17,7 @@ Usage:
 Writes into the current directory:
     freo_player_games_ext.csv  one row per Freo player per game
     freo_team_games_ext.csv    one row per game, freo_* vs opp_* totals
+    freo_squad.csv             listed squad per season: id, date of birth, height, position
 
 Join keys: season, opponent (AFL Tables naming), local match date (date_local)
 and, for players, jumper. Round numbers are NOT a join key: the API's
@@ -209,4 +210,31 @@ def main(years):
 
 
 if __name__ == "__main__":
-    main([int(a) for a in sys.argv[1:]] or [2025, 2026])
+    years = [int(a) for a in sys.argv[1:]] or [2025, 2026]
+    main(years)
+    scrape_squads(years)
+
+
+# ---- Squad details (age, height, position) -----------------------------------------
+SQUADS_URL = "https://aflapi.afl.com.au/afl/v2/squads?teamId={}&compSeasonId={}"
+TEAMS_URL = "https://aflapi.afl.com.au/afl/v2/teams?competitionId=1&pageSize=50"
+
+
+def scrape_squads(years, path="freo_squad.csv"):
+    """Fremantle's listed squad each season: Champion Data id, date of birth,
+    height and position. Writes freo_squad.csv (no token needed)."""
+    team_id = next(t["id"] for t in get(TEAMS_URL)["teams"] if t["name"] == TEAM_NAME)
+    rows = []
+    for year in years:
+        squad = get(SQUADS_URL.format(team_id, comp_season_id(year)))["squad"]["players"]
+        for entry in squad:
+            p = entry["player"]
+            rows.append({"season": year, "player_id": p["providerId"],
+                         "player": f"{p['firstName']} {p['surname']}",
+                         "jumper": entry.get("jumperNumber"), "position": entry.get("position"),
+                         "date_of_birth": p.get("dateOfBirth"),
+                         "height_cm": p.get("heightInCm") or None})
+        print(f"{year}: {sum(r['season'] == year for r in rows)} listed players")
+    write_csv(path, rows, ["season", "player_id", "player", "jumper", "position",
+                           "date_of_birth", "height_cm"])
+    return rows

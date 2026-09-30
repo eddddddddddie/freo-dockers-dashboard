@@ -106,7 +106,7 @@ def _player_join(df, ext):
 def _merge_player_ext(df, ext):
     """Attach API player stats by game and jumper. A row only merges when the
     surnames also agree, so a jumper mix-up cannot swap two players' stats."""
-    cols = _new_cols(ext, df)
+    cols = _new_cols(ext, df) + ["player_id"]  # the id links to freo_squad.csv
     m = _player_join(df, ext[["season", "opponent", "date_local", "jumper", "player"] + cols])
     bad = m["_api_player"].notna() & (m["player"].map(_surname) != m["_api_player"].map(_surname))
     m.loc[bad, cols] = pd.NA
@@ -795,6 +795,7 @@ PROFILE_STATS = [
     ("Score involvements", "score_involvements"), ("Tackles", "tackles"),
     ("Pressure acts", "pressure_acts"), ("Intercepts", "intercepts"),
     ("Rebound 50s", "rebound_50s"), ("Goals", "goals"),
+    ("Hitouts", "hitouts"), ("Marks", "marks"),
 ]
 MIN_GAMES = 5
 
@@ -852,3 +853,43 @@ def player_squad_ranks(pdf_season, player):
 def player_log(pdf_season, player):
     """Every game one player played in a season, most recent first."""
     return pdf_season[pdf_season["player"] == player].sort_values("game_dt", ascending=False)
+
+
+# ---- Player details (freo_squad.csv) ---------------------------------------------
+SQUAD_CSV = "freo_squad.csv"
+POSITIONS = {"MIDFIELDER": "Midfielder", "MIDFIELDER_FORWARD": "Midfielder / forward",
+             "MEDIUM_DEFENDER": "Defender", "KEY_DEFENDER": "Key defender",
+             "MEDIUM_FORWARD": "Forward", "KEY_FORWARD": "Key forward", "RUCK": "Ruck"}
+
+
+@st.cache_data
+def load_squad():
+    if not os.path.exists(SQUAD_CSV):
+        return None
+    return pd.read_csv(SQUAD_CSV)
+
+
+def player_details(player_df, player, season, today=None):
+    """Age, height, position, Champion Data id and the player's best squad
+    ranking this season (e.g. 1st for metres gained). Missing parts are None."""
+    me = player_df[(player_df["player"] == player)]
+    pid = me["player_id"].dropna().mode().iloc[0] if "player_id" in me and me["player_id"].notna().any() else None
+    out = {"player_id": pid, "age": None, "height_cm": None, "position": None, "top": None}
+    squad = load_squad()
+    if squad is not None and pid is not None:
+        rows = squad[squad["player_id"] == pid].sort_values("season")
+        row = rows[rows["season"] == season]
+        row = (row if len(row) else rows).iloc[-1] if len(rows) else None
+        if row is not None:
+            dob = pd.to_datetime(row["date_of_birth"], errors="coerce")
+            now = pd.Timestamp(today) if today else pd.Timestamp.now()
+            if pd.notna(dob):
+                out["age"] = int(now.year - dob.year - ((now.month, now.day) < (dob.month, dob.day)))
+            out["height_cm"] = int(row["height_cm"]) if pd.notna(row["height_cm"]) else None
+            out["position"] = POSITIONS.get(row["position"], str(row["position"]).title())
+    ranks = player_squad_ranks(players_season(player_df, season), player)
+    if len(ranks):
+        best = ranks.loc[ranks["rank"].idxmin()]      # ties go to the earlier stat in the list
+        out["top"] = {"stat": best["stat"], "rank": int(best["rank"]), "squad": int(best["squad"]),
+                      "value": float(best["value"])}
+    return out

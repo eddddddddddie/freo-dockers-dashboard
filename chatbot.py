@@ -182,8 +182,8 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
     if focus:
         note += f" They are looking at one match: {focus}."
     if opening:
-        note += (" The panel opened with this insight (computed from the data), which "
-                 f"the user may ask about: {opening}")
+        note += (" The panel shows these insights in rotation (computed from the data), "
+                 f"which the user may ask about: {opening}")
     # Tools render before system, so this breakpoint caches tools + rules + schema.
     system = [
         {"type": "text", "text": system_text(), "cache_control": {"type": "ephemeral"}},

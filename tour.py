@@ -1,6 +1,7 @@
-"""First-visit guided tour (components/tour): a step-by-step spotlight on each
-part of the Coach View, using driver.js. It runs once per browser after the
-first sign-in and again whenever `replay()` is called (the ? button in the header).
+"""Guided tour (components/tour): a step-by-step spotlight on each part of the
+Coach View, using driver.js. On a browser's first sign-in a small prompt points
+at the ? button ("New here? Take a one-minute tour"); the tour itself runs from
+there, or whenever `replay()` is called (the ? button in the header).
 """
 
 import os
