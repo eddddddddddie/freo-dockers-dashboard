@@ -48,7 +48,7 @@ def player_map(player_df, season):
     size_col = "time_on_ground_pct" if "time_on_ground_pct" in pdf.columns else "pct_played"
     pa = D.player_averages(pdf, [stats[x], stats[y], size_col])
     ev = st.plotly_chart(CH.player_map(pa, stats[x], stats[y], x, y, size_col, CHART_H),
-                         use_container_width=True, config=PLOT_CONFIG, on_select="rerun",
+                         width="stretch", config=PLOT_CONFIG, on_select="rerun",
                          selection_mode="points", key="pmap_click")
     point = nav.clicked(ev)
     if point is not None and point.get("point_index") is not None:
@@ -73,7 +73,7 @@ def year_on_year(player_df, all_seasons):
         st.info("No players with enough games in both seasons.")
         return
     ev = st.plotly_chart(CH.slope_chart(yoy, s0, s1, stat, CHART_H),
-                         use_container_width=True, config=PLOT_CONFIG, on_select="rerun",
+                         width="stretch", config=PLOT_CONFIG, on_select="rerun",
                          selection_mode="points", key="yoy_click")
     point = nav.clicked(ev)
     if point is not None and point.get("curve_number") is not None:
@@ -159,13 +159,13 @@ def quarter_time(team_df, all_seasons):
         if gt:
             bm = bm[bm["type"] == gt]
         st.plotly_chart(CH.break_scatter(bm, col, int(margin), int(window), brk, 300),
-                        use_container_width=True, config=PLOT_CONFIG)
+                        width="stretch", config=PLOT_CONFIG)
     if sm["games"]:
         show = games[["season", "round", "type", "opponent", col, "margin", "result"]].rename(
             columns={col: f"At {brk.lower()}", "margin": "Final", "result": "Result",
                      "season": "Season", "round": "Round", "type": "Type",
                      "opponent": "Opponent"})
-        st.dataframe(show, hide_index=True, use_container_width=True, height=180)
+        st.dataframe(show, hide_index=True, width="stretch", height=180)
 
 
 @st.dialog("Wharf-ai usage", width="large")
@@ -192,6 +192,6 @@ def usage_log():
     st.dataframe(df.rename(columns={"ts": "When", "user_email": "Who", "question": "Question", "tools": "Tools",
                                     "steps": "Steps", "input_tokens": "Input", "output_tokens": "Output",
                                     "cache_read": "Cache read", "cost_usd": "US$", "ok": "OK"}),
-                 hide_index=True, use_container_width=True, height=380)
+                 hide_index=True, width="stretch", height=380)
     st.caption("Costs are estimates at claude-sonnet-5-5 list prices. The log is stored on the "
                "app's own disk: on Streamlit Cloud it starts again after a restart or redeploy.")

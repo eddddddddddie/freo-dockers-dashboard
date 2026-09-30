@@ -55,9 +55,9 @@ def card(name, height="content"):
 def _plot(fig, key=None):
     """Draw a chart. With a key, clicks on its points come back as an event."""
     if key is None:
-        st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG)
+        st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
         return None
-    return st.plotly_chart(fig, use_container_width=True, config=PLOT_CONFIG,
+    return st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG,
                            on_select="rerun", selection_mode="points", key=key)
 
 

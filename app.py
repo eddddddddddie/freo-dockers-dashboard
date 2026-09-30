@@ -12,6 +12,7 @@ ANTHROPIC_WORKSPACE_ID (wrkspc_...) for multi-workspace keys.
 import html
 import os
 import random
+import time
 
 import plotly.io as pio
 import streamlit as st
@@ -58,7 +59,8 @@ TOOL_LABELS = {
     "team_games": "listing games", "team_aggregate": "averaging team stats",
     "correlate": "checking a correlation", "quarter_breakdown": "breaking down quarters",
     "player_aggregate": "comparing players", "player_games": "pulling player games",
-    "show_chart": "drawing a chart",
+    "show_chart": "drawing a chart", "league_aggregate": "comparing clubs",
+    "ladder": "checking the ladder",
 }
 # Shown while Wharf-ai works, one per step, in the spirit of Claude Code's
 # "Combobulating". A new one each time it starts a calculation.
@@ -191,10 +193,13 @@ def player_photo(player_id, season):
     return None
 
 
-def wait_line(phrase, doing=None):
-    """The waiting message: an AFL phrase with animated dots, and what Wharf-ai
-    is calculating, if anything."""
+def wait_line(phrase, doing=None, started=None):
+    """The waiting message: an AFL phrase with animated dots, what Wharf-ai is
+    calculating, if anything, and a seconds counter from `started` (time.time())."""
     extra = f' <span class="wa-doing">· {html.escape(doing)}</span>' if doing else ""
+    if started is not None:
+        extra += (f' <span class="wa-secs" style="animation-delay:-{time.time() - started:.1f}s">'
+                  '</span>')
     return (f'<div class="wa-wait">🏉 {html.escape(phrase)}<span class="wa-dots">...</span>'
             f'{extra}</div>')
 
@@ -208,8 +213,15 @@ def scroll_to_bottom(selector):
 
 
 def _show_chart(fig_json):
-    st.plotly_chart(pio.from_json(fig_json), use_container_width=True,
+    st.plotly_chart(pio.from_json(fig_json), width="stretch",
                     config={"displayModeBar": False})
+
+
+@st.cache_data(show_spinner=False)
+def season_insights(season, baseline):
+    """The season's insights, worked out once (the CSVs don't change while the
+    app runs), not on every rerun of the chat panel."""
+    return I.candidates(team_df, player_df, season, baseline)
 
 
 @st.fragment
@@ -217,9 +229,9 @@ def chat_panel(season, baseline, focus=None):
     """Runs as a fragment: asking a question reruns only this panel.
     focus: the match on screen in match mode, passed to Wharf-ai."""
     key = f"insight_{season}"
-    pool = I.candidates(team_df, player_df, season, baseline)
+    pool = season_insights(season, baseline)
     if key not in st.session_state or st.session_state[key] not in pool:
-        st.session_state[key] = I.pick(team_df, player_df, season, baseline)
+        st.session_state[key] = random.choice(pool) if pool else None
     msgs = st.session_state.setdefault("messages", [])
     client = C.get_client()
     # Which page the chat is about: the view and what is on it. Each message
@@ -259,7 +271,7 @@ def chat_panel(season, baseline, focus=None):
             shown = fitting_prompts(example_prompts(season, baseline, focus), longest,
                                     win_w, HISTORY_H)
             for i, q in enumerate(shown):
-                if st.button(q, key=f"ex_{i}", use_container_width=True,
+                if st.button(q, key=f"ex_{i}", width="stretch",
                              disabled=client is None or capped):
                     clicked = q
         for n, msg in enumerate(msgs):
@@ -275,7 +287,7 @@ def chat_panel(season, baseline, focus=None):
                     and not moved):
                 st.markdown('<div class="wa-sub">Ask next</div>', unsafe_allow_html=True)
                 for j, q in enumerate(msg["followups"]):
-                    if st.button(q, key=f"fu_{n}_{j}", use_container_width=True,
+                    if st.button(q, key=f"fu_{n}_{j}", width="stretch",
                                  disabled=client is None or capped):
                         clicked = q
         if moved:
@@ -286,7 +298,7 @@ def chat_panel(season, baseline, focus=None):
                         unsafe_allow_html=True)
             fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
             for i, q in enumerate(fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70)):
-                if st.button(q, key=f"pq_{i}", use_container_width=True,
+                if st.button(q, key=f"pq_{i}", width="stretch",
                              disabled=client is None or capped):
                     clicked = q
             scroll_to_bottom(".st-key-wa_history")
@@ -320,12 +332,22 @@ def chat_panel(season, baseline, focus=None):
             status = st.empty()
             steps, charts, followups = [], [], []
             phrases = random.sample(WAIT_PHRASES, len(WAIT_PHRASES))
-            status.markdown(wait_line(phrases[0]), unsafe_allow_html=True)
+            started = time.time()
+            status.markdown(wait_line(phrases[0], started=started), unsafe_allow_html=True)
+
+            def on_step(n):
+                # A new model request after the tools ran. The API sends the
+                # answer text in one go once it is written (text after tool calls
+                # isn't streamed on this model), so say what is happening meanwhile.
+                if n:
+                    status.markdown(wait_line(phrases[(len(steps) + n) % len(phrases)],
+                                              "writing the answer", started),
+                                    unsafe_allow_html=True)
 
             def on_tool(name, args):
                 tally.tools.append(name)
                 steps.append(TOOL_LABELS.get(name, name))
-                status.markdown(wait_line(phrases[len(steps) % len(phrases)], steps[-1]),
+                status.markdown(wait_line(phrases[len(steps) % len(phrases)], steps[-1], started),
                                 unsafe_allow_html=True)
 
             try:
@@ -333,7 +355,8 @@ def chat_panel(season, baseline, focus=None):
                     client, season, msgs, opening="\n".join(pool) or st.session_state[key],
                     on_tool=on_tool,
                     on_chart=lambda fig: charts.append(fig.to_json()), focus=focus,
-                    on_followups=followups.extend, on_usage=tally.add_usage))
+                    on_followups=followups.extend, on_usage=tally.add_usage,
+                    on_step=on_step))
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
                 if steps:
@@ -341,6 +364,7 @@ def chat_panel(season, baseline, focus=None):
                 else:
                     status.empty()
             except Exception as exc:  # show API errors instead of crashing the app
+                status.empty()
                 U.record(prompt, tally, ok=False, sid=sid,
                          user_email=(auth.current_user() or {}).get("email"))
                 msgs.pop()  # keep failed turns out of the history sent next time
@@ -349,7 +373,7 @@ def chat_panel(season, baseline, focus=None):
                              "ANTHROPIC_WORKSPACE_ID (starts with wrkspc_) in the "
                              "app secrets or environment, reboot the app, and try again.")
                 else:
-                    st.error(f"Sorry, Wharf-ai hit an error: {exc}")
+                    st.error(C.friendly_error(exc) or f"Sorry, Wharf-ai hit an error: {exc}")
                 return
     U.record(prompt, tally, sid=sid, user_email=(auth.current_user() or {}).get("email"))
     if not followups:  # the model left them out: offer unasked suggestions instead

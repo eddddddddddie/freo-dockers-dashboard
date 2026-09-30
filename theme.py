@@ -296,6 +296,13 @@ def inject_css():
           .wa-dots { display:inline-block; overflow:hidden; vertical-align:bottom; width:0;
             animation:wa-dots 1.2s steps(4, end) infinite; }
           @keyframes wa-dots { to { width:1.05em; } }
+          /* Seconds since the question was asked, counted by the browser. A
+             negative animation-delay carries the count on when the line is redrawn. */
+          @property --wa-s { syntax:'<integer>'; initial-value:0; inherits:false; }
+          .wa-secs { color:var(--muted); font-weight:500; font-variant-numeric:tabular-nums;
+            counter-reset:wa-s var(--wa-s); animation:wa-count 600s steps(600, end) forwards; }
+          .wa-secs::after { content:counter(wa-s) " s"; }
+          @keyframes wa-count { from { --wa-s:0; } to { --wa-s:600; } }
           .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }
           .st-key-wa_history div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }

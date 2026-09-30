@@ -689,10 +689,11 @@ def load_league():
         columns={"team": "opponent", **{c: f"opp_{c}" for c in stats}})
     lg = lg.merge(opp, on=["match_id", "opponent"], how="left")
     diffs = pd.DataFrame({f"diff_{c}": lg[c] - lg[f"opp_{c}"] for c in stats})
-    lg = pd.concat([lg, diffs], axis=1)  # one concat, not a column at a time
-    lg["win"] = (lg["result"] == "W").astype(int)
-    lg["accuracy"] = lg["goals_for"] / lg["scoring_shots"].replace(0, pd.NA) * 100
-    lg["game_dt"] = pd.to_datetime(lg["date_local"])
+    extra = pd.DataFrame({
+        "win": (lg["result"] == "W").astype(int),
+        "accuracy": lg["goals_for"] / lg["scoring_shots"].replace(0, pd.NA) * 100,
+        "game_dt": pd.to_datetime(lg["date_local"])})
+    lg = pd.concat([lg, diffs, extra], axis=1)  # one concat, not a column at a time
     return lg.sort_values("game_dt").reset_index(drop=True)
 
 

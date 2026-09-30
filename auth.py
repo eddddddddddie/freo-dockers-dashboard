@@ -157,9 +157,9 @@ def _login_page(message=None, google=False, error=False):
             (st.error if error else st.info)(message)
         if google:
             if st.user.is_logged_in:
-                if st.button("Sign out", use_container_width=True):
+                if st.button("Sign out", width="stretch"):
                     st.logout()
-            elif st.button("Sign in with Google", type="primary", use_container_width=True,
+            elif st.button("Sign in with Google", type="primary", width="stretch",
                            icon=":material/login:"):
                 st.login()
             st.caption("Anyone with a Google account can sign in. The app uses your name and "
@@ -197,7 +197,7 @@ def require_login():
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
             remember = st.checkbox(f"Keep me signed in for {REMEMBER_DAYS} days", value=True)
-            submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Sign in", type="primary", width="stretch")
         if submitted:
             if time.time() < locked_until:
                 st.error(f"Too many attempts. Try again in {int(locked_until - time.time()) + 1} s.")

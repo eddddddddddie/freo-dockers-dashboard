@@ -229,16 +229,27 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
   starts again after a restart or redeploy.
 - While Wharf-ai works, the status line shows an AFL phrase with animated dots (`app.WAIT_PHRASES`,
-  20 of them, shuffled; a new one each time a tool runs, with what it is calculating alongside).
+  20 of them, shuffled; a new one each time a tool runs, with what it is calculating alongside,
+  and "writing the answer" when the next model request starts), plus a seconds counter the browser
+  runs in CSS (`.wa-secs`; a negative animation-delay keeps the count going when the line is redrawn).
+- Speed (measured 2026-09-30): the time is almost all the model; app reruns take 0.1 to 0.25 s and
+  tools under 60 ms. On Sonnet 5.5, answer text written after tool results is not streamed: the
+  API sends it in one burst once written (text between tool calls may become a hidden progress
+  update, so it is held back), whatever the thinking, fallback, strict or eager settings. Only an
+  answer with no tool call streams word by word. Effort `low` (the documented setting for chat)
+  gave a median 4.7 s to an answer against 7.6 s at `medium`, with the eval still 27/27.
+  `FREO_CHAT_EFFORT` overrides it. The client has a 60 s read timeout (the longest gap between
+  streamed events), a 10 s connect timeout and 2 retries, so a stalled request fails in about a
+  minute with a plain message (`chatbot.friendly_error`) instead of hanging for the SDK's 10 minutes.
   Each answer then keeps a "Worked out with: ..." note (stored as `steps` on the message).
 - Avatars are generic SVGs in `assets/` (no club marks): `supporter.svg` (user, purple on white,
-  bobble beanie) and `anchor.svg` (Wharf-ai, white on purple anchor with eyes).
+  bobble beanie) and `anchor.svg` (Wharf-ai, white on purple anchor with a robot head: antenna, visor eyes, grille mouth).
 - Answers must be grounded in the loaded CSVs: compute numbers with code, then explain. Never
   state a stat that wasn't calculated. This is enforced with tools: `chatbot.stream_answer` runs a
-  manual streaming tool-use loop on `claude-sonnet-5-5` (adaptive thinking, effort `medium`,
+  manual streaming tool-use loop on `claude-sonnet-5-5` (adaptive thinking, effort `low`,
   server-side refusal fallback `fallbacks: "default"`), and the model gets every number from
   `wharf_tools.py` (team_games, team_aggregate, correlate, quarter_breakdown, player_aggregate,
-  player_games, show_chart): fixed pandas queries, no model-written code. show_chart draws a small
+  player_games, show_chart, league_aggregate, ladder): fixed pandas queries, no model-written code. show_chart draws a small
   team_trend / player_trend / player_bar chart under the answer from the data itself (the model
   never supplies the numbers); charts are stored with the message as figure JSON and only role +
   content go back to the API. Tool inputs stream eagerly, so

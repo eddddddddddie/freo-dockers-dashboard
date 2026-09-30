@@ -1,16 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Wharf-ai: an anchor with eyes, white on purple. Generic, no club marks. -->
+  <!-- Wharf-ai: an anchor with a robot head, white on purple. Generic, no club marks. -->
   <circle cx="32" cy="32" r="32" fill="#6D28D9"/>
   <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
     <path d="M32 22 V52" stroke-width="4"/>
-    <path d="M23 28 H41" stroke-width="3.5"/>
+    <path d="M23 29 H41" stroke-width="3.5"/>
     <path d="M15 40 Q17 52.5 32 52.5 Q47 52.5 49 40" stroke-width="3.8"/>
+    <path d="M32 7.5 V4.5" stroke-width="1.8"/>
   </g>
   <path d="M11.5 42.5 L15 36 L19.5 41.5 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
   <path d="M52.5 42.5 L49 36 L44.5 41.5 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
-  <circle cx="32" cy="14.5" r="8.5" fill="#FFFFFF"/>
-  <circle cx="28.8" cy="13.8" r="2.2" fill="#2A0A4A"/>
-  <circle cx="35.2" cy="13.8" r="2.2" fill="#2A0A4A"/>
-  <circle cx="29.5" cy="13" r="0.7" fill="#FFFFFF"/>
-  <circle cx="35.9" cy="13" r="0.7" fill="#FFFFFF"/>
+  <!-- robot head: antenna, ear bolts, square head, visor with two eyes, grille mouth -->
+  <circle cx="32" cy="4" r="2" fill="#FFFFFF"/>
+  <rect x="19" y="12" width="3" height="7" rx="1" fill="#FFFFFF"/>
+  <rect x="42" y="12" width="3" height="7" rx="1" fill="#FFFFFF"/>
+  <rect x="21.5" y="7.5" width="21" height="16" rx="4" fill="#FFFFFF"/>
+  <rect x="24.5" y="10.5" width="15" height="6.5" rx="3.25" fill="#2A0A4A"/>
+  <rect x="26.8" y="12.2" width="3.6" height="3.2" rx="1" fill="#FFFFFF"/>
+  <rect x="33.6" y="12.2" width="3.6" height="3.2" rx="1" fill="#FFFFFF"/>
+  <g stroke="#2A0A4A" stroke-width="1.2" stroke-linecap="round">
+    <path d="M28 20.2 V21.4"/><path d="M30.7 20.2 V21.4"/><path d="M33.3 20.2 V21.4"/><path d="M36 20.2 V21.4"/>
+  </g>
 </svg>

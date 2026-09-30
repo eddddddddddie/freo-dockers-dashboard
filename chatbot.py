@@ -23,9 +23,18 @@ import settings
 import wharf_tools as W
 
 MODEL = os.environ.get("FREO_CHAT_MODEL", "claude-sonnet-5-5")
-EFFORT = "medium"        # starting point for multistep tool use on Sonnet 5.5
+# "low" is the documented starting point for chat on Sonnet 5.5: it skips
+# thinking on most simple requests. Measured on Wharf-ai questions: median 4.7 s
+# to an answer (worst 8.8 s) against 7.6 s (worst 14.8 s) at "medium".
+EFFORT = os.environ.get("FREO_CHAT_EFFORT", "low")
 MAX_TOKENS = 16000
 MAX_STEPS = 10           # model requests per question before we stop the loop
+# A stalled connection fails in about a minute instead of the SDK's default ten.
+# The read timeout is the longest gap between streamed events (the API sends
+# pings while the model thinks), not a limit on the whole answer.
+READ_TIMEOUT = 60
+CONNECT_TIMEOUT = 10
+MAX_RETRIES = 2          # the SDK retries overloaded or dropped requests, with backoff
 # Server-side refusal fallback (Claude API): a declined request is retried on
 # a fallback model inside the same call.
 BETAS = ["server-side-fallback-2026-07-01"]
@@ -96,7 +105,8 @@ def get_client():
         import anthropic
     except ImportError:
         return None
-    kwargs = {"api_key": api_key}
+    kwargs = {"api_key": api_key, "max_retries": MAX_RETRIES,
+              "timeout": anthropic.Timeout(READ_TIMEOUT, connect=CONNECT_TIMEOUT)}
     workspace_id = (
         settings.get("ANTHROPIC_WORKSPACE_ID")
         or settings.get("ANTHROPIC_AWS_WORKSPACE_ID")
@@ -158,17 +168,33 @@ def _hold_back_marker(chunks, on_followups):
 
 
 def stream_answer(client, current_season, history, opening=None, on_tool=None,
-                  on_chart=None, focus=None, on_followups=None, on_usage=None):
+                  on_chart=None, focus=None, on_followups=None, on_usage=None, on_step=None):
     """Yield answer text (without the FOLLOWUPS line); see _stream_answer.
     on_usage(usage) receives each model request's token usage."""
     yield from _hold_back_marker(
         _stream_answer(client, current_season, history, opening, on_tool, on_chart, focus,
-                       on_usage),
+                       on_usage, on_step),
         on_followups)
 
 
+def friendly_error(exc):
+    """A short message for an API failure, or None to show the raw error."""
+    try:
+        import anthropic
+    except ImportError:
+        return None
+    if isinstance(exc, anthropic.APITimeoutError):
+        return "Wharf-ai took too long to respond. Please ask again."
+    if isinstance(exc, anthropic.APIConnectionError):
+        return "Wharf-ai couldn't reach the Claude API. Check the connection and ask again."
+    if isinstance(exc, (anthropic.OverloadedError, anthropic.RateLimitError,
+                        anthropic.InternalServerError, anthropic.ServiceUnavailableError)):
+        return "The Claude API is busy right now. Wait a few seconds and ask again."
+    return None
+
+
 def _stream_answer(client, current_season, history, opening=None, on_tool=None,
-                   on_chart=None, focus=None, on_usage=None):
+                   on_chart=None, focus=None, on_usage=None, on_step=None):
     """Yield answer text as it streams, running tool calls in between.
 
     history: prior turns as plain text ({"role", "content"}), ending with the
@@ -177,6 +203,8 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
     included), as preserved thinking requires. on_tool(name, args) is called
     before each tool runs, for a progress line in the UI; on_chart(fig) receives
     each chart the model asks for. focus: what the user is looking at (a match).
+    on_step(n) is called when model request n (0, 1, ...) starts, so the UI can
+    show that work is moving while the model thinks.
     """
     note = f"The user is currently viewing the {current_season} season."
     if focus:
@@ -192,7 +220,9 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
     # Only role and content go to the API (history entries may also carry charts).
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
     wrote_text = False
-    for _ in range(MAX_STEPS):
+    for step in range(MAX_STEPS):
+        if on_step:
+            on_step(step)
         with client.beta.messages.stream(
             model=MODEL,
             max_tokens=MAX_TOKENS,
