@@ -376,16 +376,17 @@ def answer_chart(series, title, y_title, kind="line", height=210):
 
 
 # ---- Opponent scout report ------------------------------------------------------
-def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle"):
+def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle", team_color=None):
     """League rank (18th on the left, 1st on the right) on each stat for the
-    opponent (orange) and Freo (purple), joined by a line."""
+    opponent (in its club colour) and Freo (purple), joined by a line."""
+    team_color = team_color or COLORS["opp"]
     fig = go.Figure()
     labels = [l for l, _, _ in stats]
     for (label, col, _), y in zip(stats, labels):
         a, b = ranks.loc[team, col], ranks.loc[freo, col]
         fig.add_trace(go.Scatter(x=[a, b], y=[y, y], mode="lines", hoverinfo="skip",
                                  line=dict(color=COLORS["grid"], width=4), showlegend=False))
-    for name, who, color in [(team, team, COLORS["opp"]), ("Fremantle", freo, COLORS["freo"])]:
+    for name, who, color in [(team, team, team_color), ("Fremantle", freo, COLORS["freo"])]:
         fig.add_trace(go.Scatter(
             x=[ranks.loc[who, c] for _, c, _ in stats], y=labels, mode="markers", name=name,
             marker=dict(size=11, color=color, line=dict(color="#FFFFFF", width=2)),
@@ -397,7 +398,7 @@ def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle"):
     fig.update_xaxes(range=[18.6, 0.4], tickvals=[18, 12, 6, 1],
                      ticktext=["18th", "12th", "6th", "1st"], showgrid=True, gridcolor=COLORS["grid"])
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=11))
-    return _inline_key(fig, [(team, COLORS["opp"]), ("Fremantle", COLORS["freo"])])
+    return _inline_key(fig, [(team, team_color), ("Fremantle", COLORS["freo"])])
 
 
 def form_bars(games, height):

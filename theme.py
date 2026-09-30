@@ -40,6 +40,39 @@ RAMP = ["#BEACE4", "#9F86CF", "#8061B5", "#5E3E8F", "#331C54"]
 DIVERGE = [COLORS["opp"], "#81C4D1", "#EDEDEF", "#B8A6DD", COLORS["freo"]]
 SERIES = [COLORS["freo"], COLORS["opp"], COLORS["series3"], COLORS["series4"]]
 
+# Club colours for the Scout view: colours only, no logos or other marks.
+# chart: the club's hue, with the lightness and chroma closest to the club colour that
+#   still passes the dataviz validator against Freo #61359C (CVD dE >= 8, normal dE >= 15,
+#   lightness band, chroma floor) and against the grey used for their opponents.
+# band / accent: the club's dark colour (white text) and a second club colour.
+# vs: the grey for 'their opponent' (lighter for Collingwood, whose chart colour is charcoal).
+CLUB_COLOURS = {
+    "Adelaide": {"chart": "#0064D2", "band": "#002B5C", "accent": "#E21937"},
+    "Brisbane Lions": {"chart": "#8F204E", "band": "#6B0033", "accent": "#FDBE57"},
+    "Carlton": {"chart": "#4D6ECC", "band": "#0E1E5B", "accent": "#FFFFFF"},
+    "Collingwood": {"chart": "#3D3D3D", "band": "#111111", "accent": "#FFFFFF", "vs": "#C4C4C4"},
+    "Essendon": {"chart": "#C52A35", "band": "#CC2031", "accent": "#111111"},
+    "Geelong": {"chart": "#0064D2", "band": "#002B5C", "accent": "#FFFFFF"},
+    "Gold Coast": {"chart": "#D33D2D", "band": "#D9261C", "accent": "#F6BD00"},
+    "Greater Western Sydney": {"chart": "#EE5D27", "band": "#343434", "accent": "#F15C22"},
+    "Hawthorn": {"chart": "#895700", "band": "#4D2004", "accent": "#FBBF15"},
+    "Melbourne": {"chart": "#6973BB", "band": "#0F1131", "accent": "#CC2031"},
+    "North Melbourne": {"chart": "#2766DB", "band": "#013B9F", "accent": "#FFFFFF"},
+    "Port Adelaide": {"chart": "#0088A9", "band": "#061A33", "accent": "#00A1C9"},
+    "Richmond": {"chart": "#C5A100", "band": "#111111", "accent": "#FED102"},
+    "St Kilda": {"chart": "#DA4434", "band": "#111111", "accent": "#ED0F05"},
+    "Sydney": {"chart": "#DA433B", "band": "#D71920", "accent": "#FFFFFF"},
+    "West Coast": {"chart": "#2766DB", "band": "#003087", "accent": "#F2A900"},
+    "Western Bulldogs": {"chart": "#0064D3", "band": "#014896", "accent": "#BD002B"},
+}
+
+
+def club_colours(club):
+    """A club's colours, falling back to the default opposition colour."""
+    c = CLUB_COLOURS.get(club, {})
+    return {"chart": c.get("chart", COLORS["opp"]), "band": c.get("band", COLORS["brand"]),
+            "accent": c.get("accent", "#FFFFFF"), "vs": c.get("vs", COLORS["neutral"])}
+
 FONT = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
 
 
@@ -126,7 +159,7 @@ def inject_css():
           .cv-form { display:flex; gap:3px; }
           .cv-form i { font-style:normal; font-size:.75rem; font-weight:700; width:20px;
             height:20px; border-radius:4px; display:flex; align-items:center;
-            justify-content:center; color:#fff; }
+            justify-content:center; color:#fff; box-shadow:0 0 0 1.5px rgba(255,255,255,.9); }
 
           /* Headline tiles */
           .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:8px; }
@@ -240,6 +273,8 @@ def inject_css():
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
           .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
           .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }
+          .st-key-wa_history div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
+            position:absolute; width:0; height:0; overflow:hidden; margin:0; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -442,18 +477,22 @@ def scout_band(team, season, lad_row, last5):
     ]
     stat_html = "".join(f'<div class="cv-stat{" hero" if l == "Ladder" else " opt"}"><b>{v}</b>'
                         f'<span>{l}</span></div>' for v, l in stats)
+    club = club_colours(team)
     st.markdown(
-        f'<div class="cv-band match"><div class="ttl">Scout: {html.escape(team)}'
+        f'<div class="cv-band match club" style="background:{club["band"]};'
+        f'border-left:6px solid {club["accent"]}"><div class="ttl">Scout: {html.escape(team)}'
         f'<small>{season} · percentage {lad_row["pct"]:.1f} (home and away)</small></div>{stat_html}'
         f'<div class="cv-stat"><div class="cv-form">{chips}</div><span>Last 5</span></div></div>',
         unsafe_allow_html=True)
 
 
-def scout_tiles_row(tiles):
-    """Opponent tiles: their value, league rank, and Freo's value for comparison."""
+def scout_tiles_row(tiles, chip=None):
+    """Opponent tiles: their value, league rank (chip in the club's colour), and
+    Freo's value for comparison."""
     cells = []
+    style = f' style="background:{chip}"' if chip else ""
     for t in tiles:
-        rank = (f'<span class="rk">{_ordinal(t["rank"])}</span>' if t["rank"] else "")
+        rank = (f'<span class="rk"{style}>{_ordinal(t["rank"])}</span>' if t["rank"] else "")
         cells.append(
             f'<div class="cv-tile"><div class="lbl">{html.escape(t["label"])}</div>'
             f'<div class="val">{t["value"]}{rank}</div>'

@@ -13,6 +13,7 @@ import os
 
 import plotly.io as pio
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
@@ -146,6 +147,14 @@ def _pick_deep_dive():
     st.session_state["deep_dive"] = None
 
 
+def scroll_to_bottom(selector):
+    """Scroll a scrolling container on the page to its end (Streamlit keeps the
+    old scroll position when content is added)."""
+    components.html(
+        "<script>setTimeout(function(){var e=window.parent.document.querySelector("
+        f"'{selector}');if(e){{e.scrollTop=e.scrollHeight;}}}},350);</script>", height=0)
+
+
 def _show_chart(fig_json):
     st.plotly_chart(pio.from_json(fig_json), use_container_width=True,
                     config={"displayModeBar": False})
@@ -170,7 +179,7 @@ def chat_panel(season, baseline, focus=None):
     asked, limit = U.questions_today(), U.cap()
     chat_header(f"Answers from the match data only · {asked}/{limit} questions today")
     capped = asked >= limit
-    history = st.container(height=HISTORY_H, border=False)
+    history = st.container(height=HISTORY_H, border=False, key="wa_history")
     with history:
         insight = st.session_state[key]
         if insight:
@@ -189,16 +198,6 @@ def chat_panel(season, baseline, focus=None):
                 if st.button(q, key=f"ex_{i}", use_container_width=True,
                              disabled=client is None):
                     clicked = q
-        elif moved:
-            # A chat has started on another page: this page's questions go first,
-            # and the earlier chat moves down underneath.
-            st.markdown('<div class="wa-sub">Questions for this page</div>', unsafe_allow_html=True)
-            fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
-            for i, q in enumerate(fresh[:4]):
-                if st.button(q, key=f"pq_{i}", use_container_width=True,
-                             disabled=client is None):
-                    clicked = q
-            st.markdown('<div class="wa-sub wa-earlier">Earlier chat</div>', unsafe_allow_html=True)
         for n, msg in enumerate(msgs):
             with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
                 st.markdown(msg["content"])
@@ -213,6 +212,18 @@ def chat_panel(season, baseline, focus=None):
                     if st.button(q, key=f"fu_{n}_{j}", use_container_width=True,
                                  disabled=client is None):
                         clicked = q
+        if moved:
+            # A chat has started on another page: the earlier chat stays, and this
+            # page's questions follow it at the bottom, filling about half the chat
+            # window. The chat is scrolled to the bottom so they are in view.
+            st.markdown('<div class="wa-sub wa-earlier">Questions for this page</div>',
+                        unsafe_allow_html=True)
+            fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
+            for i, q in enumerate(fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70)):
+                if st.button(q, key=f"pq_{i}", use_container_width=True,
+                             disabled=client is None):
+                    clicked = q
+            scroll_to_bottom(".st-key-wa_history")
         if client is None:
             st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
                        "for multi-workspace keys) in the environment or app secrets.")

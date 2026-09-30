@@ -17,7 +17,7 @@ import data as D
 import charts as CH
 import nav
 import takeaways as T
-from theme import (COLORS, RAMP, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
+from theme import (COLORS, RAMP, club_colours, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
                    h2h_table)
 
 TK = 18  # height of a card's takeaway line (px); charts give it up
@@ -283,27 +283,27 @@ def render_scout(team_df, lg, season, opp, sz):
     Row 3: their recent form | every Freo game against them.
     """
     MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK
-    grey = COLORS["neutral"]
-    scout_tiles_row(D.scout_tiles(lg, opp, season))
+    club = club_colours(opp)                 # the club's own colours
+    tint, grey = club["chart"], club["vs"]
+    scout_tiles_row(D.scout_tiles(lg, opp, season), chip=club["band"])
 
     c1, c2, c3 = st.columns([1.45, 1.35, 1.2])
     with c1, card("style"):
         avg, ranks = D.team_ranks(lg, season)
         card_title("Style vs league", "rank of 18 on each stat", takeaway=T.style(ranks, opp))
-        _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H))
+        _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H, team_color=tint))
     with c2, card("howtheywin"):
         short = D.abbr(opp)
         wc = D.scout_win_conditions(lg, opp, season)
-        card_title("How they win", keys=[(f"{short} won it", COLORS["opp"]),
+        card_title("How they win", keys=[(f"{short} won it", tint),
                                          ("Their opponent did", grey)],
                    takeaway=T.where_we_win(wc))
         _plot(CH.win_conditions_bars(wc, MID_H, names=(f"{short} won it", "Their opponent won it"),
-                                     colors=(COLORS["opp"], grey)))
+                                     colors=(tint, grey)))
     with c3, card("theirquarters"):
         qp = D.scout_quarters(lg, opp, season)
         card_title("Their quarters", "avg points", takeaway=T.quarters(qp))
-        _plot(CH.quarter_bars(qp, MID_H - 12, names=(opp, "Opponents"),
-                              colors=(COLORS["opp"], grey)))
+        _plot(CH.quarter_bars(qp, MID_H - 12, names=(opp, "Opponents"), colors=(tint, grey)))
 
     b1, b2 = st.columns([1.55, 1.45])
     games = lg[(lg["season"] == season) & (lg["team"] == opp)].tail(14)

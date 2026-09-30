@@ -130,6 +130,11 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   percentage) and form; tiles with the club's value, league rank and Freo's value; style vs league
   (rank of 18 on each stat, club vs Freo); how they win; their quarters; their last 14 games;
   every Freo game against them. Wharf-ai gets `league_aggregate` and `ladder` tools.
+  Each club is shown in its own colours (`theme.CLUB_COLOURS`, colours only, no logos): the band
+  uses the club's dark colour with an accent stripe, rank chips its dark colour, and the charts a
+  chart colour on the club's hue, chosen as the closest to the real club colour that still passes
+  the validator against Freo purple and the opponent grey (navy clubs therefore chart as a strong
+  blue). Collingwood charts in charcoal with a lighter grey for their opponents.
 - First-visit tour (`tour.py`, `components/tour`): driver.js 1.8.0 from jsDelivr, loaded into the
   app page; 13 steps spotlighting each part; runs once per browser (localStorage
   `freoCoachTourDone_v1`), replay from Deep dives -> App tour. It waits until every target card
@@ -179,9 +184,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   from the streamed text; the three show as "Ask next" buttons under the latest answer (unasked
   suggestions are used if the model leaves the line out).
 - Each chat message records the page it was asked on (`focus`, or "the <season> season"). If a chat
-  has started and the user moves to another page (view, game, player or club), the panel shows up
-  to four of that page's questions ("Questions for this page", ones already asked are skipped)
-  above the earlier chat, and hides the old answer's follow-ups. Asking one continues the same
+  has started and the user moves to another page (view, game, player or club), the earlier chat
+  stays and that page's questions follow it at the bottom ("Questions for this page", ones already
+  asked are skipped), enough to fill about half the chat window; the chat is scrolled to the bottom
+  so they are in view, and the old answer's follow-ups are hidden. Asking one continues the same
   conversation on the new page. It opens with an insight from
   `insights.py`: a pool of facts computed with pandas (win-rate swing by stat, best quarter, close
   games, home vs away, accuracy in wins vs losses, biggest change vs baseline, player in form,
