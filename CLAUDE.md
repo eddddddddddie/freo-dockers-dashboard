@@ -139,9 +139,22 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   First run: the app asks for the window size before sign-in, and if someone is signed in
   straight away (cookie, Google) it shows "Loading the Coach View..." until the size arrives
   (the viewport component is told `need` so it resends even if the tab sent it before), so a
-  phone never flashes the desktop layout. Landscape phones and tablets (700px and wider) get the
-  desktop layout. `tests/test_ui.py::test_phone_layout_scrolls_one_column` checks 375x667,
-  390x844 and 412x915.
+  phone never flashes the desktop layout. `tests/test_ui.py::test_phone_layout_scrolls_one_column`
+  checks 375x667, 390x844 and 412x915.
+- Layout modes (`layout.mode(width, height)`): phone (under 700px wide), desktop (1280x600 or
+  more: the one-screen layout), split (landscape tablets, 1000px or wider and 600px or taller)
+  and stack (everything else: portrait tablets, landscape phones, small windows). The one-screen
+  layout breaks below about 1280px (clipped controls, overlapping heatmap rows), hence the cut-off.
+  Stack and split both scroll (`theme.inject_tablet_css`, `layout.scroll_sizes`): band on its own
+  line, then a controls row (season, view buttons, Deep dives, ?, sign out) and the picker; tiles
+  three to a row; cards two to a row with wide ones (game strip, player grids, player form, game
+  flow) across the row; card heights follow content. Stack puts Wharf-ai above the dashboard (4
+  suggestions, 3 when the window is under 500px tall) with the "Dashboard ↓" button; split keeps
+  it in a column on the right, pinned with `position:sticky` while the dashboard scrolls, as tall
+  as the window less 44px (any taller and it slides off the top at the end of the page). Each
+  view lists its cards once and hands `views.arrange` three arrangements: desktop rows with
+  column ratios, the tablet grid, and the phone order. `test_tablet_layouts` checks 820x1100,
+  844x390 and 1180x760.
 - Four views: Season, Match, Player, Scout (`views.render*`). Each band leads with one big number
   (record, margin, the player's main average, ladder spot); secondary figures hide below 1760px.
   Tiles are 6 per view (grid sized from the count). Text is 12px minimum. Every card has a
@@ -271,7 +284,9 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   team_trend / player_trend / player_bar chart under the answer from the data itself (the model
   never supplies the numbers); charts are stored with the message as figure JSON and only role +
   content go back to the API. Tool inputs stream eagerly, so
-  `wharf_tools.run` validates them and returns errors the model can fix. Goal accuracy from
+  `wharf_tools.run` validates them and returns errors the model can fix. That includes filters: an
+  unknown filter key (e.g. `venue`) or a non-object `filters` is an error listing the valid ones
+  (`_check_filters`), never skipped, since skipping it would answer over every game. Goal accuracy from
   `team_aggregate` is pooled, matching the dashboard.
 - Within one question the message list is append-only and assistant turns are passed back whole
   (thinking + tool_use blocks), as preserved thinking requires; only the final text is kept in the

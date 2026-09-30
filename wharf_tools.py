@@ -51,8 +51,26 @@ def player_stats():
 
 
 # ---- helpers ----------------------------------------------------------------
+GAME_FILTERS = ("season", "result", "type", "opponent", "rounds", "min_margin", "max_margin")
+LEAGUE_FILTERS = ("season", "result", "finals", "opponent")
+
+
+def _check_filters(f, allowed):
+    """The filters as a dict. An unknown key is an error, never skipped: skipping
+    it would quietly answer over every game (e.g. a "venue" filter)."""
+    if f is None:
+        return {}
+    if not isinstance(f, dict):
+        raise ToolError("filters must be an object, e.g. {\"season\": 2026}.")
+    bad = [k for k in f if k not in allowed]
+    if bad:
+        raise ToolError(f"Unknown filter: {', '.join(bad)}. Valid filters are "
+                        f"{', '.join(allowed)}. To split by something else, use group_by.")
+    return f
+
+
 def _filter(df, f):
-    f = f or {}
+    f = _check_filters(f, GAME_FILTERS)
     if f.get("season") not in (None, "all"):
         df = df[df["season"] == int(f["season"])]
     if f.get("result"):
@@ -239,7 +257,7 @@ def league_aggregate(metrics, agg="mean", group_by="team", filters=None, teams=N
                      sort_by=None, limit=18):
     """Any club's games: aggregate league metrics, by team by default."""
     lg = _league()
-    f = dict(filters or {})
+    f = _check_filters(filters, LEAGUE_FILTERS)
     if f.get("season") not in (None, "all"):
         lg = lg[lg["season"] == int(f["season"])]
     if f.get("result"):

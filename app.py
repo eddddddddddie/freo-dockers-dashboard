@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_tablet_css, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -50,15 +50,20 @@ if first_run and not layout.size_known():
     # then jump. The size arrives in a moment and reruns the app.
     st.markdown('<div class="cv-wait">Loading the Coach View...</div>', unsafe_allow_html=True)
     st.stop()
-PHONE = layout.is_phone(win_w)
-V.set_phone(PHONE)
+LAYOUT = layout.mode(win_w, win_h)      # phone, stack, split or desktop (see layout.mode)
+PHONE = LAYOUT == "phone"
+SCROLL = LAYOUT != "desktop"            # the page scrolls instead of fitting one screen
+CHAT_TOP = LAYOUT in ("phone", "stack")  # Wharf-ai above the dashboard, not beside it
+V.set_layout(LAYOUT)
 if PHONE:
     inject_phone_css()
+elif SCROLL:
+    inject_tablet_css(LAYOUT)
 tour.show(phone=PHONE)        # first-visit walkthrough (once per browser)
 if st.session_state.pop("restored", False) and "messages" not in st.session_state:
     # Signed back in from the cookie: carry on this session's Wharf-ai chat.
     st.session_state["messages"] = U.load_chat(st.session_state.get("sid"))
-SZ = layout.phone_sizes(win_h, win_w) if PHONE else layout.sizes(win_h, win_w)
+SZ = layout.scroll_sizes(LAYOUT, win_h, win_w) if SCROLL else layout.sizes(win_h, win_w)
 
 team_df = D.load_team()
 player_df = D.load_players()
@@ -69,7 +74,7 @@ AVATARS = {"user": os.path.join(ASSETS, "supporter.svg"),        # supporter in 
            "assistant": os.path.join(ASSETS, "anchor.svg")}      # Wharf-ai's anchor
 PANEL_H = SZ["panel"]       # Wharf-ai panel height (px), level with the dashboard bottom
 HISTORY_H = SZ["history"]   # scrolling area inside the panel
-PHONE_PROMPTS = 3           # suggested questions on a phone
+TOP_PROMPTS = 3 if PHONE or win_h < 500 else 4   # suggestions when Wharf-ai sits above the dashboard
 TOOL_LABELS = {
     "team_games": "listing games", "team_aggregate": "averaging team stats",
     "correlate": "checking a correlation", "quarter_breakdown": "breaking down quarters",
@@ -142,7 +147,8 @@ def example_prompts(season, baseline, focus=None):
     return scout + match + [q for q in season_q if q]
 
 
-SIDE_SHARE = 1 / 4.55          # the chat panel's share of the window width (columns 3.55 : 1)
+# The chat panel's share of the window width: columns 3.55 : 1 (desktop), 2.6 : 1 (split).
+SIDE_SHARE = 1 / 3.6 if LAYOUT == "split" else 1 / 4.55
 CHAR_W = 6.4                   # average width of one character in panel text (px)
 
 
@@ -269,7 +275,7 @@ def chat_panel(season, baseline, focus=None):
     capped = day_capped or login_capped
     # On a phone the panel is as tall as its content until a chat starts, then
     # the chat scrolls inside about half the screen so the dashboard stays close.
-    history_h = (HISTORY_H if msgs else "content") if PHONE else HISTORY_H
+    history_h = (HISTORY_H if msgs else "content") if CHAT_TOP else HISTORY_H
     history = st.container(height=history_h, border=False, key="wa_history")
     with history:
         insight = st.session_state[key]
@@ -286,7 +292,7 @@ def chat_panel(season, baseline, focus=None):
             # Fill the panel to the bottom: as many suggestions as fit under the insight.
             st.markdown('<div class="wa-sub">Try asking</div>', unsafe_allow_html=True)
             longest = max(pool, key=len) if pool else insight  # the card is as tall as this
-            shown = (example_prompts(season, baseline, focus)[:PHONE_PROMPTS] if PHONE else
+            shown = (example_prompts(season, baseline, focus)[:TOP_PROMPTS] if CHAT_TOP else
                      fitting_prompts(example_prompts(season, baseline, focus), longest,
                                      win_w, HISTORY_H))
             for i, q in enumerate(shown):
@@ -316,7 +322,7 @@ def chat_panel(season, baseline, focus=None):
             st.markdown('<div class="wa-sub wa-earlier">Questions for this page</div>',
                         unsafe_allow_html=True)
             fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
-            page_qs = (fresh[:PHONE_PROMPTS] if PHONE else
+            page_qs = (fresh[:TOP_PROMPTS] if CHAT_TOP else
                        fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70))
             for i, q in enumerate(page_qs):
                 if st.button(q, key=f"pq_{i}", width="stretch",
@@ -331,7 +337,7 @@ def chat_panel(season, baseline, focus=None):
                    else f"You've used your {mine_limit} questions for today" if login_capped
                    else "Ask Wharf-ai about the data")
     typed = st.chat_input(placeholder, disabled=client is None or capped)
-    if PHONE and msgs:
+    if CHAT_TOP and msgs:
         # A button and a script, not a #link: Streamlit's page scrolls inside
         # its own container, where the browser's jump to an anchor lands wrong.
         if st.button("Dashboard ↓", key="jump_dash", type="tertiary"):
@@ -417,8 +423,10 @@ def chat_panel(season, baseline, focus=None):
 
 # ------------------------------------------------------------- layout
 # Desktop: one screen, the dashboard on the left and Wharf-ai down the right.
-# Phone (layout.PHONE_W): one scrolling column: band, controls, Wharf-ai, then
-# the dashboard's cards one under another.
+# Split (landscape tablets): the same two columns, but the dashboard scrolls and
+# Wharf-ai stays pinned. Stack (portrait tablets, landscape phones): band,
+# controls, Wharf-ai, then the cards two to a row. Phone: one column, Wharf-ai
+# first, then the cards one under another (see layout.mode).
 focus = None
 league = D.load_league()
 CLUBS = sorted(t for t in league["team"].unique() if t != "Fremantle") if league is not None else []
@@ -444,6 +452,20 @@ if PHONE:
     pick_slot = st.container()
     chat_slot = st.container(border=True, key="card_wharfai")
     main = st.container()
+elif SCROLL:
+    # Tablets and small windows: the band on its own line, the controls under it.
+    top = st.container()
+    if LAYOUT == "split":
+        main, side = st.columns([2.6, 1])
+        top = main
+    with top:
+        band_slot = st.container()
+        with st.container(key="t_ctrl"):
+            h2, h3, h4, h5, h6 = st.columns([1.05, 2.3, 1.25, 0.3, 0.3], vertical_alignment="center")
+        pick_slot = st.columns([1, 1.6])[0]
+    if LAYOUT == "stack":
+        chat_slot = st.container(border=True, key="card_wharfai")
+        main = st.container()
 else:
     main, side = st.columns([3.55, 1])
     with main:
@@ -471,7 +493,7 @@ pos = scout = player = game_round = None
 
 def _pick_and_band():
     """The picker (game, player or club) and band slots for this view."""
-    if PHONE:
+    if SCROLL:
         return pick_slot, band_slot
     if view == "Season":
         return None, h1
@@ -562,12 +584,12 @@ elif dive == "Quarter-time check":
 elif dive == "Wharf-ai usage":
     DD.usage_log()
 
-if PHONE:
+if CHAT_TOP:
     with chat_slot:
         chat_panel(season, baseline, focus)
 
 with main:
-    if PHONE:
+    if CHAT_TOP:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
     if scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
@@ -582,6 +604,6 @@ with main:
             st.markdown('<div class="wa-sub">More</div>', unsafe_allow_html=True)
             deep_dive_menu()
 
-if not PHONE:
+if not CHAT_TOP:
     with side, st.container(border=True, height=PANEL_H, key="card_wharfai"):
         chat_panel(season, baseline, focus)

@@ -73,6 +73,14 @@ def test_phone_layout(app):
     assert at.session_state["view"] == "Match"
 
 
+def test_layout_modes():
+    import layout as L
+    assert L.mode(390, 844) == L.mode(667, 340) == "phone"
+    assert L.mode(820, 1100) == L.mode(844, 390) == L.mode(1024, 1366) == "stack"
+    assert L.mode(1180, 820) == L.mode(1024, 700) == "split"
+    assert L.mode(1280, 680) == L.mode(1440, 790) == L.mode(1366, 1024) == "desktop"
+
+
 def test_constant_time_compare():
     assert auth._matches("abc", "abc") and not auth._matches("abc", "abd")
 

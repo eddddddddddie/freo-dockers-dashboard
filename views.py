@@ -52,23 +52,46 @@ def card(name, height="content"):
     return st.container(border=True, height=height, key=f"card_{name}")
 
 
-PHONE = False  # set by the app: the phone layout (one scrolling column, touch)
+# Set by the app from layout.mode: "desktop" (one screen), "split" and "stack"
+# (tablets: the page scrolls, cards two to a row) or "phone" (one column).
+LAYOUT = "desktop"
+PHONE = False
+GRID = False     # the tablet layouts' two-to-a-row grid
 
 
-def set_phone(flag):
-    global PHONE
-    PHONE = bool(flag)
+def set_layout(mode):
+    global LAYOUT, PHONE, GRID
+    LAYOUT, PHONE, GRID = mode, mode == "phone", mode in ("stack", "split")
 
 
 def _h(height):
-    """A card's fixed height on desktop; on a phone cards grow with their content."""
-    return "content" if PHONE else height
+    """A card's fixed height on the one-screen desktop; when the page scrolls,
+    cards grow with their content."""
+    return height if LAYOUT == "desktop" else "content"
+
+
+def arrange(desktop, grid, phone):
+    """Draw a view's cards (functions that each draw one card).
+    desktop: [(column ratios, [cards])] rows; grid: [[cards]] rows of one or
+    two for tablets (a single card spans the row); phone: [cards] in order."""
+    if PHONE:
+        for part in phone:
+            part()
+        return
+    rows = [([1] * len(r), r) for r in grid] if GRID else desktop
+    for ratios, parts in rows:
+        if len(parts) == 1:
+            parts[0]()
+            continue
+        for col, part in zip(st.columns(ratios), parts):
+            with col:
+                part()
 
 
 def _plot(fig, key=None):
     """Draw a chart. With a key, clicks on its points come back as an event.
-    On a phone, dragging a chart would zoom it instead of scrolling the page."""
-    if PHONE:
+    On a touch screen, dragging a chart would zoom it instead of scrolling."""
+    if LAYOUT != "desktop":
         fig.update_layout(dragmode=False)
     if key is None:
         st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
@@ -182,28 +205,10 @@ def render(team_df, player_df, season, baseline, sz):
             card_title("What drives our margin", "r, not cause", takeaway=T.drivers(dr))
             _plot(CH.drivers_bar(dr, BOT_H))
 
-    if PHONE:
-        for part in (recent, wherewin, drivers, quarters, role_leaders, form):
-            part()
-        return
-
-    # ---- middle row
-    c1, c2, c3 = st.columns([2.2, 1.35, 1.15])
-    with c1:
-        strip()
-    with c2:
-        wherewin()
-    with c3:
-        quarters()
-
-    # ---- bottom row
-    b1, b2, b3 = st.columns([1.05, 2.45, 1.2])
-    with b1:
-        role_leaders()
-    with b2:
-        form()
-    with b3:
-        drivers()
+    arrange(desktop=[([2.2, 1.35, 1.15], [strip, wherewin, quarters]),
+                     ([1.05, 2.45, 1.2], [role_leaders, form, drivers])],
+            grid=[[strip], [wherewin, quarters], [role_leaders, drivers], [form]],
+            phone=[recent, wherewin, drivers, quarters, role_leaders, form])
 
 
 RECENT_N = 8  # games in the phone's recent games list before "Show all"
@@ -257,31 +262,44 @@ def render_match(team_df, player_df, season, pos, sz):
 
     tiles_row(D.match_tiles(team_df, season, pos), "Season avg")
 
-    c1, c2, c3 = st.columns([1.5, 1.25, 1])
-    with c1, card("tape", height=_h(MID_H + 40 + TK)):
-        rows = D.tale_of_the_tape(tdf, pos)
-        card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"]),
-                                             ("season avg share", COLORS["ink"])],
-                   takeaway=T.tape(rows))
-        tape(rows)
-    with c2, card("flow"):
-        flow, avg = D.game_flow(tdf, pos)
-        take = T.flow(flow.rename(index=BREAK_NAMES), game["result"], int(game["margin"]))
-        card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg win", COLORS["win"]),
-                                      ("Avg loss", COLORS["loss"])], takeaway=take)
-        _plot(CH.game_flow_lines(flow, avg, MID_H))
-    with c3, card("gameleaders", height=_h(MID_H + 40 + TK)):
-        leaders, goals = D.match_leaders(pdf, game)
-        card_title("Game leaders", takeaway=T.match_leaders(goals))
-        leaders_list(leaders)
+    def tape_card():
+        with card("tape", height=_h(MID_H + 40 + TK)):
+            rows = D.tale_of_the_tape(tdf, pos)
+            card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"]),
+                                                 ("season avg share", COLORS["ink"])],
+                       takeaway=T.tape(rows))
+            tape(rows)
 
+    def flow_card():
+        with card("flow"):
+            flow, avg = D.game_flow(tdf, pos)
+            take = T.flow(flow.rename(index=BREAK_NAMES), game["result"], int(game["margin"]))
+            card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg win", COLORS["win"]),
+                                          ("Avg loss", COLORS["loss"])], takeaway=take)
+            _plot(CH.game_flow_lines(flow, avg, MID_H))
+
+    def leaders_card():
+        with card("gameleaders", height=_h(MID_H + 40 + TK)):
+            leaders, goals = D.match_leaders(pdf, game)
+            card_title("Game leaders", takeaway=T.match_leaders(goals))
+            leaders_list(leaders)
+
+    def players_card():
+        _match_players(pdf, game, season, pos, BOT_H)
+
+    arrange(desktop=[([1.5, 1.25, 1], [tape_card, flow_card, leaders_card]), ([1], [players_card])],
+            grid=[[tape_card, leaders_card], [flow_card], [players_card]],
+            phone=[tape_card, flow_card, leaders_card, players_card])
+
+
+def _match_players(pdf, game, season, pos, BOT_H):
     with card("players", height=_h(BOT_H + 40 + TK)):
         stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns
                  and (not PHONE or lbl in PHONE_GRID)]
         vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
         card_title("Players this game", "shaded against each player's own season average · "
-                   + ("tap a player" if PHONE else "click a player"), keys=[("below", RAMP[0]), ("above", RAMP[-1])],
-                   takeaway=T.match_players(vals))
+                   + ("tap a player" if PHONE else "click a player"),
+                   keys=[("below", RAMP[0]), ("above", RAMP[-1])], takeaway=T.match_players(vals))
         grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
         ev = _plot(CH.match_player_grid(vals, pct, [lbl for lbl, _ in stats], grid_h),
                    key=f"mplayers_{season}_{pos}")
@@ -316,27 +334,38 @@ def render_player(player_df, season, baseline, player, sz):
     tiles_row(D.player_tiles(player_df, player, season, baseline), baseline,
               rank_label="squad rank")
 
-    c1, c2 = st.columns([1.9, 1.1])
-    with c1, card("ptrend"):
-        label = st.session_state.get("ptrend_stat") or "Disposals"
-        col = trend_stats.get(label, "disposals")
-        t, s = st.columns([2.4, 1], vertical_alignment="center")
-        with t:
-            card_title("Game by game", "dots green win, red loss",
-                       takeaway=T.player_trend(me, col, label))
-        with s:
-            st.selectbox("Trend stat", list(trend_stats), key="ptrend_stat",
-                         label_visibility="collapsed")
-        _plot(CH.player_trend(me, col, label, MID_H - 10))
-    with c2, card("pranks"):
-        pr = D.player_squad_ranks(pdf, player)
-        card_title("Squad rank", f"per game, of players with {D.MIN_GAMES}+ games",
-                   takeaway=T.player_ranks(pr))
-        if len(pr):
-            _plot(CH.squad_rank_bars(pr, MID_H))
-        else:
-            st.caption(f"Needs {D.MIN_GAMES} games for a squad rank.")
+    def trend_card():
+        with card("ptrend"):
+            label = st.session_state.get("ptrend_stat") or "Disposals"
+            col = trend_stats.get(label, "disposals")
+            t, s = st.columns([2.4, 1], vertical_alignment="center")
+            with t:
+                card_title("Game by game", "dots green win, red loss",
+                           takeaway=T.player_trend(me, col, label))
+            with s:
+                st.selectbox("Trend stat", list(trend_stats), key="ptrend_stat",
+                             label_visibility="collapsed")
+            _plot(CH.player_trend(me, col, label, MID_H - 10))
 
+    def ranks_card():
+        with card("pranks"):
+            pr = D.player_squad_ranks(pdf, player)
+            card_title("Squad rank", f"per game, of players with {D.MIN_GAMES}+ games",
+                       takeaway=T.player_ranks(pr))
+            if len(pr):
+                _plot(CH.squad_rank_bars(pr, MID_H))
+            else:
+                st.caption(f"Needs {D.MIN_GAMES} games for a squad rank.")
+
+    def log_card():
+        _player_log(pdf, player, BOT_H)
+
+    arrange(desktop=[([1.9, 1.1], [trend_card, ranks_card]), ([1], [log_card])],
+            grid=[[trend_card, ranks_card], [log_card]],
+            phone=[trend_card, ranks_card, log_card])
+
+
+def _player_log(pdf, player, BOT_H):
     with card("plog", height=_h(BOT_H + 40 + TK)):
         log = D.player_log(pdf, player)
         stats = [(l, c) for l, c in LOG_STATS if c in log.columns
@@ -366,34 +395,47 @@ def render_scout(team_df, lg, season, opp, sz):
     tint, grey = club["chart"], club["vs"]
     scout_tiles_row(D.scout_tiles(lg, opp, season), chip=club["band"])
 
-    c1, c2, c3 = st.columns([1.45, 1.35, 1.2])
-    with c1, card("style"):
-        avg, ranks = D.team_ranks(lg, season)
-        card_title("Style vs league", "rank of 18 on each stat", takeaway=T.style(ranks, opp))
-        _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H, team_color=tint))
-    with c2, card("howtheywin"):
-        short = D.abbr(opp)
-        wc = D.scout_win_conditions(lg, opp, season)
-        card_title("How they win", keys=[(f"{short} won it", tint),
-                                         ("Their opponent did", grey)],
-                   takeaway=T.where_we_win(wc))
-        _plot(CH.win_conditions_bars(wc, MID_H, names=(f"{short} won it", "Their opponent won it"),
-                                     colors=(tint, grey)))
-    with c3, card("theirquarters"):
-        qp = D.scout_quarters(lg, opp, season)
-        card_title("Their quarters", "avg points", takeaway=T.quarters(qp))
-        _plot(CH.quarter_bars(qp, MID_H - 12, names=(opp, "Opponents"), colors=(tint, grey)))
-
-    b1, b2 = st.columns([1.55, 1.45])
     games = lg[(lg["season"] == season) & (lg["team"] == opp)].tail(14)
-    with b1, card("theirform"):
-        card_title("Their form", f"last {len(games)} games, green win, red loss",
-                   takeaway=T.scout_form(games))
-        _plot(CH.form_bars(games, BOT_H))
-    with b2, card("h2h", height=_h(BOT_H + 40 + TK)):
-        rows = D.head_to_head(team_df, opp)
-        card_title("Against Fremantle", "every game, both seasons", takeaway=T.h2h(rows))
-        if len(rows):
-            h2h_table(rows)
-        else:
-            st.caption("No games against Fremantle in the data.")
+
+    def style_card():
+        with card("style"):
+            avg, ranks = D.team_ranks(lg, season)
+            card_title("Style vs league", "rank of 18 on each stat", takeaway=T.style(ranks, opp))
+            _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H, team_color=tint))
+
+    def win_card():
+        with card("howtheywin"):
+            short = D.abbr(opp)
+            wc = D.scout_win_conditions(lg, opp, season)
+            card_title("How they win", keys=[(f"{short} won it", tint),
+                                             ("Their opponent did", grey)],
+                       takeaway=T.where_we_win(wc))
+            _plot(CH.win_conditions_bars(wc, MID_H,
+                                         names=(f"{short} won it", "Their opponent won it"),
+                                         colors=(tint, grey)))
+
+    def quarters_card():
+        with card("theirquarters"):
+            qp = D.scout_quarters(lg, opp, season)
+            card_title("Their quarters", "avg points", takeaway=T.quarters(qp))
+            _plot(CH.quarter_bars(qp, MID_H - 12, names=(opp, "Opponents"), colors=(tint, grey)))
+
+    def form_card():
+        with card("theirform"):
+            card_title("Their form", f"last {len(games)} games, green win, red loss",
+                       takeaway=T.scout_form(games))
+            _plot(CH.form_bars(games, BOT_H))
+
+    def h2h_card():
+        with card("h2h", height=_h(BOT_H + 40 + TK)):
+            rows = D.head_to_head(team_df, opp)
+            card_title("Against Fremantle", "every game, both seasons", takeaway=T.h2h(rows))
+            if len(rows):
+                h2h_table(rows)
+            else:
+                st.caption("No games against Fremantle in the data.")
+
+    arrange(desktop=[([1.45, 1.35, 1.2], [style_card, win_card, quarters_card]),
+                     ([1.55, 1.45], [form_card, h2h_card])],
+            grid=[[style_card, win_card], [quarters_card, form_card], [h2h_card]],
+            phone=[style_card, win_card, quarters_card, form_card, h2h_card])

@@ -128,6 +128,52 @@ def test_phone_layout_scrolls_one_column(browser, server, w, h):
     ctx.close()
 
 
+TABLETS = [(820, 1100, "stack"), (844, 390, "stack"), (1180, 760, "split")]
+
+
+@pytest.mark.parametrize("w,h,mode", TABLETS)
+def test_tablet_layouts(browser, server, w, h, mode):
+    """Tablets and landscape phones: the page scrolls with nothing wider than the
+    screen, cards two to a row, tiles three to a row. stack: Wharf-ai above the
+    dashboard; split: beside it, and still in view after scrolling down."""
+    ctx = browser.new_context(viewport={"width": w, "height": h}, has_touch=True)
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    pg = ctx.new_page()
+    pg.goto(server)
+    pg.wait_for_selector("input[type=password]", timeout=60000)
+    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
+    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
+    pg.get_by_role("button", name="Sign in").click()
+    for view in ["Season", "Match", "Player", "Scout"]:
+        if view != "Season":
+            pg.goto(f"{server}/?season=2026&view={view}")
+        pg.wait_for_selector(".js-plotly-plot", timeout=60000)
+        pg.wait_for_timeout(3000)
+        f = pg.evaluate("""() => {
+            const m = document.querySelector('[data-testid=stMain]');
+            const r = s => document.querySelector(s).getBoundingClientRect();
+            const tiles = [...document.querySelectorAll('.cv-tile')].map(t => Math.round(t.getBoundingClientRect().left));
+            const cards = [...document.querySelectorAll('[class*=st-key-card_]')]
+                .filter(c => !c.className.includes('card_wharfai')).map(c => Math.round(c.getBoundingClientRect().left));
+            const out = {docW: document.documentElement.scrollWidth, mainW: m.scrollWidth,
+                exceptions: document.querySelectorAll('[data-testid=stException]').length,
+                tileCols: new Set(tiles).size, cardCols: new Set(cards).size,
+                chatAbove: r('.st-key-card_wharfai').bottom <= r('.cv-tiles').top + 1,
+                chatBeside: r('.st-key-card_wharfai').left >= r('.cv-tiles').right};
+            m.scrollTo(0, m.scrollHeight);
+            return out; }""")
+        pg.wait_for_timeout(500)
+        chat_top = pg.evaluate("document.querySelector('.st-key-card_wharfai').getBoundingClientRect().top")
+        assert f["exceptions"] == 0, (view, f)
+        assert f["docW"] <= w and f["mainW"] <= w, (view, w, f)
+        assert f["tileCols"] == 3 and f["cardCols"] == 2, (view, f)
+        if mode == "stack":
+            assert f["chatAbove"], (view, f)
+        else:
+            assert f["chatBeside"] and 0 <= chat_top <= 20, (view, f, chat_top)  # pinned in view
+    ctx.close()
+
+
 def _click_cell(pg, card, n):
     """Press on the n-th clickable cell of a card's chart (the invisible layer)."""
     box = pg.locator(f".st-key-card_{card} .js-plotly-plot g.points path").nth(n).bounding_box()

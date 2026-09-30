@@ -37,15 +37,45 @@ def size_known():
     return "window_size" in st.session_state
 
 
+DESKTOP_W, DESKTOP_H = 1280, 600   # the one-screen layout needs at least this much room
+SPLIT_W = 1000                     # landscape tablets from here keep Wharf-ai at the side
+
+
+def mode(width, height):
+    """Which layout suits the window.
+
+    phone:   narrower than PHONE_W; one scrolling column, Wharf-ai first.
+    desktop: DESKTOP_W x DESKTOP_H or more; everything on one screen.
+    split:   a landscape tablet (SPLIT_W or wider, landscape, DESKTOP_H or
+             taller); the dashboard scrolls, cards two to a row, with Wharf-ai
+             pinned down the right.
+    stack:   everything else (portrait tablets, landscape phones, small windows);
+             Wharf-ai first, then the dashboard with cards two to a row.
+    """
+    if width < PHONE_W:
+        return "phone"
+    if width >= DESKTOP_W and height >= DESKTOP_H:
+        return "desktop"
+    if width >= SPLIT_W and height >= DESKTOP_H and width > height:
+        return "split"
+    return "stack"
+
+
 def is_phone(width):
     return width < PHONE_W
 
 
-def phone_sizes(height, width):
-    """Sizes for the phone layout: the page scrolls, so charts get a fixed,
-    readable height and the chat history about half the screen."""
-    return {"phone": True, "mid": 250, "bot": 300, "form_rows": 10,
-            "panel": None, "history": max(300, int(height * 0.55)), "width": width}
+def scroll_sizes(mode_, height, width):
+    """Sizes for the scrolling layouts (phone, stack, split): charts get a fixed,
+    readable height. With Wharf-ai at the top, its chat scrolls in about half
+    the screen; at the side (split) the panel is as tall as the window."""
+    sz = {"phone": mode_ == "phone", "mode": mode_, "width": width, "form_rows": 10,
+          "mid": 250 if mode_ == "phone" else 270, "bot": 300 if mode_ == "phone" else 320,
+          "panel": None, "history": max(300, int(height * 0.55))}
+    if mode_ == "split":
+        sz["panel"] = height - 44          # leaves room for the page's bottom padding
+        sz["history"] = height - 44 - 150   # header, chat box and padding
+    return sz
 
 
 def sizes(height, width=1440):
@@ -60,6 +90,7 @@ def sizes(height, width=1440):
     bot = int(262 + 0.55 * extra)
     return {
         "phone": False,
+        "mode": "desktop",
         "mid": mid,
         "bot": bot,
         "panel": int(722 + extra + wrap),

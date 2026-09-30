@@ -364,6 +364,34 @@ def inject_phone_css():
     )
 
 
+def inject_tablet_css(mode):
+    """Extra rules for the tablet layouts (layout.mode "stack" and "split"): the
+    page scrolls, cards sit two to a row, tiles three to a row, card text
+    wraps, and in "split" Wharf-ai stays in view while the dashboard scrolls."""
+    sticky = """
+          div[data-testid="stColumn"]:has(.st-key-card_wharfai) {
+            position:sticky; top:8px; align-self:flex-start; }""" if mode == "split" else ""
+    st.markdown(
+        f"""
+        <style>
+          .block-container {{ padding:8px 14px 32px !important; }}
+          .cv-tiles {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }}
+          .card-title, .card-take, .card-title .take {{ white-space:normal; }}
+          .cv-band .opt {{ display:none; }}
+          div[data-testid="stButton"] button {{ min-height:38px; }}
+          div[data-testid="stButtonGroup"] button {{ min-height:36px; }}
+          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ min-height:36px; }}
+          .st-key-tour_btn button, .st-key-signout_btn button {{ width:38px; height:38px; min-height:38px; }}
+          .st-key-jump_dash {{ display:flex; justify-content:flex-end; }}
+          .st-key-jump_dash button p {{ font-weight:700; color:var(--brand); }}
+          div[data-testid="stElementContainer"]:has(iframe[height="0"]) {{
+            position:absolute; width:0; height:0; overflow:hidden; margin:0; }}{sticky}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def card_title(text, note="", keys=None, takeaway=""):
     """Card heading. keys: optional [(label, colour)] drawn as a legend, for
     charts too narrow for a Plotly legend. takeaway: the card's main point in

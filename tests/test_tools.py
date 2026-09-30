@@ -73,3 +73,24 @@ def test_league_tools_if_present():
     text = run_ok("ladder", {"season": 2026})
     assert "Fremantle" in text
     run_ok("league_aggregate", {"metrics": ["margin"], "filters": {"season": 2026}})
+
+
+@pytest.mark.parametrize("name,args", [
+    ("team_aggregate", {"metrics": ["margin"], "filters": {"venue": "Perth Stadium"}}),
+    ("player_aggregate", {"stats": ["disposals"], "filters": {"quarter": 3}}),
+    ("team_games", {"metrics": ["margin"], "filters": "2026"}),
+])
+def test_unknown_or_malformed_filters_are_errors(name, args):
+    """A filter the tools don't know must fail loudly: skipping it would answer
+    over every game instead."""
+    text, is_error, _ = W.run(name, args)
+    assert is_error, text
+    assert "filter" in text.lower()
+
+
+def test_unknown_league_filter_is_an_error():
+    if D.load_league() is None:
+        pytest.skip("no league data")
+    text, is_error, _ = W.run("league_aggregate", {"metrics": ["margin"],
+                                                   "filters": {"venue": "Gabba"}})
+    assert is_error and "Unknown filter: venue" in text
