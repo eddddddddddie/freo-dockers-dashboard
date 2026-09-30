@@ -14,9 +14,10 @@ _tour = components.declare_component(
     "tour", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "components", "tour"))
 
 
-def show():
-    """Render the (invisible) tour component; it decides whether to run."""
-    _tour(force=st.session_state.get("tour_force"), key="tour", default=None)
+def show(phone=False):
+    """Render the (invisible) tour component; it decides whether to run.
+    phone: the shorter tour for the phone layout."""
+    _tour(force=st.session_state.get("tour_force"), phone=phone, key="tour", default=None)
 
 
 def replay():

@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -37,14 +37,28 @@ import tour
 import nav
 
 inject_css()
+# The window size is asked for first, so it is usually known by the time the
+# dashboard draws (the sign-in page gives it time to arrive).
+win_w, win_h = layout.window_size()
+first_run = not st.session_state.get("_ran")
+st.session_state["_ran"] = True
 auth.require_login()          # stops here until signed in (a valid cookie signs in too)
 auth.cookie_sync()            # stores the "keep me signed in" cookie after sign-in
-win_w, win_h = layout.window_size()
-tour.show()                   # first-visit walkthrough (once per browser)
+if first_run and not layout.size_known():
+    # Signed in straight away (cookie or Google) before the browser has said how
+    # wide it is: wait for it rather than draw the desktop layout on a phone and
+    # then jump. The size arrives in a moment and reruns the app.
+    st.markdown('<div class="cv-wait">Loading the Coach View...</div>', unsafe_allow_html=True)
+    st.stop()
+PHONE = layout.is_phone(win_w)
+V.set_phone(PHONE)
+if PHONE:
+    inject_phone_css()
+tour.show(phone=PHONE)        # first-visit walkthrough (once per browser)
 if st.session_state.pop("restored", False) and "messages" not in st.session_state:
     # Signed back in from the cookie: carry on this session's Wharf-ai chat.
     st.session_state["messages"] = U.load_chat(st.session_state.get("sid"))
-SZ = layout.sizes(win_h, win_w)
+SZ = layout.phone_sizes(win_h, win_w) if PHONE else layout.sizes(win_h, win_w)
 
 team_df = D.load_team()
 player_df = D.load_players()
@@ -55,6 +69,7 @@ AVATARS = {"user": os.path.join(ASSETS, "supporter.svg"),        # supporter in 
            "assistant": os.path.join(ASSETS, "anchor.svg")}      # Wharf-ai's anchor
 PANEL_H = SZ["panel"]       # Wharf-ai panel height (px), level with the dashboard bottom
 HISTORY_H = SZ["history"]   # scrolling area inside the panel
+PHONE_PROMPTS = 3           # suggested questions on a phone
 TOOL_LABELS = {
     "team_games": "listing games", "team_aggregate": "averaging team stats",
     "correlate": "checking a correlation", "quarter_breakdown": "breaking down quarters",
@@ -252,7 +267,10 @@ def chat_panel(season, baseline, focus=None):
         chat_header(f"Answers from the match data only · {mine}/{mine_limit} of your questions today")
         day_capped, login_capped = asked >= limit, mine >= mine_limit
     capped = day_capped or login_capped
-    history = st.container(height=HISTORY_H, border=False, key="wa_history")
+    # On a phone the panel is as tall as its content until a chat starts, then
+    # the chat scrolls inside about half the screen so the dashboard stays close.
+    history_h = (HISTORY_H if msgs else "content") if PHONE else HISTORY_H
+    history = st.container(height=history_h, border=False, key="wa_history")
     with history:
         insight = st.session_state[key]
         if insight:
@@ -268,8 +286,9 @@ def chat_panel(season, baseline, focus=None):
             # Fill the panel to the bottom: as many suggestions as fit under the insight.
             st.markdown('<div class="wa-sub">Try asking</div>', unsafe_allow_html=True)
             longest = max(pool, key=len) if pool else insight  # the card is as tall as this
-            shown = fitting_prompts(example_prompts(season, baseline, focus), longest,
-                                    win_w, HISTORY_H)
+            shown = (example_prompts(season, baseline, focus)[:PHONE_PROMPTS] if PHONE else
+                     fitting_prompts(example_prompts(season, baseline, focus), longest,
+                                     win_w, HISTORY_H))
             for i, q in enumerate(shown):
                 if st.button(q, key=f"ex_{i}", width="stretch",
                              disabled=client is None or capped):
@@ -297,7 +316,9 @@ def chat_panel(season, baseline, focus=None):
             st.markdown('<div class="wa-sub wa-earlier">Questions for this page</div>',
                         unsafe_allow_html=True)
             fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
-            for i, q in enumerate(fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70)):
+            page_qs = (fresh[:PHONE_PROMPTS] if PHONE else
+                       fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70))
+            for i, q in enumerate(page_qs):
                 if st.button(q, key=f"pq_{i}", width="stretch",
                              disabled=client is None or capped):
                     clicked = q
@@ -310,6 +331,13 @@ def chat_panel(season, baseline, focus=None):
                    else f"You've used your {mine_limit} questions for today" if login_capped
                    else "Ask Wharf-ai about the data")
     typed = st.chat_input(placeholder, disabled=client is None or capped)
+    if PHONE and msgs:
+        # A button and a script, not a #link: Streamlit's page scrolls inside
+        # its own container, where the browser's jump to an anchor lands wrong.
+        if st.button("Dashboard ↓", key="jump_dash", type="tertiary"):
+            components.html(
+                "<script>var e=window.parent.document.getElementById('cv-dash');"
+                "if(e){e.scrollIntoView({block:'start'});}</script>", height=0)
     pending = st.session_state.pop("pending_prompt", None)  # sent from a deep dive
     prompt = typed or clicked or (pending if client is not None else None)
     if not prompt:
@@ -388,7 +416,9 @@ def chat_panel(season, baseline, focus=None):
 
 
 # ------------------------------------------------------------- layout
-main, side = st.columns([3.55, 1])
+# Desktop: one screen, the dashboard on the left and Wharf-ai down the right.
+# Phone (layout.PHONE_W): one scrolling column: band, controls, Wharf-ai, then
+# the dashboard's cards one under another.
 focus = None
 league = D.load_league()
 CLUBS = sorted(t for t in league["team"].unique() if t != "Fremantle") if league is not None else []
@@ -407,99 +437,138 @@ def _game_label(season, rnd):
 nav.apply_pending(all_seasons, _game_label,
                   lambda s: D.player_list(D.players_season(player_df, s)), lambda: CLUBS)
 
-with main:
-    h1, h2, h3, h4, h5, h6 = st.columns([4.4, 0.84, 1.66, 0.98, 0.24, 0.24],
-                                         vertical_alignment="center")
-    with h2:
-        season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
-                                      key="season", label_visibility="collapsed")
-    with h3:
-        views = [v for v in nav.VIEWS if v != "Scout" or league is not None]
-        view = st.segmented_control("View", views, default="Season",
-                                    key="view", label_visibility="collapsed") or "Season"
-    season = season or all_seasons[-1]
-    baseline = D.baseline_season(season, all_seasons)
-    tdf = D.team_season(team_df, season)
-    pdf_season = D.players_season(player_df, season)
-    pos = scout = player = game_round = None
+if PHONE:
+    band_slot = st.container()
+    with st.container(key="m_ctrl"):
+        h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
+    pick_slot = st.container()
+    chat_slot = st.container(border=True, key="card_wharfai")
+    main = st.container()
+else:
+    main, side = st.columns([3.55, 1])
+    with main:
+        h1, h2, h3, h4, h5, h6 = st.columns([4.4, 0.84, 1.66, 0.98, 0.24, 0.24],
+                                             vertical_alignment="center")
+
+with h2:
+    season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
+                                  key="season", label_visibility="collapsed")
+with h3:
+    views = [v for v in nav.VIEWS if v != "Scout" or league is not None]
+    if st.session_state.get("view") not in views:
+        st.session_state["view"] = "Season"
+    if PHONE:  # four buttons don't fit next to the season at phone width
+        view = st.selectbox("View", views, key="view", label_visibility="collapsed")
+    else:
+        view = st.segmented_control("View", views, key="view",
+                                    label_visibility="collapsed") or "Season"
+season = season or all_seasons[-1]
+baseline = D.baseline_season(season, all_seasons)
+tdf = D.team_season(team_df, season)
+pdf_season = D.players_season(player_df, season)
+pos = scout = player = game_round = None
+
+
+def _pick_and_band():
+    """The picker (game, player or club) and band slots for this view."""
+    if PHONE:
+        return pick_slot, band_slot
+    if view == "Season":
+        return None, h1
     with h1:
-        if view == "Scout" and league is not None:
-            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
-            if st.session_state.get("scout_team") not in CLUBS:
-                last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
-                st.session_state["scout_team"] = last_opp if last_opp in CLUBS else CLUBS[0]
-            with pick:
-                scout = st.selectbox("Opponent", CLUBS, key="scout_team",
-                                     label_visibility="collapsed")
-            with band:
-                lad = D.ladder(league, season)
-                games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
-                last5 = [(r.result, f"{r.api_round} v {r.opponent}: {r.score_for} to {r.score_against}")
-                         for r in games.itertuples()]
-                scout_band(scout, season, lad.loc[scout], last5)
-            focus = f"the opponent scout report for {scout}, {season} season"
-        elif view == "Player":
-            names = D.player_list(pdf_season)
-            if st.session_state.get("player_pick") not in names:
-                st.session_state["player_pick"] = names[0]
-            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
-            with pick:
-                player = st.selectbox("Player", names, key="player_pick",
-                                      label_visibility="collapsed")
-            with band:
-                details = D.player_details(player_df, player, season)
-                player_band(player, season, pdf_season[pdf_season["player"] == player],
-                            details=details, photo_url=player_photo(details.get("player_id"), season))
-            focus = f"the player profile for {player}, {season} season"
-        elif view == "Match" and len(tdf):
-            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
-            choices = D.game_choices(tdf)
-            with pick:
-                label = st.selectbox("Game", [c[0] for c in choices], key=f"game_{season}",
-                                     label_visibility="collapsed")
-            pos = dict(choices)[label]
-            game = tdf.iloc[pos]
-            game_round = game["round"]
-            with band:
-                match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
-            focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
-                     f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}")
-        else:
-            last = tdf.tail(5)
-            form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
-                    for r in last.itertuples()]
-            note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]}, "
-                    f"{tdf['game_dt'].iloc[-1]:%d %b}") if len(tdf) else "No games"
-            if baseline is not None:
-                note += f" · vs {baseline}"
-            header_band(season, D.record(tdf), form, note)
+        pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
+    return pick, band
+
+
+pick, band = _pick_and_band()
+if view == "Scout" and league is not None:
+    if st.session_state.get("scout_team") not in CLUBS:
+        last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
+        st.session_state["scout_team"] = last_opp if last_opp in CLUBS else CLUBS[0]
+    with pick:
+        scout = st.selectbox("Opponent", CLUBS, key="scout_team", label_visibility="collapsed")
+    with band:
+        lad = D.ladder(league, season)
+        games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
+        last5 = [(r.result, f"{r.api_round} v {r.opponent}: {r.score_for} to {r.score_against}")
+                 for r in games.itertuples()]
+        scout_band(scout, season, lad.loc[scout], last5)
+    focus = f"the opponent scout report for {scout}, {season} season"
+elif view == "Player":
+    names = D.player_list(pdf_season)
+    if st.session_state.get("player_pick") not in names:
+        st.session_state["player_pick"] = names[0]
+    with pick:
+        player = st.selectbox("Player", names, key="player_pick", label_visibility="collapsed")
+    with band:
+        details = D.player_details(player_df, player, season)
+        player_band(player, season, pdf_season[pdf_season["player"] == player],
+                    details=details, photo_url=player_photo(details.get("player_id"), season))
+    focus = f"the player profile for {player}, {season} season"
+elif view == "Match" and len(tdf):
+    choices = D.game_choices(tdf)
+    with pick:
+        label = st.selectbox("Game", [c[0] for c in choices], key=f"game_{season}",
+                             label_visibility="collapsed")
+    pos = dict(choices)[label]
+    game = tdf.iloc[pos]
+    game_round = game["round"]
+    with band:
+        match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
+    focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
+             f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}")
+else:
+    last = tdf.tail(5)
+    form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
+            for r in last.itertuples()]
+    note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]}, "
+            f"{tdf['game_dt'].iloc[-1]:%d %b}") if len(tdf) else "No games"
+    if baseline is not None:
+        note += f" · vs {baseline}"
+    with band:
+        header_band(season, D.record(tdf), form, note)
+
+
+def deep_dive_menu():
+    # A dropdown rather than a popover: it closes itself on a pick, so it
+    # never sits on top of the dialog it opens.
+    st.selectbox("Deep dives", list(DEEP_DIVES), index=None, placeholder="Deep dives",
+                 key="deep_dive", label_visibility="collapsed", on_change=_pick_deep_dive)
+
+
+if not PHONE:
     with h4:
-        # A dropdown rather than a popover: it closes itself on a pick, so it
-        # never sits on top of the dialog it opens.
-        st.selectbox("Deep dives", list(DEEP_DIVES), index=None, placeholder="Deep dives",
-                     key="deep_dive", label_visibility="collapsed", on_change=_pick_deep_dive)
-    with h5:
-        # The walkthrough has its own button (it also runs once, on first sign-in).
-        if st.button("?", key="tour_btn", help="Take the app tour"):
-            tour.replay()
-            st.rerun()
-    with h6:
-        who = (auth.current_user() or {}).get("email")
-        if st.button("", icon=":material/logout:", key="signout_btn",
-                     help=f"Sign out ({who})" if who else "Sign out"):
-            auth.sign_out()
-    nav.write_url(season, view, game=game_round, player=player, opp=scout)
-    dive = st.session_state.pop("open_deep_dive", None)
-    if dive == "Player map":
-        DD.player_map(player_df, season)
-    elif dive == "Year on year":
-        DD.year_on_year(player_df, all_seasons)
-    elif dive == "Opponents":
-        DD.opponents(team_df, all_seasons)
-    elif dive == "Quarter-time check":
-        DD.quarter_time(team_df, all_seasons)
-    elif dive == "Wharf-ai usage":
-        DD.usage_log()
+        deep_dive_menu()
+with h5:
+    # The walkthrough has its own button (it also runs once, on first sign-in).
+    if st.button("?", key="tour_btn", help="Take the app tour"):
+        tour.replay()
+        st.rerun()
+with h6:
+    who = (auth.current_user() or {}).get("email")
+    if st.button("", icon=":material/logout:", key="signout_btn",
+                 help=f"Sign out ({who})" if who else "Sign out"):
+        auth.sign_out()
+nav.write_url(season, view, game=game_round, player=player, opp=scout)
+dive = st.session_state.pop("open_deep_dive", None)
+if dive == "Player map":
+    DD.player_map(player_df, season)
+elif dive == "Year on year":
+    DD.year_on_year(player_df, all_seasons)
+elif dive == "Opponents":
+    DD.opponents(team_df, all_seasons)
+elif dive == "Quarter-time check":
+    DD.quarter_time(team_df, all_seasons)
+elif dive == "Wharf-ai usage":
+    DD.usage_log()
+
+if PHONE:
+    with chat_slot:
+        chat_panel(season, baseline, focus)
+
+with main:
+    if PHONE:
+        st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
     if scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
     elif player is not None:
@@ -508,6 +577,11 @@ with main:
         V.render_match(team_df, player_df, season, pos, SZ)
     else:
         V.render(team_df, player_df, season, baseline, SZ)
+    if PHONE:
+        with st.container(key="m_more"):
+            st.markdown('<div class="wa-sub">More</div>', unsafe_allow_html=True)
+            deep_dive_menu()
 
-with side, st.container(border=True, height=PANEL_H, key="card_wharfai"):
-    chat_panel(season, baseline, focus)
+if not PHONE:
+    with side, st.container(border=True, height=PANEL_H, key="card_wharfai"):
+        chat_panel(season, baseline, focus)

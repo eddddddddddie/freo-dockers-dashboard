@@ -124,6 +124,24 @@ panel height and player-form row count, tuned at 1440x790 and scaled from there 
 give up extra height because titles wrap). The first run uses the 1440x790 design size.
 Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`. After any layout
 change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
+- Phone layout (window narrower than `layout.PHONE_W` = 700px; `app.PHONE`, `views.set_phone`,
+  `theme.inject_phone_css`): one scrolling column instead of one screen. Order: band, a controls
+  row (season, view dropdown, ?, sign out; kept on one line by CSS because Streamlit stacks
+  columns below 640px), the picker for Match/Player/Scout, Wharf-ai (insight, 3 suggestions,
+  chat box; once a chat starts it scrolls inside about half the screen, with a "Dashboard ↓"
+  button that scrolls by script, since a #anchor link lands in the wrong place in Streamlit's
+  scrolling container), then the cards one per row, and Deep dives at the bottom. Season on a
+  phone: tiles 2 to a row, recent games as tappable buttons (8, then "Show all") instead of the
+  game strip, then where we win, drivers, quarters, role leaders, player form (the 6-game
+  heatmap reads fine at 390px). Player grids keep 6 columns (`views.PHONE_GRID`). Cards grow
+  with their content (`views._h`), chart dragging is off so a swipe scrolls the page, tap
+  targets are at least 40 to 44px, and the tour has a shorter phone version (`PHONE_STEPS`).
+  First run: the app asks for the window size before sign-in, and if someone is signed in
+  straight away (cookie, Google) it shows "Loading the Coach View..." until the size arrives
+  (the viewport component is told `need` so it resends even if the tab sent it before), so a
+  phone never flashes the desktop layout. Landscape phones and tablets (700px and wider) get the
+  desktop layout. `tests/test_ui.py::test_phone_layout_scrolls_one_column` checks 375x667,
+  390x844 and 412x915.
 - Four views: Season, Match, Player, Scout (`views.render*`). Each band leads with one big number
   (record, margin, the player's main average, ladder spot); secondary figures hide below 1760px.
   Tiles are 6 per view (grid sized from the count). Text is 12px minimum. Every card has a

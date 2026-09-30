@@ -218,6 +218,9 @@ def inject_css():
           div[data-testid="stElementContainer"]:has(iframe[title*="tour"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
 
+          /* Shown while the app waits for the window size on its first run */
+          .cv-wait { margin:30vh 0 0; text-align:center; color:var(--muted); font-weight:600; }
+
           /* Login */
           .login-head { margin:18vh 0 14px; text-align:center; }
           .login-head b { display:block; font-size:1.5rem; font-weight:800; letter-spacing:-.5px; color:var(--ink); }
@@ -306,6 +309,55 @@ def inject_css():
           .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }
           .st-key-wa_history div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def inject_phone_css():
+    """Extra rules for the phone layout (app.PHONE): one scrolling column,
+    touch-sized targets, text that wraps instead of being cut off."""
+    st.markdown(
+        """
+        <style>
+          .block-container { padding:8px 10px 32px !important; }
+          /* Streamlit stacks columns below 640px; the controls row stays one line. */
+          .st-key-m_ctrl div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
+          .st-key-m_ctrl div[data-testid="stColumn"] { min-width:0 !important; width:auto !important; }
+          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(1) { flex:1 1 0 !important; }
+          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(2) { flex:1.25 1 0 !important; }
+          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(n+3) { flex:0 0 40px !important; }
+          .st-key-tour_btn button, .st-key-signout_btn button { width:40px; height:40px; min-height:40px; }
+          div[data-testid="stButtonGroup"] button { min-height:40px; padding:4px 10px; }
+          div[data-testid="stButtonGroup"] button p { font-size:.85rem; }
+          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:40px; font-size:.9rem; }
+          div[data-testid="stButton"] button { min-height:44px; }
+          div[data-testid="stButton"] button p { font-size:.88rem; }
+          div[data-testid="stButton"] button[kind="tertiary"] { min-height:36px; }
+
+          /* Bands wrap onto a second line instead of cutting the title off. */
+          .cv-band { height:auto; min-height:52px; flex-wrap:wrap; row-gap:6px; column-gap:14px;
+            padding:9px 12px; }
+          .cv-band .ttl { flex:1 1 100%; }
+          .cv-band.player .ttl { flex:1 1 0; }  /* the initials or photo sit beside the name */
+          .cv-band .ttl small { white-space:normal; }
+
+          /* Tiles two to a row */
+          .cv-tiles { grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }
+          .cv-tile .val { font-size:1.3rem; }
+
+          /* Card text wraps; there is room to scroll */
+          .card-title, .card-take, .card-title .take { white-space:normal; }
+          .card-title .key { display:inline-block; margin-left:8px; }
+          div[class*="st-key-card_"] { padding:10px 12px; }
+          .tp-row { grid-template-columns:88px 50px 1fr 50px; gap:6px; }
+          .tp-f, .tp-o { font-size:.8rem; }
+          .st-key-jump_dash { display:flex; justify-content:flex-end; }
+          .st-key-jump_dash button p { font-weight:700; color:var(--brand); }
+          div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
+            position:absolute; width:0; height:0; overflow:hidden; margin:0; }
+          .st-key-m_more { margin-top:6px; }
         </style>
         """,
         unsafe_allow_html=True,

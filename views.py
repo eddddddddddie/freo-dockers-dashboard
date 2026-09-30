@@ -52,8 +52,24 @@ def card(name, height="content"):
     return st.container(border=True, height=height, key=f"card_{name}")
 
 
+PHONE = False  # set by the app: the phone layout (one scrolling column, touch)
+
+
+def set_phone(flag):
+    global PHONE
+    PHONE = bool(flag)
+
+
+def _h(height):
+    """A card's fixed height on desktop; on a phone cards grow with their content."""
+    return "content" if PHONE else height
+
+
 def _plot(fig, key=None):
-    """Draw a chart. With a key, clicks on its points come back as an event."""
+    """Draw a chart. With a key, clicks on its points come back as an event.
+    On a phone, dragging a chart would zoom it instead of scrolling the page."""
+    if PHONE:
+        fig.update_layout(dragmode=False)
     if key is None:
         st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
         return None
@@ -77,7 +93,9 @@ def _open_player(event, season, strip_avg=False):
 
 def render(team_df, player_df, season, baseline, sz):
     """sz: pixel sizes from layout.sizes(); "mid"/"bot" are the chart heights of
-    the middle and bottom rows, "form_rows" the players shown in player form."""
+    the middle and bottom rows, "form_rows" the players shown in player form.
+    On a phone the cards run one under another, the game strip replaced by a
+    list of recent games."""
     MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK
     tdf = D.team_season(team_df, season)
     pdf = D.players_season(player_df, season)
@@ -85,72 +103,129 @@ def render(team_df, player_df, season, baseline, sz):
 
     tiles_row(D.tiles(team_df, season, baseline), baseline)
 
+    def strip():
+        with card("strip"):
+            card_title("Game strip", "click a game to open it",
+                       keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])],
+                       takeaway=T.strip(tdf))
+            rows, z, hover, labels = D.game_strip(tdf)
+            ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), MID_H),
+                       key=f"strip_{season}")
+            _open_game(ev, labels, season)
+
+    def recent():
+        with card("recent"):
+            recent_games(tdf, season)
+
+    def wherewin():
+        with card("wherewin"):
+            wc = D.win_conditions(tdf)
+            card_title("Where we win", keys=[("Freo won it", COLORS["freo"]),
+                                             ("Opp won it", COLORS["opp"])],
+                       takeaway=T.where_we_win(wc))
+            _plot(CH.win_conditions_bars(wc, MID_H))
+
+    def quarters():
+        with card("quarters"):
+            t, s = st.columns([0.8, 1.2], vertical_alignment="center")
+            with s:
+                qview = st.segmented_control("Quarter view", ["Points", "W v L"],
+                                             default="Points", key="qview",
+                                             label_visibility="collapsed") or "Points"
+            qp, rm = D.quarter_pattern(tdf), D.running_margin(tdf)
+            with t:
+                card_title("Quarters")  # colour key sits inside the chart
+            st.markdown(f'<div class="card-take">{T.quarters(qp) if qview == "Points" else T.running(rm)}'
+                        '</div>', unsafe_allow_html=True)
+            if qview == "Points":
+                _plot(CH.quarter_bars(qp, MID_H - 12))
+            else:
+                _plot(CH.running_margin_lines(rm, MID_H - 12))
+
+    def role_leaders():
+        # Same height as its neighbours; on very small windows the list scrolls
+        # inside the card instead of pushing the page past the screen.
+        with card("leaders", height=_h(max(BOT_H + 40 + TK, 200))):
+            leaders = D.role_leaders(pdf)
+            card_title("Role leaders", "most games led", takeaway=T.leaders(leaders))
+            gk = D.top_goalkickers(pdf, n=1)
+            if len(gk):
+                leaders.append({"role": "Top goalkicker", "player": gk.index[0],
+                                "value": f"{int(gk['goals'].iloc[0])}",
+                                "sub": f"goals in {int(gk['games'].iloc[0])} games"})
+            leaders_list(leaders)
+
+    def form():
+        with card("form"):
+            stat = st.session_state.get("form_stat") or "Disposals"
+            vals, avgs, _ = D.form_matrix(pdf, form_stats.get(stat, "disposals"),
+                                          n_players=sz["form_rows"])
+            t, s = st.columns([2.6, 1], vertical_alignment="center")
+            with t:
+                card_title("Player form", "last 6 games vs own season avg · "
+                           + ("tap a player" if PHONE else "click a player"),
+                           keys=[("below", RAMP[0]), ("above", RAMP[-1])],
+                           takeaway=T.form(vals, avgs) if len(vals) else "")
+            with s:
+                st.selectbox("Form stat", list(form_stats), key="form_stat",
+                             label_visibility="collapsed")
+            if len(vals):
+                ev = _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38),
+                           key=f"form_{season}_{stat}")
+                _open_player(ev, season, strip_avg=True)
+            else:
+                st.caption("Not enough games yet.")
+
+    def drivers():
+        with card("drivers"):
+            dr = D.margin_drivers(tdf)
+            card_title("What drives our margin", "r, not cause", takeaway=T.drivers(dr))
+            _plot(CH.drivers_bar(dr, BOT_H))
+
+    if PHONE:
+        for part in (recent, wherewin, drivers, quarters, role_leaders, form):
+            part()
+        return
+
     # ---- middle row
     c1, c2, c3 = st.columns([2.2, 1.35, 1.15])
-    with c1, card("strip"):
-        card_title("Game strip", "click a game to open it",
-                   keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])],
-                   takeaway=T.strip(tdf))
-        rows, z, hover, labels = D.game_strip(tdf)
-        ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), MID_H),
-                   key=f"strip_{season}")
-        _open_game(ev, labels, season)
-    with c2, card("wherewin"):
-        wc = D.win_conditions(tdf)
-        card_title("Where we win", keys=[("Freo won it", COLORS["freo"]),
-                                         ("Opp won it", COLORS["opp"])],
-                   takeaway=T.where_we_win(wc))
-        _plot(CH.win_conditions_bars(wc, MID_H))
-    with c3, card("quarters"):
-        t, s = st.columns([0.8, 1.2], vertical_alignment="center")
-        with s:
-            qview = st.segmented_control("Quarter view", ["Points", "W v L"],
-                                         default="Points", key="qview",
-                                         label_visibility="collapsed") or "Points"
-        qp, rm = D.quarter_pattern(tdf), D.running_margin(tdf)
-        with t:
-            card_title("Quarters")  # colour key sits inside the chart
-        st.markdown(f'<div class="card-take">{T.quarters(qp) if qview == "Points" else T.running(rm)}'
-                    '</div>', unsafe_allow_html=True)
-        if qview == "Points":
-            _plot(CH.quarter_bars(qp, MID_H - 12))
-        else:
-            _plot(CH.running_margin_lines(rm, MID_H - 12))
+    with c1:
+        strip()
+    with c2:
+        wherewin()
+    with c3:
+        quarters()
 
     # ---- bottom row
     b1, b2, b3 = st.columns([1.05, 2.45, 1.2])
-    # Same height as its neighbours; on very small windows the list scrolls
-    # inside the card instead of pushing the page past the screen.
-    with b1, card("leaders", height=max(BOT_H + 40 + TK, 200)):
-        leaders = D.role_leaders(pdf)
-        card_title("Role leaders", "most games led", takeaway=T.leaders(leaders))
-        gk = D.top_goalkickers(pdf, n=1)
-        if len(gk):
-            leaders.append({"role": "Top goalkicker", "player": gk.index[0],
-                            "value": f"{int(gk['goals'].iloc[0])}",
-                            "sub": f"goals in {int(gk['games'].iloc[0])} games"})
-        leaders_list(leaders)
-    with b2, card("form"):
-        stat = st.session_state.get("form_stat") or "Disposals"
-        vals, avgs, _ = D.form_matrix(pdf, form_stats.get(stat, "disposals"),
-                                      n_players=sz["form_rows"])
-        t, s = st.columns([2.6, 1], vertical_alignment="center")
-        with t:
-            card_title("Player form", "last 6 games vs own season avg · click a player",
-                       keys=[("below", RAMP[0]), ("above", RAMP[-1])],
-                       takeaway=T.form(vals, avgs) if len(vals) else "")
-        with s:
-            st.selectbox("Form stat", list(form_stats), key="form_stat",
-                         label_visibility="collapsed")
-        if len(vals):
-            ev = _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38), key=f"form_{season}_{stat}")
-            _open_player(ev, season, strip_avg=True)
-        else:
-            st.caption("Not enough games yet.")
-    with b3, card("drivers"):
-        dr = D.margin_drivers(tdf)
-        card_title("What drives our margin", "r, not cause", takeaway=T.drivers(dr))
-        _plot(CH.drivers_bar(dr, BOT_H))
+    with b1:
+        role_leaders()
+    with b2:
+        form()
+    with b3:
+        drivers()
+
+
+RECENT_N = 8  # games in the phone's recent games list before "Show all"
+
+
+def recent_games(tdf, season):
+    """Phone: the season's games as a list, newest first, each a button that
+    opens the game in Match view (the game strip is too narrow to read or tap)."""
+    show_all = st.session_state.get(f"recent_all_{season}", False)
+    games = tdf.iloc[::-1] if show_all else tdf.iloc[::-1].head(RECENT_N)
+    card_title("Recent games" if not show_all else "Every game", "tap a game to open it",
+               takeaway=T.strip(tdf))
+    for r in games.itertuples():
+        label = (f"**{r.result}** · {r.round} v {r.opponent} · "
+                 f"{int(r.freo_score)}-{int(r.opp_score)} ({int(r.margin):+d})")
+        if st.button(label, key=f"rg_{season}_{r.round}", width="stretch"):
+            nav.go(view="Match", season=season, game=r.round)
+    if len(tdf) > RECENT_N:
+        more = "Show fewer" if show_all else f"Show all {len(tdf)} games"
+        if st.button(more, key=f"rg_more_{season}", type="tertiary"):
+            st.session_state[f"recent_all_{season}"] = not show_all
+            st.rerun()
 
 
 # ---- Match mode ------------------------------------------------------------
@@ -162,6 +237,8 @@ MATCH_STATS = [
     ("PA", "pressure_acts"), ("R50", "rebound_50s"), ("G", "goals"), ("B", "behinds"),
     ("RP", "rating_points"),
 ]
+# The columns kept in player grids on a phone (about 50px each fits 390px wide).
+PHONE_GRID = {"D", "CP", "CLR", "T", "MG", "G"}
 BREAK_NAMES = {"Q1": "quarter time", "Q2": "half time", "Q3": "three quarter time",
                "Q4": "the siren"}
 
@@ -181,7 +258,7 @@ def render_match(team_df, player_df, season, pos, sz):
     tiles_row(D.match_tiles(team_df, season, pos), "Season avg")
 
     c1, c2, c3 = st.columns([1.5, 1.25, 1])
-    with c1, card("tape", height=MID_H + 40 + TK):
+    with c1, card("tape", height=_h(MID_H + 40 + TK)):
         rows = D.tale_of_the_tape(tdf, pos)
         card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"]),
                                              ("season avg share", COLORS["ink"])],
@@ -193,16 +270,17 @@ def render_match(team_df, player_df, season, pos, sz):
         card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg win", COLORS["win"]),
                                       ("Avg loss", COLORS["loss"])], takeaway=take)
         _plot(CH.game_flow_lines(flow, avg, MID_H))
-    with c3, card("gameleaders", height=MID_H + 40 + TK):
+    with c3, card("gameleaders", height=_h(MID_H + 40 + TK)):
         leaders, goals = D.match_leaders(pdf, game)
         card_title("Game leaders", takeaway=T.match_leaders(goals))
         leaders_list(leaders)
 
-    with card("players", height=BOT_H + 40 + TK):
-        stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns]
+    with card("players", height=_h(BOT_H + 40 + TK)):
+        stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns
+                 and (not PHONE or lbl in PHONE_GRID)]
         vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
         card_title("Players this game", "shaded against each player's own season average · "
-                   "click a player", keys=[("below", RAMP[0]), ("above", RAMP[-1])],
+                   + ("tap a player" if PHONE else "click a player"), keys=[("below", RAMP[0]), ("above", RAMP[-1])],
                    takeaway=T.match_players(vals))
         grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
         ev = _plot(CH.match_player_grid(vals, pct, [lbl for lbl, _ in stats], grid_h),
@@ -259,9 +337,10 @@ def render_player(player_df, season, baseline, player, sz):
         else:
             st.caption(f"Needs {D.MIN_GAMES} games for a squad rank.")
 
-    with card("plog", height=BOT_H + 40 + TK):
+    with card("plog", height=_h(BOT_H + 40 + TK)):
         log = D.player_log(pdf, player)
-        stats = [(l, c) for l, c in LOG_STATS if c in log.columns]
+        stats = [(l, c) for l, c in LOG_STATS if c in log.columns
+                 and (not PHONE or l in PHONE_GRID)]
         card_title("Every game", "shaded against the player's own season average",
                    keys=[("below", RAMP[0]), ("above", RAMP[-1])],
                    takeaway=T.player_best(log, "disposals", "Disposals"))
@@ -311,7 +390,7 @@ def render_scout(team_df, lg, season, opp, sz):
         card_title("Their form", f"last {len(games)} games, green win, red loss",
                    takeaway=T.scout_form(games))
         _plot(CH.form_bars(games, BOT_H))
-    with b2, card("h2h", height=BOT_H + 40 + TK):
+    with b2, card("h2h", height=_h(BOT_H + 40 + TK)):
         rows = D.head_to_head(team_df, opp)
         card_title("Against Fremantle", "every game, both seasons", takeaway=T.h2h(rows))
         if len(rows):

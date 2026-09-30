@@ -47,6 +47,24 @@
      text: "Replay this tour any time with this ? button."}
   ];
 
+  // The phone layout: one scrolling column, touch instead of hover and click.
+  var PHONE_STEPS = [
+    {title: "Welcome to the Coach View",
+     text: "The season in one scrolling page, with Wharf-ai, an analyst you can question, at the top. This quick tour shows where everything is."},
+    {el: ".cv-band", title: "At a glance",
+     text: "Record, average margin and the last five results."},
+    {el: ".st-key-season", title: "Pick a season", text: "Switch between 2025 and 2026."},
+    {el: ".st-key-view", title: "Four views",
+     text: "Season, Match (one game), Player (one player's season) and Scout (any club against the league)."},
+    {el: ".st-key-card_wharfai", title: "Ask Wharf-ai",
+     text: "Tap a suggestion or type a question. Every number it gives is calculated from the data."},
+    {el: ".cv-tiles", title: "Key numbers",
+     text: "Season value, change on last season (green is good, red is not) and a trend line per game."},
+    {el: ".st-key-card_recent", title: "Recent games",
+     text: "Tap a game to open it in Match view. The cards below cover where we win, what drives the margin, quarters and players."},
+    {el: ".st-key-tour_btn", title: "That's it", text: "Replay this tour any time with this ? button."}
+  ];
+
   function load(cb) {
     if (P.driver && P.driver.js) return cb();
     if (!doc.getElementById("freo-driver-css")) {
@@ -75,7 +93,7 @@
   }
 
   function start() {
-    var steps = STEPS.filter(function (s) { return !s.el || doc.querySelector(s.el); })
+    var steps = (P.__freoTourPhone ? PHONE_STEPS : STEPS).filter(function (s) { return !s.el || doc.querySelector(s.el); })
       .map(function (s) {
         var step = {popover: {title: s.title, description: s.text}};
         if (s.el) step.element = s.el;
@@ -111,7 +129,7 @@
       steps: [{element: ".st-key-tour_btn", popover: {
         title: "New here?",
         description: "Take a one-minute tour of the Coach View. You can start it any time with this ? button.",
-        side: "left", align: "start"}}],
+        side: P.__freoTourPhone ? "bottom" : "left", align: P.__freoTourPhone ? "end" : "start"}}],
       onNextClick: function () { take = true; d.destroy(); },
       onDestroyed: function () {
         P.__freoTourActive = false;
@@ -133,7 +151,7 @@
     P.__freoTourRunning = true;
     // Wait until every card the tour highlights has rendered (or 10 s), so no
     // step is dropped for an element that simply hasn't drawn yet.
-    var targets = STEPS.filter(function (s) { return s.el; }).map(function (s) { return s.el; });
+    var targets = (P.__freoTourPhone ? PHONE_STEPS : STEPS).filter(function (s) { return s.el; }).map(function (s) { return s.el; });
     var tries = 0, timer = setInterval(function () {
       var ready = targets.every(function (sel) { return doc.querySelector(sel); });
       if ((ready && doc.querySelector(".js-plotly-plot")) || ++tries > 40) {
@@ -147,6 +165,7 @@
   window.addEventListener("message", function (e) {
     if (e.data && e.data.type === "streamlit:render") {
       send("streamlit:setFrameHeight", {height: 0});
+      P.__freoTourPhone = !!(e.data.args || {}).phone;
       maybeStart((e.data.args || {}).force);
     }
   });

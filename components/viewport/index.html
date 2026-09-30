@@ -17,22 +17,23 @@
   // not resend it: every send reruns the app and would cut off a streaming answer.
   var store = (function () { try { return window.parent; } catch (e) { return window; } })();
   var timer = null;
-  function report() {
+  function report(force) {
     var s = size(), last = store.__freoViewportSent;
-    if (last && Math.abs(s.w - last.w) < 16 && Math.abs(s.h - last.h) < 16) return;
+    if (!force && last && Math.abs(s.w - last.w) < 16 && Math.abs(s.h - last.h) < 16) return;
     store.__freoViewportSent = s;
     send("streamlit:setComponentValue", {value: s, dataType: "json"});
   }
   window.addEventListener("message", function (e) {
     if (e.data && e.data.type === "streamlit:render") {
       send("streamlit:setFrameHeight", {height: 0});
-      report();
+      // need: Python has no size yet (a new session), so send even if unchanged.
+      report(!!(e.data.args || {}).need);
     }
   });
   try {
     window.parent.addEventListener("resize", function () {
       clearTimeout(timer);
-      timer = setTimeout(report, 250);
+      timer = setTimeout(function () { report(false); }, 250);
     });
     // Streamlit doesn't rerun on the browser's Back/Forward, so tell Python the
     // address changed; nav.apply_pending then moves to the view in the address.

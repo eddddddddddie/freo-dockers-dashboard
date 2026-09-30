@@ -19,12 +19,33 @@ DESIGN_H = 790          # usable height the fixed sizes were tuned for (1440x900
 MIN_H, MAX_H = 660, 1500
 
 
+PHONE_W = 700           # narrower than this gets the phone layout (one scrolling column)
+
+
 def window_size():
-    """(width, height) of the browser window, or the design size until known."""
-    v = _viewport(key="viewport", default=None)
+    """(width, height) of the browser window, or the design size until known.
+    Until a size has arrived the component is asked to send one even if this
+    browser tab already sent it (a new session in the same tab)."""
+    known = "window_size" in st.session_state
+    v = _viewport(key="viewport", default=None, need=not known)
     if isinstance(v, dict) and v.get("h"):
         st.session_state["window_size"] = (int(v["w"]), int(v["h"]))
     return st.session_state.get("window_size", (1440, DESIGN_H))
+
+
+def size_known():
+    return "window_size" in st.session_state
+
+
+def is_phone(width):
+    return width < PHONE_W
+
+
+def phone_sizes(height, width):
+    """Sizes for the phone layout: the page scrolls, so charts get a fixed,
+    readable height and the chat history about half the screen."""
+    return {"phone": True, "mid": 250, "bot": 300, "form_rows": 10,
+            "panel": None, "history": max(300, int(height * 0.55)), "width": width}
 
 
 def sizes(height, width=1440):
@@ -38,6 +59,7 @@ def sizes(height, width=1440):
     mid = int(238 + 0.45 * extra)
     bot = int(262 + 0.55 * extra)
     return {
+        "phone": False,
         "mid": mid,
         "bot": bot,
         "panel": int(722 + extra + wrap),

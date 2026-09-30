@@ -93,6 +93,41 @@ def test_every_view_fits_one_screen(browser, server, w, h):
     pg.close()
 
 
+PHONES = [(375, 667), (390, 844), (412, 915)]   # iPhone SE, iPhone 15, Pixel
+
+
+@pytest.mark.parametrize("w,h", PHONES)
+def test_phone_layout_scrolls_one_column(browser, server, w, h):
+    """On a phone: nothing wider than the screen, Wharf-ai above the dashboard,
+    tiles two to a row."""
+    ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    pg = ctx.new_page()
+    pg.goto(server)
+    pg.wait_for_selector("input[type=password]", timeout=60000)
+    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
+    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
+    pg.get_by_role("button", name="Sign in").click()   # stays signed in for the links below
+    for view in ["Season", "Match", "Player", "Scout"]:
+        if view != "Season":
+            pg.goto(f"{server}/?season=2026&view={view}")
+        pg.wait_for_selector(".js-plotly-plot", timeout=60000)
+        pg.wait_for_timeout(3000)
+        f = pg.evaluate("""() => {
+            const m = document.querySelector('[data-testid=stMain]');
+            const top = s => document.querySelector(s).getBoundingClientRect().top;
+            const lefts = [...document.querySelectorAll('.cv-tile')].map(t => Math.round(t.getBoundingClientRect().left));
+            return {docW: document.documentElement.scrollWidth, mainW: m.scrollWidth,
+                    exceptions: document.querySelectorAll('[data-testid=stException]').length,
+                    chatAbove: top('.st-key-card_wharfai') < top('.cv-tiles'),
+                    columns: new Set(lefts).size};
+        }""")
+        assert f["exceptions"] == 0, (view, f)
+        assert f["docW"] <= w and f["mainW"] <= w, (view, w, f)
+        assert f["chatAbove"] and f["columns"] == 2, (view, f)
+    ctx.close()
+
+
 def _click_cell(pg, card, n):
     """Press on the n-th clickable cell of a card's chart (the invisible layer)."""
     box = pg.locator(f".st-key-card_{card} .js-plotly-plot g.points path").nth(n).bounding_box()

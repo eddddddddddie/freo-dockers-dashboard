@@ -57,6 +57,22 @@ def test_match_and_scout_views_render(app):
         views = at.button_group(key="view")
 
 
+def test_phone_layout(app):
+    """Below layout.PHONE_W the app draws one column: a view dropdown, Wharf-ai
+    above the dashboard, and a list of recent games that open in Match."""
+    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
+    at.session_state["window_size"] = (390, 844)
+    at = at.run()
+    assert not at.exception, at.exception
+    games = [b for b in at.button if (b.key or "").startswith("rg_2026_")]
+    assert len(games) == 8 and games[0].label.startswith("**")   # newest first, 8 shown
+    for view in ["Match", "Player", "Scout", "Season"]:
+        at = at.selectbox(key="view").set_value(view).run()
+        assert not at.exception, (view, at.exception)
+    at = at.button(key=games[0].key).click().run()
+    assert at.session_state["view"] == "Match"
+
+
 def test_constant_time_compare():
     assert auth._matches("abc", "abc") and not auth._matches("abc", "abd")
 
