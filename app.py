@@ -138,7 +138,7 @@ def fitting_prompts(prompts, insight, win_w, history_h):
 
 # ------------------------------------------------------------ Wharf-ai
 DEEP_DIVES = ["Player map", "Year on year", "Opponents", "Quarter-time check",
-              "Wharf-ai usage", "App tour"]
+              "Wharf-ai usage"]
 
 
 def _pick_deep_dive():
@@ -303,7 +303,7 @@ nav.apply_pending(all_seasons, _game_label,
                   lambda s: D.player_list(D.players_season(player_df, s)), lambda: CLUBS)
 
 with main:
-    h1, h2, h3, h4 = st.columns([4.75, 0.84, 1.66, 1.02], vertical_alignment="center")
+    h1, h2, h3, h4, h5 = st.columns([4.62, 0.84, 1.66, 0.98, 0.24], vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")
@@ -360,16 +360,21 @@ with main:
             last = tdf.tail(5)
             form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
                     for r in last.itertuples()]
-            note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]} "
-                    f"({tdf['game_dt'].iloc[-1]:%d %b %Y})") if len(tdf) else "No games"
+            note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]}, "
+                    f"{tdf['game_dt'].iloc[-1]:%d %b}") if len(tdf) else "No games"
             if baseline is not None:
-                note += f" · changes vs {baseline}"
+                note += f" · vs {baseline}"
             header_band(season, D.record(tdf), form, note)
     with h4:
         # A dropdown rather than a popover: it closes itself on a pick, so it
         # never sits on top of the dialog it opens.
         st.selectbox("Deep dives", list(DEEP_DIVES), index=None, placeholder="Deep dives",
                      key="deep_dive", label_visibility="collapsed", on_change=_pick_deep_dive)
+    with h5:
+        # The walkthrough has its own button (it also runs once, on first sign-in).
+        if st.button("?", key="tour_btn", help="Take the app tour"):
+            tour.replay()
+            st.rerun()
     nav.write_url(season, view, game=game_round, player=player, opp=scout)
     dive = st.session_state.pop("open_deep_dive", None)
     if dive == "Player map":
@@ -382,9 +387,6 @@ with main:
         DD.quarter_time(team_df, all_seasons)
     elif dive == "Wharf-ai usage":
         DD.usage_log()
-    elif dive == "App tour":
-        tour.replay()
-        st.rerun()
     if scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
     elif player is not None:

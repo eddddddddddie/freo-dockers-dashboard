@@ -147,9 +147,12 @@ def inject_css():
             color:#fff; border-radius:8px; padding:7px 14px; height:52px;
             display:flex; align-items:center; gap:clamp(10px, 1.2vw, 22px); overflow:hidden;
           }
-          .cv-band .ttl { font-weight:800; font-size:1.08rem; letter-spacing:-.3px; white-space:nowrap; }
+          /* The title block gives way (its subtitle ellipsises) so a band never overflows. */
+          .cv-band .ttl { font-weight:800; font-size:1.08rem; letter-spacing:-.3px; white-space:nowrap;
+            flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
           .cv-band .ttl small { display:block; font-weight:500; font-size:.75rem; letter-spacing:0;
-            color:rgba(255,255,255,.72); }
+            color:rgba(255,255,255,.72); overflow:hidden; text-overflow:ellipsis; }
+          .cv-band .cv-stat { flex:none; }
           .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
           .cv-stat { line-height:1.05; white-space:nowrap; }
           .cv-stat b { font-size:1.08rem; font-weight:700; }
@@ -270,6 +273,10 @@ def inject_css():
           div[data-testid="stButton"] button p { font-size:.78rem; font-weight:500; text-align:left; }
           div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
           div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
+          .st-key-tour_btn button { width:34px; height:34px; min-height:34px; padding:0; border-radius:50%;
+            justify-content:center; border:1.5px solid var(--brand); color:var(--brand); }
+          .st-key-tour_btn button p { font-size:1rem; font-weight:800; text-align:center; }
+          .st-key-tour_btn button:hover { background:var(--brand); color:#fff; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
           .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
           .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }

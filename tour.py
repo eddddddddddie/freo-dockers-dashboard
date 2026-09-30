@@ -1,6 +1,6 @@
 """First-visit guided tour (components/tour): a step-by-step spotlight on each
 part of the Coach View, using driver.js. It runs once per browser after the
-first sign-in and again whenever `replay()` is called (Deep dives -> App tour).
+first sign-in and again whenever `replay()` is called (the ? button in the header).
 """
 
 import os

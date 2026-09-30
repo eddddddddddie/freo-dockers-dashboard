@@ -8,7 +8,7 @@ doesn't show. Watch and take notes; don't teach the app during the tasks.
 
 - One person per session, with you beside them. 30 minutes: 2 intro, 20 tasks, 8 debrief.
 - Their own laptop or the screen they would really use (a laptop, or the TV in the coaches' box).
-- Sign them in, then clear the tour so it plays for them: Deep dives, then App tour. Let them go
+- Sign them in, then start the tour with the ? button at the top right. Let them go
   through it or skip it, and note which.
 - Open the Wharf-ai usage log afterwards (Deep dives, then Wharf-ai usage): what they asked is
   part of the result.

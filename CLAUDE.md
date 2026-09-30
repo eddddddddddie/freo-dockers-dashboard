@@ -137,7 +137,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   blue). Collingwood charts in charcoal with a lighter grey for their opponents.
 - First-visit tour (`tour.py`, `components/tour`): driver.js 1.8.0 from jsDelivr, loaded into the
   app page; 13 steps spotlighting each part; runs once per browser (localStorage
-  `freoCoachTourDone_v1`), replay from Deep dives -> App tour. It waits until every target card
+  `freoCoachTourDone_v1`), replay with the ? button at the right of the header. It waits until every target card
   has rendered, and never starts over a running tour. The CSS that hides Streamlit's footer must
   not match `footer` generally: driver.js draws its buttons in a `<footer>`.
 - Match mode (`views.render_match`): pick one game (most recent first); the band shows the score

@@ -5,7 +5,7 @@
 <script>
 // First-visit guided tour of the Coach View (driver.js, loaded into the app page).
 // Runs once per browser (remembered in localStorage) and again whenever Python
-// passes a new `force` value (Deep dives -> App tour). Sends nothing back, so it
+// passes a new `force` value (the ? button in the header). Sends nothing back, so it
 // never reruns the app.
 (function () {
   var DONE_KEY = "freoCoachTourDone_v1";
@@ -26,7 +26,7 @@
     {el: ".st-key-view", title: "Four views",
      text: "Season, Match (one game against the season average), Player (one player's season) and Scout (any club against the league). The web address keeps your place, so you can bookmark or send a view."},
     {el: ".st-key-deep_dive", title: "Deep dives",
-     text: "Bigger views: player map, year on year, opponents, the opponent scout report, a quarter-time check and Wharf-ai usage. This tour is here too."},
+     text: "Bigger views: player map, year on year, opponents, a quarter-time check and Wharf-ai usage."},
     {el: ".cv-tiles", title: "Key numbers",
      text: "Season value, change on last season (green is good, red is not, grey has no good or bad) and a trend line with a point per game. Hover the line for each game."},
     {el: ".st-key-card_strip", title: "Game strip",
@@ -41,8 +41,8 @@
      text: "How closely each differential moves with the final margin. It shows association, not cause."},
     {el: ".st-key-card_wharfai", title: "Ask Wharf-ai",
      text: "Ask anything about the data, or tap a suggestion. Every number it gives is calculated from the data, it draws charts when they help, and it suggests follow-up questions."},
-    {title: "That's it",
-     text: "Replay this tour any time from Deep dives, then App tour."}
+    {el: ".st-key-tour_btn", title: "That's it",
+     text: "Replay this tour any time with this ? button."}
   ];
 
   function load(cb) {
