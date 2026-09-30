@@ -95,3 +95,15 @@ def test_insights_are_computed_sentences():
     for season, base in [(2026, 2025), (2025, None)]:
         pool = I.candidates(team, players, season, base)
         assert pool and all(any(ch.isdigit() for ch in c) for c in pool)
+
+
+def test_unlimited_users_skip_the_caps_and_the_shared_count(tmp_path, monkeypatch):
+    monkeypatch.setenv("USAGE_DB", str(tmp_path / "u.sqlite"))
+    monkeypatch.setenv("WHARF_UNLIMITED", "Owner@Example.com, second@example.com")
+    t = U.Tally()
+    U.record("q1", t, sid="g:owner", user_email="owner@example.com")
+    U.record("q2", t, sid="g:coach", user_email="coach@example.com")
+    U.record("q3", t, sid="pw-login")                       # password sign-in, no email
+    assert U.is_unlimited("OWNER@example.com ") and not U.is_unlimited("coach@example.com")
+    assert not U.is_unlimited(None) and not U.is_unlimited("")
+    assert U.questions_today() == 2   # the owner's question isn't counted

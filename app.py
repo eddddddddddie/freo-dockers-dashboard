@@ -201,10 +201,15 @@ def chat_panel(season, baseline, focus=None):
     moved = bool(msgs) and msgs[-1].get("page") != page
 
     sid = st.session_state.get("sid")
+    email = (auth.current_user() or {}).get("email")
     asked, limit = U.questions_today(), U.cap()
     mine, mine_limit = U.questions_this_login(sid), U.login_cap()
-    chat_header(f"Answers from the match data only · {mine}/{mine_limit} of your questions today")
-    day_capped, login_capped = asked >= limit, mine >= mine_limit
+    if U.is_unlimited(email):   # WHARF_UNLIMITED: no per-person or daily limit
+        chat_header(f"Answers from the match data only · {mine} questions today, no limit")
+        day_capped = login_capped = False
+    else:
+        chat_header(f"Answers from the match data only · {mine}/{mine_limit} of your questions today")
+        day_capped, login_capped = asked >= limit, mine >= mine_limit
     capped = day_capped or login_capped
     history = st.container(height=HISTORY_H, border=False, key="wa_history")
     with history:

@@ -9,10 +9,14 @@ The file lives next to the app (gitignored). On Streamlit Cloud the disk is
 not kept across restarts or redeploys, so the log and today's count start
 again after one; for permanent history, point USAGE_DB at persistent storage.
 
-Settings (environment or Streamlit secrets): WHARF_DAILY_CAP (default 50, shared
+Settings (environment or Streamlit secrets): WHARF_DAILY_CAP (default 100, shared
 by everyone), WHARF_USER_CAP (default 10 questions per person per day; with the
 username/password fallback a "person" is one sign-in), USAGE_DB (default
-wharf_usage.sqlite). WHARF_LOGIN_CAP is read as a fallback for WHARF_USER_CAP.
+wharf_usage.sqlite), WHARF_UNLIMITED (comma separated emails with no limits,
+e.g. the app owner; their questions don't count towards the shared daily cap;
+needs Google sign-in, which is how the app knows who someone is). Keep emails in
+secrets, not the code: the repo is public. WHARF_LOGIN_CAP is read as a fallback
+for WHARF_USER_CAP.
 """
 
 import json
@@ -24,7 +28,7 @@ from zoneinfo import ZoneInfo
 import settings
 
 TZ = ZoneInfo("Australia/Perth")
-DEFAULT_CAP = 50
+DEFAULT_CAP = 100
 DEFAULT_LOGIN_CAP = 10
 # claude-sonnet-5-5, US$ per million tokens: input, output, cache read, cache write (5 min).
 PRICES = {"input": 2.00, "output": 10.00, "cache_read": 0.20, "cache_write": 2.50}
@@ -57,9 +61,24 @@ def today():
     return datetime.now(TZ).strftime("%Y-%m-%d")
 
 
+def unlimited_emails():
+    raw = settings.get("WHARF_UNLIMITED") or ""
+    return {e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()}
+
+
+def is_unlimited(email):
+    return bool(email) and email.strip().lower() in unlimited_emails()
+
+
 def questions_today():
+    """Questions asked today by everyone except unlimited users (the shared cap)."""
+    exempt = sorted(unlimited_emails())
+    marks = ",".join("?" * len(exempt))
+    sql = "SELECT COUNT(*) FROM questions WHERE day = ?"
+    if exempt:
+        sql += f" AND (user_email IS NULL OR lower(user_email) NOT IN ({marks}))"
     with _db() as con:
-        return con.execute("SELECT COUNT(*) FROM questions WHERE day = ?", (today(),)).fetchone()[0]
+        return con.execute(sql, (today(), *exempt)).fetchone()[0]
 
 
 def login_cap():

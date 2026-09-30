@@ -213,7 +213,9 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   steps, tokens, estimated cost at Sonnet 5.5 prices, sign-in session id); `WHARF_LOGIN_CAP`
   (default 10) questions per sign-in, answered or failed, shown in the panel header ("3/10 questions
   this sign-in"; a refresh or new tab keeps the same sign-in, signing in again starts a fresh 10);
-  `WHARF_DAILY_CAP` (default 50) per day, shared by everyone, resets at midnight Perth time, is the
+  `WHARF_UNLIMITED` (comma separated emails, Google sign-in only) skips both limits and isn't
+  counted in the shared total; keep it in secrets (the repo is public).
+  `WHARF_DAILY_CAP` (default 100) per day, shared by everyone, resets at midnight Perth time, is the
   overall ceiling; log in Deep dives
   -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
   starts again after a restart or redeploy.

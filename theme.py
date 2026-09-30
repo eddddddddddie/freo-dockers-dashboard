@@ -330,7 +330,7 @@ def header_band(season, rec, form, data_note):
     st.markdown(
         f'<div class="cv-band"><div class="ttl">Fremantle {season}'
         f'<small>{html.escape(data_note)}</small></div>{stat_html}'
-        f'<div class="cv-stat"><div class="cv-form">{chips}</div><span>Last 5</span></div>'
+        f'<div class="cv-stat" title="Last 5 results"><div class="cv-form">{chips}</div></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -497,7 +497,7 @@ def scout_band(team, season, lad_row, last5):
         f'<div class="cv-band match club" style="background:{club["band"]};'
         f'border-left:6px solid {club["accent"]}"><div class="ttl">Scout: {html.escape(team)}'
         f'<small>{season} · percentage {lad_row["pct"]:.1f} (home and away)</small></div>{stat_html}'
-        f'<div class="cv-stat"><div class="cv-form">{chips}</div><span>Last 5</span></div></div>',
+        f'<div class="cv-stat" title="Last 5 results"><div class="cv-form">{chips}</div></div></div>',
         unsafe_allow_html=True)
 
 
