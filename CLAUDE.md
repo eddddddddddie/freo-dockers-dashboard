@@ -217,6 +217,9 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   overall ceiling; log in Deep dives
   -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
   starts again after a restart or redeploy.
+- While Wharf-ai works, the status line shows an AFL phrase with animated dots (`app.WAIT_PHRASES`,
+  20 of them, shuffled; a new one each time a tool runs, with what it is calculating alongside).
+  Each answer then keeps a "Worked out with: ..." note (stored as `steps` on the message).
 - Avatars are generic SVGs in `assets/` (no club marks): `supporter.svg` (user, purple on white,
   bobble beanie) and `anchor.svg` (Wharf-ai, white on purple anchor with eyes).
 - Answers must be grounded in the loaded CSVs: compute numbers with code, then explain. Never

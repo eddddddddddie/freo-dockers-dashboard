@@ -282,6 +282,11 @@ def inject_css():
           .st-key-tour_btn button:hover { background:var(--brand); color:#fff; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
           .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
+          .wa-wait { font-size:.8rem; font-weight:600; color:var(--brand); margin:2px 0 4px; }
+          .wa-wait .wa-doing { color:var(--muted); font-weight:500; }
+          .wa-dots { display:inline-block; overflow:hidden; vertical-align:bottom; width:0;
+            animation:wa-dots 1.2s steps(4, end) infinite; }
+          @keyframes wa-dots { to { width:1.05em; } }
           .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }
           .st-key-wa_history div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }

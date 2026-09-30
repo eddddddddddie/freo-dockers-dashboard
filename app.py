@@ -9,7 +9,9 @@ ANTHROPIC_API_KEY (environment or Streamlit secrets), plus
 ANTHROPIC_WORKSPACE_ID (wrkspc_...) for multi-workspace keys.
 """
 
+import html
 import os
+import random
 
 import plotly.io as pio
 import streamlit as st
@@ -57,6 +59,16 @@ TOOL_LABELS = {
     "player_aggregate": "comparing players", "player_games": "pulling player games",
     "show_chart": "drawing a chart",
 }
+# Shown while Wharf-ai works, one per step, in the spirit of Claude Code's
+# "Combobulating". A new one each time it starts a calculation.
+WAIT_PHRASES = [
+    "Inside 50ing", "Marking", "Drawing a free", "Taking a speccy", "Shepherding",
+    "Handballing over the top", "Kicking truly", "Snapping around the corner",
+    "Winning the hard ball", "Laying a tackle", "Going back to the mark", "Soccering it off the deck",
+    "Running through the banner", "Checking the score review", "Threading a torpedo",
+    "Reading the ruck tap", "Breaking the tag", "Arguing with the umpire (politely)",
+    "Kicking it long to the square", "Rushing a behind",
+]
 
 
 def example_prompts(season, baseline, focus=None):
@@ -151,6 +163,14 @@ def _pick_deep_dive():
     st.session_state["deep_dive"] = None
 
 
+def wait_line(phrase, doing=None):
+    """The waiting message: an AFL phrase with animated dots, and what Wharf-ai
+    is calculating, if anything."""
+    extra = f' <span class="wa-doing">· {html.escape(doing)}</span>' if doing else ""
+    return (f'<div class="wa-wait">🏉 {html.escape(phrase)}<span class="wa-dots">...</span>'
+            f'{extra}</div>')
+
+
 def scroll_to_bottom(selector):
     """Scroll a scrolling container on the page to its end (Streamlit keeps the
     old scroll position when content is added)."""
@@ -207,6 +227,8 @@ def chat_panel(season, baseline, focus=None):
                     clicked = q
         for n, msg in enumerate(msgs):
             with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
+                if msg.get("steps"):
+                    st.caption("Worked out with: " + ", ".join(msg["steps"]))
                 st.markdown(msg["content"])
                 for fig_json in msg.get("charts", []):
                     _show_chart(fig_json)
@@ -260,11 +282,14 @@ def chat_panel(season, baseline, focus=None):
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             status = st.empty()
             steps, charts, followups = [], [], []
+            phrases = random.sample(WAIT_PHRASES, len(WAIT_PHRASES))
+            status.markdown(wait_line(phrases[0]), unsafe_allow_html=True)
 
             def on_tool(name, args):
                 tally.tools.append(name)
                 steps.append(TOOL_LABELS.get(name, name))
-                status.caption("Calculating: " + ", ".join(steps))
+                status.markdown(wait_line(phrases[len(steps) % len(phrases)], steps[-1]),
+                                unsafe_allow_html=True)
 
             try:
                 reply = st.write_stream(C.stream_answer(
@@ -273,6 +298,10 @@ def chat_panel(season, baseline, focus=None):
                     on_followups=followups.extend, on_usage=tally.add_usage))
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
+                if steps:
+                    status.caption("Worked out with: " + ", ".join(dict.fromkeys(steps)))
+                else:
+                    status.empty()
             except Exception as exc:  # show API errors instead of crashing the app
                 U.record(prompt, tally, ok=False, sid=sid,
                          user_email=(auth.current_user() or {}).get("email"))
@@ -289,7 +318,7 @@ def chat_panel(season, baseline, focus=None):
         asked_now = {m["content"] for m in msgs if m["role"] == "user"}
         followups = [q for q in example_prompts(season, baseline, focus) if q not in asked_now][:3]
     msgs.append({"role": "assistant", "content": reply, "charts": charts,
-                 "followups": followups, "page": page})
+                 "followups": followups, "page": page, "steps": list(dict.fromkeys(steps))})
     U.save_chat(st.session_state.get("sid"), msgs)
     # Redraw without the example prompts. A question handed over from a deep
     # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
