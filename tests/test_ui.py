@@ -119,3 +119,25 @@ def test_clicks_links_and_back_button(browser, server):
     pg2.wait_for_timeout(3000)
     assert pg2.locator(".cv-band .ttl").inner_text().startswith("EF v"), "deep link opens the game"
     pg2.close()
+
+
+def test_stay_signed_in_and_sign_out(browser, server):
+    ctx = browser.new_context(viewport={"width": 1440, "height": 790})
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    pg = ctx.new_page()
+    pg.goto(server)
+    pg.wait_for_selector("input[type=password]", timeout=60000)
+    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
+    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
+    pg.get_by_role("button", name="Sign in").click()   # "keep me signed in" is ticked by default
+    pg.wait_for_selector(".js-plotly-plot", timeout=60000)
+    pg.wait_for_timeout(2000)
+    pg.reload()
+    pg.wait_for_selector(".js-plotly-plot", timeout=60000)
+    assert pg.locator("input[type=password]").count() == 0, "a reload should not ask again"
+    pg.locator(".st-key-signout_btn button").first.click()
+    pg.wait_for_selector("input[type=password]", timeout=60000)
+    pg.reload()
+    pg.wait_for_selector("input[type=password]", timeout=60000)
+    assert not [c for c in ctx.cookies() if c["name"] == "freo_coach_session"]
+    ctx.close()

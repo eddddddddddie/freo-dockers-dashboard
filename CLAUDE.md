@@ -31,7 +31,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run: `streamlit run app.py`. There are no tests or linter config.
 - Secrets live in `.streamlit/secrets.toml` locally (gitignored, never commit it) or the app's
   Secrets on Streamlit Cloud, read through `settings.get()`: `APP_USERNAME` / `APP_PASSWORD`
-  (login, required: the app stays locked without them), `ANTHROPIC_API_KEY`, optional
+  (login, required: the app stays locked without them), optional `APP_COOKIE_SECRET` (signs the
+  stay-signed-in cookie; defaults to a key derived from APP_PASSWORD), `ANTHROPIC_API_KEY`, optional
   `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_BASE_URL`, `FREO_CHAT_MODEL`. The repo is public, so
   never put credentials in code.
 
@@ -95,7 +96,14 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
 
 ## Dashboard layout (single Coach View, no other pages)
 The whole app sits behind a login (`auth.require_login`, username/password from secrets,
-compared in constant time, 30 s pause after 5 failed tries; lasts for the browser session).
+compared in constant time, 30 s pause after 5 failed tries). "Keep me signed in for 7 days"
+(ticked by default) stores a signed token (HMAC-SHA256 over a random session id, the username and
+an expiry) in the `freo_coach_session` cookie, set from JavaScript by `components/cookie` because
+Streamlit can't set cookies (so not HttpOnly; SameSite=Lax, Secure on https). A new visit, refresh
+or opened link with a valid token skips the form (`st.context.cookies`), and the session's
+Wharf-ai chat is reloaded (`usage.save_chat` / `load_chat`, same disk caveat as the usage log).
+Changing APP_PASSWORD (or APP_COOKIE_SECRET) signs everyone out. The sign-out button (header, next
+to ?) clears the cookie. Not yet checked on Streamlit Cloud, where the app runs inside a frame.
 One screen with no page scroll, sized to the browser window: the dashboard (`views.render`) on
 the left, the Wharf-ai chat panel down the right (`app.chat_panel`, a fragment, so chatting does
 not re-render the charts). `components/viewport` is a tiny custom component that reports the
@@ -194,8 +202,11 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   centre vs stoppage clearances), one picked at random per page open and per season. No LLM
   writes the insight, so it works without an API key. The shown insight is passed to the model.
 - Daily cap and usage log (`usage.py`): every question is logged to SQLite (question, tools,
-  steps, tokens, estimated cost at Sonnet 5.5 prices); `WHARF_DAILY_CAP` (default 50) per day,
-  shared by everyone, resets at midnight Perth time; shown in the panel header; log in Deep dives
+  steps, tokens, estimated cost at Sonnet 5.5 prices, sign-in session id); `WHARF_LOGIN_CAP`
+  (default 10) questions per sign-in, answered or failed, shown in the panel header ("3/10 questions
+  this sign-in"; a refresh or new tab keeps the same sign-in, signing in again starts a fresh 10);
+  `WHARF_DAILY_CAP` (default 50) per day, shared by everyone, resets at midnight Perth time, is the
+  overall ceiling; log in Deep dives
   -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
   starts again after a restart or redeploy.
 - Avatars are generic SVGs in `assets/` (no club marks): `supporter.svg` (user, purple on white,

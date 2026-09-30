@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>cookie</title></head>
+<body style="margin:0">
+<script>
+// Sets or clears the sign-in cookie on the app page (Streamlit can't set cookies from
+// Python). Python reads it back with st.context.cookies on the next visit. Each
+// request carries a nonce so it runs once even if this frame re-renders.
+(function () {
+  var P = window.parent;
+  function send(type, extra) {
+    P.postMessage(Object.assign({isStreamlitMessage: true, type: type}, extra), "*");
+  }
+  window.addEventListener("message", function (e) {
+    if (!e.data || e.data.type !== "streamlit:render") return;
+    send("streamlit:setFrameHeight", {height: 0});
+    var a = e.data.args || {};
+    if (!a.nonce || a.nonce === P.__freoCookieNonce) return;
+    P.__freoCookieNonce = a.nonce;
+    var secure = P.location.protocol === "https:" ? "; Secure" : "";
+    var value = a.action === "set" ? encodeURIComponent(a.value) : "";
+    var age = a.action === "set" ? a.max_age : 0;
+    P.document.cookie = a.name + "=" + value + "; Max-Age=" + age + "; Path=/; SameSite=Lax" + secure;
+  });
+  send("streamlit:componentReady", {apiVersion: 1});
+})();
+</script>
+</body>
+</html>

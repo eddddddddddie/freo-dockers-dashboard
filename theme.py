@@ -213,6 +213,7 @@ def inject_css():
 
           /* Window-size reporter: no visible footprint */
           div[data-testid="stElementContainer"]:has(iframe[title*="viewport"]),
+          div[data-testid="stElementContainer"]:has(iframe[title*="cookie"]),
           div[data-testid="stElementContainer"]:has(iframe[title*="tour"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
 
@@ -273,8 +274,10 @@ def inject_css():
           div[data-testid="stButton"] button p { font-size:.78rem; font-weight:500; text-align:left; }
           div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
           div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
-          .st-key-tour_btn button { width:34px; height:34px; min-height:34px; padding:0; border-radius:50%;
-            justify-content:center; border:1.5px solid var(--brand); color:var(--brand); }
+          .st-key-tour_btn button, .st-key-signout_btn button { width:34px; height:34px; min-height:34px;
+            padding:0; border-radius:50%; justify-content:center; border:1.5px solid var(--brand);
+            color:var(--brand); }
+          .st-key-signout_btn button:hover { background:var(--brand); color:#fff; }
           .st-key-tour_btn button p { font-size:1rem; font-weight:800; text-align:center; }
           .st-key-tour_btn button:hover { background:var(--brand); color:#fff; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }

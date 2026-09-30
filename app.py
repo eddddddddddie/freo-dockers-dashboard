@@ -33,9 +33,13 @@ import tour
 import nav
 
 inject_css()
-auth.require_login()          # stops here until signed in
+auth.require_login()          # stops here until signed in (a valid cookie signs in too)
+auth.cookie_sync()            # stores the "keep me signed in" cookie after sign-in
 win_w, win_h = layout.window_size()
 tour.show()                   # first-visit walkthrough (once per browser)
+if st.session_state.pop("restored", False) and "messages" not in st.session_state:
+    # Signed back in from the cookie: carry on this session's Wharf-ai chat.
+    st.session_state["messages"] = U.load_chat(st.session_state.get("sid"))
 SZ = layout.sizes(win_h, win_w)
 
 team_df = D.load_team()
@@ -176,9 +180,12 @@ def chat_panel(season, baseline, focus=None):
     asked_before = {m["content"] for m in msgs if m["role"] == "user"}
     moved = bool(msgs) and msgs[-1].get("page") != page
 
+    sid = st.session_state.get("sid")
     asked, limit = U.questions_today(), U.cap()
-    chat_header(f"Answers from the match data only · {asked}/{limit} questions today")
-    capped = asked >= limit
+    mine, mine_limit = U.questions_this_login(sid), U.login_cap()
+    chat_header(f"Answers from the match data only · {mine}/{mine_limit} questions this sign-in")
+    day_capped, login_capped = asked >= limit, mine >= mine_limit
+    capped = day_capped or login_capped
     history = st.container(height=HISTORY_H, border=False, key="wa_history")
     with history:
         insight = st.session_state[key]
@@ -196,7 +203,7 @@ def chat_panel(season, baseline, focus=None):
                                     win_w, HISTORY_H)
             for i, q in enumerate(shown):
                 if st.button(q, key=f"ex_{i}", use_container_width=True,
-                             disabled=client is None):
+                             disabled=client is None or capped):
                     clicked = q
         for n, msg in enumerate(msgs):
             with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
@@ -210,7 +217,7 @@ def chat_panel(season, baseline, focus=None):
                 st.markdown('<div class="wa-sub">Ask next</div>', unsafe_allow_html=True)
                 for j, q in enumerate(msg["followups"]):
                     if st.button(q, key=f"fu_{n}_{j}", use_container_width=True,
-                                 disabled=client is None):
+                                 disabled=client is None or capped):
                         clicked = q
         if moved:
             # A chat has started on another page: the earlier chat stays, and this
@@ -221,24 +228,29 @@ def chat_panel(season, baseline, focus=None):
             fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
             for i, q in enumerate(fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70)):
                 if st.button(q, key=f"pq_{i}", use_container_width=True,
-                             disabled=client is None):
+                             disabled=client is None or capped):
                     clicked = q
             scroll_to_bottom(".st-key-wa_history")
         if client is None:
             st.caption("Questions need ANTHROPIC_API_KEY (and ANTHROPIC_WORKSPACE_ID "
                        "for multi-workspace keys) in the environment or app secrets.")
 
-    typed = st.chat_input("Daily question limit reached; resets at midnight Perth time"
-                          if capped else "Ask Wharf-ai about the data",
-                          disabled=client is None or capped)
+    placeholder = ("Daily question limit reached; resets at midnight Perth time" if day_capped
+                   else f"{mine_limit} question limit reached for this sign-in" if login_capped
+                   else "Ask Wharf-ai about the data")
+    typed = st.chat_input(placeholder, disabled=client is None or capped)
     pending = st.session_state.pop("pending_prompt", None)  # sent from a deep dive
     prompt = typed or clicked or (pending if client is not None else None)
     if not prompt:
         return
     if capped:
         with history:
-            st.info(f"Wharf-ai has answered {limit} questions today, the daily limit. "
-                    "It resets at midnight Perth time.")
+            if day_capped:
+                st.info(f"Wharf-ai has answered {limit} questions today, the daily limit. "
+                        "It resets at midnight Perth time.")
+            else:
+                st.info(f"This sign-in has used its {mine_limit} Wharf-ai questions. "
+                        "The dashboard still works as normal.")
         return
     tally = U.Tally()
     msgs.append({"role": "user", "content": prompt, "page": page})
@@ -262,7 +274,7 @@ def chat_panel(season, baseline, focus=None):
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
             except Exception as exc:  # show API errors instead of crashing the app
-                U.record(prompt, tally, ok=False)
+                U.record(prompt, tally, ok=False, sid=sid)
                 msgs.pop()  # keep failed turns out of the history sent next time
                 if "anthropic-workspace-id" in str(exc):
                     st.error("This API key is not tied to one workspace. Set "
@@ -271,12 +283,13 @@ def chat_panel(season, baseline, focus=None):
                 else:
                     st.error(f"Sorry, Wharf-ai hit an error: {exc}")
                 return
-    U.record(prompt, tally)
+    U.record(prompt, tally, sid=sid)
     if not followups:  # the model left them out: offer unasked suggestions instead
         asked_now = {m["content"] for m in msgs if m["role"] == "user"}
         followups = [q for q in example_prompts(season, baseline, focus) if q not in asked_now][:3]
     msgs.append({"role": "assistant", "content": reply, "charts": charts,
                  "followups": followups, "page": page})
+    U.save_chat(st.session_state.get("sid"), msgs)
     # Redraw without the example prompts. A question handed over from a deep
     # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
     st.rerun() if pending and not (typed or clicked) else st.rerun(scope="fragment")
@@ -303,7 +316,8 @@ nav.apply_pending(all_seasons, _game_label,
                   lambda s: D.player_list(D.players_season(player_df, s)), lambda: CLUBS)
 
 with main:
-    h1, h2, h3, h4, h5 = st.columns([4.62, 0.84, 1.66, 0.98, 0.24], vertical_alignment="center")
+    h1, h2, h3, h4, h5, h6 = st.columns([4.4, 0.84, 1.66, 0.98, 0.24, 0.24],
+                                         vertical_alignment="center")
     with h2:
         season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                       key="season", label_visibility="collapsed")
@@ -375,6 +389,9 @@ with main:
         if st.button("?", key="tour_btn", help="Take the app tour"):
             tour.replay()
             st.rerun()
+    with h6:
+        if st.button("", icon=":material/logout:", key="signout_btn", help="Sign out"):
+            auth.sign_out()
     nav.write_url(season, view, game=game_round, player=player, opp=scout)
     dive = st.session_state.pop("open_deep_dive", None)
     if dive == "Player map":

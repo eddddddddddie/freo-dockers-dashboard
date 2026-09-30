@@ -78,6 +78,18 @@ def test_usage_cap_and_cost(tmp_path, monkeypatch):
     assert U.questions_today() == 2 and not U.can_ask()
 
 
+def test_login_cap_counts_per_sign_in(tmp_path, monkeypatch):
+    monkeypatch.setenv("USAGE_DB", str(tmp_path / "u.sqlite"))
+    monkeypatch.setenv("WHARF_DAILY_CAP", "50")
+    monkeypatch.setenv("WHARF_LOGIN_CAP", "2")
+    t = U.Tally()
+    U.record("q1", t, sid="login-a")
+    U.record("q2", t, ok=False, sid="login-a")   # failed questions count too
+    U.record("q3", t, sid="login-b")
+    assert U.questions_this_login("login-a") == 2 and not U.can_ask("login-a")
+    assert U.questions_this_login("login-b") == 1 and U.can_ask("login-b")
+
+
 def test_insights_are_computed_sentences():
     team, players = D.load_team(), D.load_players()
     for season, base in [(2026, 2025), (2025, None)]:
