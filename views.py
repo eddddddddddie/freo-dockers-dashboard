@@ -25,6 +25,7 @@ from theme import (COLORS, RAMP, club_colours, card_title, tiles_row, leaders_li
                    leaders_pair)
 
 TK = 18  # height of a card's takeaway line (px); charts give it up
+ROW_GAIN = 15  # Match and Player rows run 15px shorter than Season's; their bottom row takes it
 
 # Player stats offered on the form card: label -> column.
 FORM_STATS = {
@@ -259,7 +260,7 @@ def render_match(team_df, player_df, season, pos, sz):
     Row 2: tale of the tape | game flow (running margin) | who led each role.
     Row 3: every Freo player, shaded against their own season average.
     """
-    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK
+    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK + ROW_GAIN
     tdf = D.team_season(team_df, season)
     pdf = D.players_season(player_df, season)
     game = tdf.iloc[pos]
@@ -339,7 +340,7 @@ def render_player(player_df, season, baseline, player, sz):
     Row 2: game by game trend (pick a stat) | squad rank on each stat.
     Row 3: every game this season, shaded against the player's own average.
     """
-    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK
+    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK + ROW_GAIN
     pdf = D.players_season(player_df, season)
     me = pdf[pdf["player"] == player].sort_values("game_dt")
     trend_stats = {k: v for k, v in PLAYER_TREND_STATS.items() if v in pdf.columns}
@@ -403,7 +404,7 @@ def render_compare(player_df, season, a, b, sz):
     Row 2: game by game for both (pick a stat) | squad rank on every stat.
     Row 3: every stat, season and last 5 averages, and the gap.
     """
-    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK
+    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK + ROW_GAIN - 3
     pdf = D.players_season(player_df, season)
     names = (a, b)
     logs = [pdf[pdf["player"] == n].sort_values("game_dt") for n in names]

@@ -112,7 +112,7 @@ def inject_css():
     st.markdown(
         """
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap');
           :root { --brand:#331C54; --brand-2:#4A2A78; --maroon:#8B0042; --ink:#1A1A1A;
                   --muted:#525252; --line:#E6E6E6; --canvas:#F7F7F7;
                   --freo:#61359C; --opp:#008CA2; }
@@ -125,16 +125,49 @@ def inject_css():
           header[data-testid="stHeader"], footer:not(.driver-popover-footer), #MainMenu,
           [data-testid="stToolbar"], [data-testid="stDecoration"],
           section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none !important; }
-          .block-container { padding:8px 14px 0 !important; max-width:100% !important; }
+          .block-container { padding:0 14px 0 !important; max-width:100% !important; }
           div[data-testid="stVerticalBlock"] { gap:6px; }
           div[data-testid="stHorizontalBlock"] { gap:8px; }
           div[data-testid="stElementContainer"]:has(> .stPlotlyChart) { margin:0; }
 
+          /* The top bar, after the club site's nav bar: flat purple, edge to edge,
+             the title in a serif, seasons and views as white nav links with an
+             underline on the one selected, outlined icon buttons. */
+          [data-testid="stLayoutWrapper"]:has(> .st-key-topbar) { margin:0 -14px 2px;
+            width:auto !important; max-width:none !important; align-self:stretch; }
+          .st-key-topbar { background:var(--brand); padding:2px 14px; width:100% !important;
+            border-bottom:1px solid rgba(255,255,255,.14); }
+          /* The CSS blocks above the bar take no room (no gap above it). */
+          .block-container div[data-testid="stElementContainer"]:has(> .stMarkdown [data-testid="stMarkdownContainer"] > style:only-child) {
+            position:absolute; width:0; height:0; overflow:hidden; }
+          .cv-brand { font-family:"Source Serif 4", Georgia, "Times New Roman", serif; font-weight:600;
+            font-size:1.5rem; line-height:1; color:#fff; letter-spacing:-.5px; white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+          .cv-brand i { font-style:italic; }
+          .st-key-topbar [data-testid="stButtonGroup"] > div { gap:2px; }
+          .st-key-topbar [data-testid="stButtonGroup"] button { background:transparent !important;
+            border:none !important; border-radius:0 !important; box-shadow:none !important;
+            min-height:36px; padding:2px 9px; }
+          .st-key-topbar [data-testid="stButtonGroup"] button p { color:rgba(255,255,255,.78);
+            font-weight:700; font-size:.88rem; }
+          .st-key-topbar [data-testid="stButtonGroup"] button:hover { background:rgba(255,255,255,.08) !important; }
+          .st-key-topbar [data-testid="stButtonGroup"] button[aria-checked="true"] {
+            box-shadow:inset 0 -3px 0 #fff !important; }
+          .st-key-topbar [data-testid="stButtonGroup"] button[aria-checked="true"] p { color:#fff; }
+          .st-key-topbar div[data-testid="stButton"] button { background:transparent;
+            border:1px solid rgba(255,255,255,.38); color:#fff; }
+          .st-key-topbar div[data-testid="stButton"] button p { color:#fff; }
+          .st-key-topbar div[data-testid="stButton"] button:hover { background:#fff; color:var(--brand); }
+          .st-key-topbar div[data-testid="stButton"] button:hover p { color:var(--brand); }
+          .st-key-topbar div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+            background:transparent; border-color:rgba(255,255,255,.38); color:#fff; }
+          .st-key-topbar div[data-testid="stSelectbox"] svg { fill:#fff; }
+
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
           div[class*="st-key-card_"],
           div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:#FFFFFF; border:1px solid var(--line) !important; border-radius:8px;
-            box-shadow:0 1px 3px rgba(0,0,0,.07);
+            background:#FFFFFF; border:1px solid var(--line) !important; border-radius:4px;
+            box-shadow:0 1px 2px rgba(0,0,0,.04);
           }
           div[class*="st-key-card_"] { gap:2px; }
           div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
@@ -153,7 +186,7 @@ def inject_css():
           /* Header band */
           .cv-band {
             background:var(--brand);
-            color:#fff; border-radius:8px; padding:7px 14px; height:52px;
+            color:#fff; border-radius:4px; padding:7px 14px; height:52px;
             display:flex; align-items:center; gap:clamp(10px, 1.2vw, 22px); overflow:hidden;
           }
           /* The title block gives way (its subtitle ellipsises) so a band never overflows. */
@@ -163,9 +196,31 @@ def inject_css():
             color:rgba(255,255,255,.72); overflow:hidden; text-overflow:ellipsis; }
           .cv-band .cv-stat { flex:none; }
           .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
+          /* Match card (after the club site's): big score in the middle, thin dividers */
+          .mc-div { flex:none; width:1px; align-self:stretch; margin:-3px 0;
+            background:rgba(255,255,255,.2); }
+          .mc-score { display:flex; align-items:center; gap:10px; flex:none; }
+          .mc-team { line-height:1.1; white-space:nowrap; text-align:right; }
+          .mc-team.r { text-align:left; }
+          .mc-team b { display:block; font-size:.8rem; font-weight:700; }
+          .mc-team span { font-size:.75rem; color:rgba(255,255,255,.72); }
+          .mc-num { font-size:1.75rem; font-weight:800; letter-spacing:-.8px; line-height:1; }
+          .mc-score em, .mc-last em { font-style:normal; font-weight:500; color:rgba(255,255,255,.6); }
+          .mc-res .cv-res { font-size:.8rem; padding:3px 11px; }
+          .mc-last b { font-size:1.08rem; }
+          .mc-last .cv-res { padding:1px 7px; margin-left:3px; vertical-align:2px; }
+          @media (max-width: 1599px) { .cv-band .opt2 { display:none; } }
+          @media (max-width: 1380px) { .mc-team span { display:none; } .mc-num { font-size:1.5rem; } }
+          /* A faint anchor in the bands, where the club site puts its crests (a plain
+             anchor drawing of our own, not the club crest). */
+          .cv-band { position:relative; }
+          .cv-band::after { content:""; position:absolute; right:14px; top:-8px; width:80px; height:80px;
+            background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'%3E%3Ccircle cx='32' cy='12' r='6'/%3E%3Cpath d='M32 18v38M20 28h24M10 38c2 12 12 18 22 18s20-6 22-18'/%3E%3C/svg%3E") no-repeat center/contain;
+            opacity:.07; pointer-events:none; }
+          .cv-band.club::after, .cv-band.match::after { right:24px; }
           .cv-stat { line-height:1.05; white-space:nowrap; }
           .cv-stat b { font-size:1.08rem; font-weight:700; }
-          .cv-stat span { display:block; font-size:.75rem; letter-spacing:0;
+          .cv-stat span { display:block; font-size:.75rem; letter-spacing:.04em; text-transform:uppercase;
             color:rgba(255,255,255,.75); }
           .cv-stat.hero b { font-size:1.75rem; font-weight:800; letter-spacing:-.8px; line-height:1; }
           .cv-form { display:flex; gap:3px; }
@@ -175,12 +230,17 @@ def inject_css():
 
           /* Headline tiles */
           .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:8px; }
-          .cv-tile { background:#fff; border:1px solid var(--line); border-radius:8px;
+          .cv-tile { background:#fff; border:1px solid var(--line); border-radius:4px;
             padding:6px 8px 4px; min-width:0; box-shadow:0 1px 3px rgba(0,0,0,.07); }
-          .cv-tile .lbl { font-size:.75rem; font-weight:600; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .cv-tile .lbl { font-size:.75rem; font-weight:700; color:var(--muted); white-space:nowrap; overflow:hidden;
+            text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.04em; }
           .cv-tile .val { font-size:1.4rem; font-weight:800; letter-spacing:-.4px; color:var(--ink); line-height:1.15; }
           .cv-tile .dlt { font-size:.75rem; font-weight:600; margin-left:3px; white-space:nowrap; }
           .cv-tile svg { display:block; width:100%; height:22px; margin-top:1px; }
+          /* Narrow windows: value, rank chip and change stay on one line. */
+          .cv-tile .val { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          @media (max-width: 1380px) { .cv-tile .val { font-size:1.22rem; letter-spacing:-.6px; }
+            .cv-tile .dlt { margin-left:1px; letter-spacing:-.2px; } }
 
           /* Role leaders */
           .cv-lead { display:grid; grid-template-columns:auto 1fr auto; align-items:baseline; gap:8px;
@@ -214,6 +274,7 @@ def inject_css():
 
           /* Streamlit pulls markdown blocks up by 1rem; not wanted for these. */
           div[data-testid="stMarkdownContainer"]:has(> .cv-band),
+          div[data-testid="stMarkdownContainer"]:has(> .cv-brand),
           div[data-testid="stMarkdownContainer"]:has(> .cv-tiles),
           div[data-testid="stMarkdownContainer"]:has(> .wa-head),
           div[data-testid="stMarkdownContainer"]:has(> .wa-insight),
@@ -262,8 +323,9 @@ def inject_css():
           /* Match mode */
           .cv-res { font-style:normal; font-size:.75rem; font-weight:700; padding:2px 9px; border-radius:999px;
             text-transform:uppercase; letter-spacing:.04em; }
-          .tp { display:flex; flex-direction:column; gap:2px; margin-top:0; }
-          .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px; }
+          .tp { display:flex; flex-direction:column; gap:0; margin-top:0; }
+          .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px;
+            line-height:1.25; min-height:21px; }
           .tp-f, .tp-o { font-weight:800; font-size:.85rem; color:var(--ink); }
           .tp-f { text-align:right; }
           .tp-lbl { font-size:.75rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -380,15 +442,17 @@ def inject_phone_css():
     st.markdown(
         """
         <style>
-          .block-container { padding:8px 10px 32px !important; }
+          .block-container { padding:0 10px 32px !important; }
+          [data-testid="stLayoutWrapper"]:has(> .st-key-topbar) { margin:0 -10px 4px; }
+          .st-key-topbar { padding:6px 10px; }
           /* Streamlit stacks columns below 640px; the controls row stays one line. */
-          .st-key-m_ctrl div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
-          .st-key-m_ctrl div[data-testid="stColumn"] { min-width:0 !important; width:auto !important; }
+          .st-key-topbar div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
+          .st-key-topbar div[data-testid="stColumn"] { min-width:0 !important; width:auto !important; }
           /* The season buttons (one per season) get the room they need; the view dropdown the rest. */
-          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(1) { flex:0 0 auto !important; }
-          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(2) { flex:1 1 0 !important; }
+          .st-key-topbar div[data-testid="stColumn"]:nth-child(1) { flex:0 0 auto !important; }
+          .st-key-topbar div[data-testid="stColumn"]:nth-child(2) { flex:1 1 0 !important; }
           .st-key-season div[data-testid="stButtonGroup"] button { padding:4px 8px; }
-          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(n+3) { flex:0 0 40px !important; }
+          .st-key-topbar div[data-testid="stColumn"]:nth-child(n+3) { flex:0 0 40px !important; }
           .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:40px; height:40px; min-height:40px; }
           div[data-testid="stButtonGroup"] button { min-height:40px; padding:4px 10px; }
           div[data-testid="stButtonGroup"] button p { font-size:.85rem; }
@@ -438,7 +502,7 @@ def inject_tablet_css(mode):
     st.markdown(
         f"""
         <style>
-          .block-container {{ padding:8px 14px 32px !important; }}
+          .block-container {{ padding:0 14px 32px !important; }}
           .cv-tiles {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }}
           .card-title, .card-take, .card-title .take {{ white-space:normal; }}
           .cv-band .opt {{ display:none; }}
@@ -470,8 +534,14 @@ def card_title(text, note="", keys=None, takeaway=""):
                 unsafe_allow_html=True)
 
 
-def header_band(season, rec, form, data_note):
-    """form: list of (result, tooltip) for the last five games."""
+def brand_title():
+    """The bar's title, set like the club site's headline: a serif, one word in italic."""
+    st.markdown('<div class="cv-brand"><i>Freo</i> Coach View</div>', unsafe_allow_html=True)
+
+
+def header_band(season, rec, form, data_note, last=None):
+    """form: list of (result, tooltip) for the last five games. last: the latest
+    game (a team row), shown as a small match-card score on wide windows."""
     chips = "".join(
         f'<i title="{html.escape(t)}" style="background:'
         f'{result_colour(r)}">{r}</i>'
@@ -491,9 +561,20 @@ def header_band(season, rec, form, data_note):
         f'<div class="cv-band"><div class="ttl">Fremantle {season}'
         f'<small>{html.escape(data_note)}</small></div>{stat_html}'
         f'<div class="cv-stat" title="Last 5 results"><div class="cv-form">{chips}</div></div>'
-        f'</div>',
+        f'{_last_match(last)}</div>',
         unsafe_allow_html=True,
     )
+
+
+def _last_match(g):
+    """'Last match · GF v BRL · 89 v 96 · L', at the end of the season band."""
+    if g is None:
+        return ""
+    from data import abbr
+    return (f'<i class="mc-div opt2"></i><div class="cv-stat mc-last opt2">'
+            f'<b>{g["freo_score"]} <em>v</em> {g["opp_score"]} '
+            f'<i class="cv-res" style="background:{result_colour(g["result"])}">{g["result"]}</i></b>'
+            f'<span>Last match · {html.escape(g["round"])} v {html.escape(abbr(g["opponent"]))}</span></div>')
 
 
 def _sparkline(values, labels, highlight=None):
@@ -620,22 +701,27 @@ def insight_card(text):
 
 def match_band(game, venue_date):
     """Header band for match mode: result, score line and margin."""
-    res = {"W": "Won", "L": "Lost"}.get(game["result"], "Drew")
+    margin = abs(int(game["margin"]))
+    res = {"W": f"Won by {margin}", "L": f"Lost by {margin}"}.get(game["result"], "Drew")
     color = result_colour(game["result"])
     fq, oq = game["freo_qtrs"].split()[-1], game["opp_qtrs"].split()[-1]
-    # Freo purple fading into the opposition's dark club colour, their second
-    # colour as a stripe on the right.
+    # Laid out like the club site's match card: the score big in the middle,
+    # goals.behinds under each side, the result pill, thin white dividers. Freo
+    # purple fades into the opposition's dark club colour, their second colour
+    # as a stripe on the right.
     club = club_colours(game["opponent"])
     style = (f'background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 40%, '
              f'{club["band"]} 100%); border-right:6px solid {club["accent"]}')
     st.markdown(
-        f'<div class="cv-band match" style="{style}"><div class="ttl">{html.escape(game["round"])} v '
+        f'<div class="cv-band match mc" style="{style}"><div class="ttl">{html.escape(game["round"])} v '
         f'{html.escape(game["opponent"])}<small>{html.escape(venue_date)}</small></div>'
-        f'<div class="cv-stat opt"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
-        f'<span>{html.escape(game["type"])}</span></div>'
-        f'<div class="cv-stat"><b>{fq} ({game["freo_score"]})</b><span>Fremantle</span></div>'
-        f'<div class="cv-stat"><b>{oq} ({game["opp_score"]})</b><span>{html.escape(game["opponent"])}</span></div>'
-        f'<div class="cv-stat hero"><b>{int(game["margin"]):+d}</b><span>Margin</span></div></div>',
+        f'<i class="mc-div"></i>'
+        f'<div class="mc-score"><div class="mc-team"><b>Fremantle</b><span>{fq}</span></div>'
+        f'<b class="mc-num">{game["freo_score"]}</b><em>v</em><b class="mc-num">{game["opp_score"]}</b>'
+        f'<div class="mc-team r"><b>{html.escape(game["opponent"])}</b><span>{oq}</span></div></div>'
+        f'<i class="mc-div"></i>'
+        f'<div class="cv-stat mc-res"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
+        f'<span>{html.escape(game["type"])}</span></div></div>',
         unsafe_allow_html=True)
 
 

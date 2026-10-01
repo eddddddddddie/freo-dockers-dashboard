@@ -141,8 +141,10 @@ One screen with no page scroll, sized to the browser window: the dashboard (`vie
 the left, the Wharf-ai chat panel down the right (`app.chat_panel`, a fragment, so chatting does
 not re-render the charts). `components/viewport` is a tiny custom component that reports the
 window size (and again on resize); `layout.sizes(height, width)` turns it into the chart heights,
-panel height and player-form row count, tuned at 1440x790 and scaled from there (narrow windows
-give up extra height because titles wrap). The first run uses the 1440x790 design size.
+panel height and player-form row count, tuned at 1440x790 and scaled from there (`BAR_H` is the
+top bar; titles and tile values ellipsise rather than wrap, so width doesn't change heights; the
+cards and the Wharf-ai panel end level, 9px above the window bottom; Match and Player rows take
+`views.ROW_GAIN` extra to end level with Season's). The first run uses the 1440x790 design size.
 Streamlit chrome and the sidebar are hidden by CSS in `theme.inject_css`. After any layout
 change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 - Phone layout (window narrower than `layout.PHONE_W` = 700px; `app.PHONE`, `views.set_phone`,
@@ -203,9 +205,15 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   rows. Wharf-ai gets comparison questions on that page.
 - Coach research: `docs/coach_sessions.md` is a 30-minute task script (five timed tasks with the
   correct answers, what to watch for, note sheet, debrief). Re-run it after each design round.
-- Header: season toggle (one button per season in the data, 2024 to 2026; its column scales with the count), view switch, a Wharf-ai usage button (admins only), and a band
-  with record, win rate, avg for/against/margin, last 5, data freshness (the two averages hide
-  below 1380px wide).
+- Top bar (`st-key-topbar`, every layout, after the club site's nav bar): flat purple, edge to
+  edge (its wrapper takes negative margins; the CSS-only markdown blocks above it are taken out
+  of the flow so there's no gap), the title "*Freo* Coach View" in Source Serif 4 (Google Fonts;
+  the club's own font is not used) with "Freo" in italic like the site's headline, the season
+  toggle (one button per season in the data; its column scales with the count) and the view
+  switch as white nav links with an underline on the selected one (`aria-checked`), then the
+  outlined icon buttons: Wharf-ai usage (admins only), ?, sign out. Phones drop the title. Under
+  the bar: the picker and the band, with record, win rate, avg for/against/margin, last 5, data
+  freshness and (1600px and wider) the last match score.
 - Scout mode (`views.render_scout`, needs league_team_games.csv): pick any club (defaults to the
   last opponent); band with home and away record, ladder spot (computed: 4 points a win, 2 a draw,
   percentage) and form; tiles with the club's value, league rank and Freo's value; style vs league
@@ -358,10 +366,13 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 Python + Streamlit + pandas + Plotly (simple to run locally), unless a better option is agreed.
 
 ## Style and constraints
-- Styled after fremantlefc.com.au's look: flat deep purple #331C54 header / nav / Wharf-ai head,
-  #F7F7F7 page, white cards (8px radius, soft shadow), Inter (Google Fonts) with bold
-  sentence-case titles, purple-to-maroon match band with a pill for the result. Palette in CSS
-  variables at the top of `theme.inject_css`.
+- Styled after fremantlefc.com.au's look: flat deep purple #331C54 top bar / Wharf-ai head,
+  #F7F7F7 page, white cards (4px radius, a faint shadow), Inter (Google Fonts) with bold
+  sentence-case titles, small uppercase labels on tiles and bands, thin white dividers on purple,
+  and a faint plain anchor (our own drawing, not the crest) at the right of each band. The Match
+  band is laid out like the site's match card: the score big in the middle with goals.behinds
+  under each side, then a "Won by 12" / "Lost by 7" pill. Palette in CSS variables at the top of
+  `theme.inject_css`.
 - Chart colours come from the site too, all in `theme.COLORS` / `RAMP` / `DIVERGE` / `SERIES`
   (nothing hard-coded elsewhere) and checked with the dataviz validator: Freo #61359C (the site
   purple's hue lifted to OKLCH L 0.44; #331C54 itself is L 0.29, below the 0.43 floor for marks),

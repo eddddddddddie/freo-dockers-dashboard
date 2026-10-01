@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_side_panel_css, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -523,34 +523,41 @@ nav.apply_pending(all_seasons, _game_label,
                   lambda s: [nav.SQUAD] + D.player_list(D.players_season(player_df, s)),
                   lambda: [nav.ALL_CLUBS] + CLUBS)
 
+# Every layout starts with the purple top bar (the club site's nav bar): the
+# title, seasons, views and the icon buttons. The band and picker sit under it.
 if PHONE:
-    band_slot = st.container()
-    with st.container(key="m_ctrl"):
+    with st.container(key="topbar"):
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
+    band_slot = st.container()
     pick_slot = pick2_slot = st.container()
     chat_slot = st.container(border=True, key="card_wharfai")
     main = st.container()
 elif SCROLL:
-    # Tablets and small windows: the band on its own line, the controls under it.
+    # Tablets and small windows: the bar, then the band on its own line and the picker.
+    with st.container(key="topbar"):
+        hb, h2, h3, h4, h5, h6 = st.columns([1.6, 0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
+                                            vertical_alignment="center")
     top = st.container()
     if LAYOUT == "split":
         main, side = st.columns([2.6, 1])
         top = main
     with top:
         band_slot = st.container()
-        with st.container(key="t_ctrl"):
-            h2, h3, h4, h5, h6 = st.columns([0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
-                                            vertical_alignment="center")
         pick_slot, pick2_slot, _ = st.columns([1, 1, 1.2])
     if LAYOUT == "stack":
         chat_slot = st.container(border=True, key="card_wharfai")
         main = st.container()
 else:
+    seasons_w = 0.55 * len(all_seasons)       # the season buttons, about 0.55 each
+    with st.container(key="topbar"):
+        hb, h2, h3, _, h4, h5, h6 = st.columns([1.9, seasons_w, 2.7, 5.9 - seasons_w, 0.3, 0.3, 0.3],
+                                                vertical_alignment="center")
     main, side = st.columns([3.55, 1])
     with main:
-        seasons_w = 0.42 * len(all_seasons)       # the season buttons, about 0.42 each
-        h1, h2, h3, h4, h5, h6 = st.columns([5.98 - seasons_w, seasons_w, 1.66, 0.24, 0.24, 0.24],
-                                             vertical_alignment="center")
+        h1 = st.container()                   # the picker and band row
+if not PHONE:
+    with hb:
+        brand_title()
 
 with h2:
     season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
@@ -605,7 +612,7 @@ def season_band():
     if updated is not None:
         note += f" · data {updated:%-d %b}"
     with band:
-        header_band(season, D.record(tdf), form, note)
+        header_band(season, D.record(tdf), form, note, last=tdf.iloc[-1] if len(tdf) else None)
 
 
 if view == "Scout" and league is not None:
@@ -646,7 +653,7 @@ elif view == "Player":
         with pick2:
             vs = st.selectbox("Compare with", [None] + others, key="player_vs",
                               format_func=lambda n: "Compare with..." if n is None else n,
-                              label_visibility="collapsed")
+                              placeholder="Compare with...", label_visibility="collapsed")
         with band:
             if vs:
                 compare_band(player, vs, season, D.games_together(pdf_season, player, vs))

@@ -16,6 +16,7 @@ _viewport = components.declare_component(
                                   "components", "viewport"))
 
 DESIGN_H = 790          # usable height the fixed sizes were tuned for (1440x900 laptop)
+BAR_H = 44              # the purple top bar and the gap under it
 MIN_H, MAX_H = 660, 1500
 
 
@@ -80,21 +81,20 @@ def scroll_sizes(mode_, height, width):
 
 def sizes(height, width=1440):
     """Pixel sizes for the current window. Extra height is shared between the
-    two chart rows; the chat panel grows with the window. Below about 1400px
-    wide some card titles and controls wrap onto a second line, so the charts
-    give up that height too."""
+    two chart rows; the chat panel grows with the window. (Card titles and
+    tile values ellipsise rather than wrap, so width doesn't change heights.)"""
     h = max(MIN_H, min(MAX_H, height))
-    wrap = max(0, min(100, int((1400 - width) * 0.65)))
-    extra = h - DESIGN_H - wrap
-    mid = int(238 + 0.45 * extra)
-    bot = int(262 + 0.55 * extra)
+    extra = h - DESIGN_H - BAR_H
+    mid = int(241 + 0.45 * extra)
+    bot = int(265 + 0.55 * extra)
     return {
         "phone": False,
         "mode": "desktop",
         "mid": mid,
         "bot": bot,
-        "panel": int(722 + extra + wrap),
-        "history": int(570 + extra + wrap),
+        # Level with the cards: the window less the bar and 9px at the bottom.
+        "panel": int(722 + extra + 53),
+        "history": int(570 + extra + 53),
         # Player form rows that fit the bottom card at 12px labels, after the
         # card's takeaway line (about 18px a row).
         "form_rows": max(7, min(24, int((bot - 18 - 68) / 18))),
