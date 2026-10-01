@@ -286,7 +286,8 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   overall ceiling; log in Deep dives
   -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
   starts again after a restart or redeploy.
-- While Wharf-ai works, the status line shows an AFL phrase with animated dots (`app.WAIT_PHRASES`,
+- While Wharf-ai works, the status line shows a spinning red AFL ball (`app.WAIT_BALL`, inline SVG, fixed size so the
+  line doesn't shift; still under reduced motion) and an AFL phrase (`app.WAIT_PHRASES`,
   20 of them, shuffled; a new one each time a tool runs, with what it is calculating alongside,
   and "writing the answer" when the next model request starts), plus a seconds counter the browser
   runs in CSS (`.wa-secs`; a negative animation-delay keeps the count going when the line is redrawn).

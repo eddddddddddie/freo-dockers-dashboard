@@ -227,15 +227,23 @@ def player_photo(player_id, season):
     return None
 
 
+# A red AFL ball with white laces (inline, so it can spin; the 🏉 emoji is a
+# brown rugby ball on most systems and can't be recoloured).
+WAIT_BALL = ('<svg class="wa-ball" viewBox="0 0 24 24" aria-hidden="true">'
+             '<ellipse cx="12" cy="12" rx="10.5" ry="6.5" fill="#C8102E"/>'
+             '<path d="M4 12h16" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/>'
+             '<path d="M9 10.3v3.4M11 10.3v3.4M13 10.3v3.4M15 10.3v3.4" stroke="#fff" '
+             'stroke-width="1.1" stroke-linecap="round"/></svg>')
+
+
 def wait_line(phrase, doing=None, started=None):
-    """The waiting message: an AFL phrase with animated dots, what Wharf-ai is
+    """The waiting message: a spinning red footy, an AFL phrase, what Wharf-ai is
     calculating, if anything, and a seconds counter from `started` (time.time())."""
     extra = f' <span class="wa-doing">· {html.escape(doing)}</span>' if doing else ""
     if started is not None:
         extra += (f' <span class="wa-secs" style="animation-delay:-{time.time() - started:.1f}s">'
                   '</span>')
-    return (f'<div class="wa-wait">🏉 {html.escape(phrase)}<span class="wa-dots">...</span>'
-            f'{extra}</div>')
+    return f'<div class="wa-wait">{WAIT_BALL} {html.escape(phrase)}{extra}</div>'
 
 
 def scroll_to_bottom(selector):

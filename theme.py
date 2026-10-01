@@ -320,9 +320,11 @@ def inject_css():
           .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
           .wa-wait { font-size:.8rem; font-weight:600; color:var(--brand); margin:2px 0 4px; }
           .wa-wait .wa-doing { color:var(--muted); font-weight:500; }
-          .wa-dots { display:inline-block; overflow:hidden; vertical-align:bottom; width:0;
-            animation:wa-dots 1.2s steps(4, end) infinite; }
-          @keyframes wa-dots { to { width:1.05em; } }
+          /* Spinning footy: fixed size, so the line doesn't shift as it turns. */
+          .wa-ball { display:inline-block; width:1.15em; height:1.15em; vertical-align:-.25em;
+            margin-right:2px; animation:wa-spin 1.1s linear infinite; }
+          @keyframes wa-spin { to { transform:rotate(360deg); } }
+          @media (prefers-reduced-motion: reduce) { .wa-ball { animation:none; } }
           /* Seconds since the question was asked, counted by the browser. A
              negative animation-delay carries the count on when the line is redrawn. */
           @property --wa-s { syntax:'<integer>'; initial-value:0; inherits:false; }
