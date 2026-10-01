@@ -13,6 +13,8 @@ import html
 
 import streamlit as st
 
+import marks
+
 # Chart palette, derived from fremantlefc.com.au's colours and checked with the
 # dataviz validator (OKLCH lightness band, chroma floor, colour-vision separation,
 # contrast on white). The site purple #331C54 is too dark for a data mark
@@ -109,6 +111,8 @@ def style_fig(fig, y_title="", unified=True, height=240):
 
 
 def inject_css():
+    st.markdown(f'<style>:root {{ --mark-freo:{marks.uri("Fremantle")}; }}</style>',
+                unsafe_allow_html=True)
     st.markdown(
         """
         <style>
@@ -211,12 +215,12 @@ def inject_css():
           .mc-last .cv-res { padding:1px 7px; margin-left:3px; vertical-align:2px; }
           @media (max-width: 1599px) { .cv-band .opt2 { display:none; } }
           @media (max-width: 1380px) { .mc-team span { display:none; } .mc-num { font-size:1.5rem; } }
-          /* A faint anchor in the bands, where the club site puts its crests (a plain
-             anchor drawing of our own, not the club crest). */
-          .cv-band { position:relative; }
+          /* A faint mark at the right of each band, where the club site puts its
+             crests: our own line drawings (marks.py), the anchor for Freo and a
+             club's mascot in its Scout band and at their end of the Match band. */
+          .cv-band { position:relative; --mark:var(--mark-freo); }
           .cv-band::after { content:""; position:absolute; right:14px; top:-8px; width:80px; height:80px;
-            background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'%3E%3Ccircle cx='32' cy='12' r='6'/%3E%3Cpath d='M32 18v38M20 28h24M10 38c2 12 12 18 22 18s20-6 22-18'/%3E%3C/svg%3E") no-repeat center/contain;
-            opacity:.07; pointer-events:none; }
+            background:var(--mark) no-repeat center/contain; opacity:.08; pointer-events:none; }
           .cv-band.club::after, .cv-band.match::after { right:24px; }
           .cv-stat { line-height:1.05; white-space:nowrap; }
           .cv-stat b { font-size:1.08rem; font-weight:700; }
@@ -361,6 +365,10 @@ def inject_css():
           .wa-rot:hover .wa-rot-item { animation-play-state:paused; }
           .pl-photo { width:42px; height:42px; border-radius:50%; flex:none; object-fit:cover;
             object-position:top; background:#fff; border:2px solid rgba(255,255,255,.85); }
+          /* In a comparison: a thick ring in the player's chart colour, a thin white
+             edge so the purple ring still shows on the purple band; B overlaps A. */
+          .pl-photo.ring { border-width:3px; border-style:solid; box-shadow:0 0 0 1.5px #fff; }
+          .pl-photo.ring + .pl-photo.ring { margin-left:-16px; }
           .pl-initials { display:flex; align-items:center; justify-content:center; background:var(--brand-2);
             color:#fff; font-weight:800; font-size:.95rem; letter-spacing:.5px; }
           .cv-band.player { gap:clamp(9px, 1vw, 18px); }
@@ -711,7 +719,8 @@ def match_band(game, venue_date):
     # as a stripe on the right.
     club = club_colours(game["opponent"])
     style = (f'background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 40%, '
-             f'{club["band"]} 100%); border-right:6px solid {club["accent"]}')
+             f'{club["band"]} 100%); border-right:6px solid {club["accent"]}; '
+             f'--mark:{marks.uri(game["opponent"])}')
     st.markdown(
         f'<div class="cv-band match mc" style="{style}"><div class="ttl">{html.escape(game["round"])} v '
         f'{html.escape(game["opponent"])}<small>{html.escape(venue_date)}</small></div>'
@@ -763,7 +772,7 @@ def scout_band(team, season, lad_row, last5):
     club = club_colours(team)
     st.markdown(
         f'<div class="cv-band match club" style="background:{club["band"]};'
-        f'border-left:6px solid {club["accent"]}"><div class="ttl">Scout: {html.escape(team)}'
+        f'border-left:6px solid {club["accent"]};--mark:{marks.uri(team)}"><div class="ttl">Scout: {html.escape(team)}'
         f'<small>{season} · percentage {lad_row["pct"]:.1f} (home and away)</small></div>{stat_html}'
         f'<div class="cv-stat" title="Last 5 results"><div class="cv-form">{chips}</div></div></div>',
         unsafe_allow_html=True)
@@ -821,11 +830,14 @@ def h2h_table(rows):
                 f'<tbody>{body}</tbody></table>', unsafe_allow_html=True)
 
 
-def _avatar(player, photo_url=None):
-    """A round headshot, or the player's initials in the club purple."""
+def _avatar(player, photo_url=None, ring=None):
+    """A round headshot, or the player's initials in the club purple. ring: a
+    colour for the border (the player's chart colour in a comparison)."""
+    style = f' style="border-color:{ring};{"background:" + ring if not photo_url else ""}"' if ring else ""
+    cls = " ring" if ring else ""
     if photo_url:
-        return f'<img class="pl-photo" src="{html.escape(photo_url)}" alt="" loading="lazy">'
-    return f'<span class="pl-photo pl-initials">{_initials(player)}</span>'
+        return f'<img class="pl-photo{cls}" src="{html.escape(photo_url)}" alt=""{style} loading="lazy">'
+    return f'<span class="pl-photo pl-initials{cls}"{style}>{_initials(player)}</span>'
 
 
 def _initials(player):
@@ -891,15 +903,16 @@ def insight_rotator(texts, start=0, seconds=30):
 PAIR = (COLORS["freo"], COLORS["opp"])   # player A, player B (charts.PAIR)
 
 
-def compare_band(a, b, season, together):
-    """Header band for two players: both names (each with its chart colour as a
-    key) and how many games they played together, with Freo's record in them."""
+def compare_band(a, b, season, together, photos=(None, None)):
+    """Header band for two players: each one's photo (or initials) ringed in
+    their chart colour, both names, and how many games they played together,
+    with Freo's record in them."""
     keys = '<span class="cmp-v">v</span>'.join(
-        f'<span class="cmp-name"><i style="background:{c}"></i>{html.escape(n.split()[-1])}</span>'
-        for n, c in zip((a, b), PAIR))
+        f'<span class="cmp-name">{html.escape(n.split()[-1])}</span>' for n in (a, b))
     rec = record_text(together["wins"], together["losses"], together.get("draws", 0))
     st.markdown(
-        f'<div class="cv-band player cmp"><div class="ttl">{keys}'
+        f'<div class="cv-band player cmp">{_avatar(a, photos[0], ring=PAIR[0])}'
+        f'{_avatar(b, photos[1], ring=PAIR[1])}<div class="ttl">{keys}'
         f'<small>{season} · {together["games"]} games together, {rec}</small></div>'
         f'<div class="cv-stat opt"><b>{together["games_a"]} / {together["games_b"]}</b>'
         f'<span>Games each</span></div></div>',

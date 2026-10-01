@@ -196,7 +196,8 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   on last season, game-by-game trend (pick a stat), squad rank on 12 stats, every game shaded
   against the player's own average.
 - Player vs player: in the Player view, "Compare with..." (next to the player picker; `vs=` in
-  the address) swaps the profile for `views.render_compare`: a band with both surnames and their
+  the address) swaps the profile for `views.render_compare`: a band with both photos (or
+  initials), each ringed in that player's chart colour, both surnames and their
   games together and record in them (`data.games_together`), tiles with each player's average and
   squad rank per stat and a share bar, game by game for both (gaps where one didn't play, dashed
   season averages), squad rank on each stat as a dumbbell (as many stats as fit the height), and a
@@ -369,7 +370,10 @@ Python + Streamlit + pandas + Plotly (simple to run locally), unless a better op
 - Styled after fremantlefc.com.au's look: flat deep purple #331C54 top bar / Wharf-ai head,
   #F7F7F7 page, white cards (4px radius, a faint shadow), Inter (Google Fonts) with bold
   sentence-case titles, small uppercase labels on tiles and bands, thin white dividers on purple,
-  and a faint plain anchor (our own drawing, not the crest) at the right of each band. The Match
+  and a faint mark at the right of each band (`marks.py`, our own line drawings, never a club's
+logo or crest): the anchor for Freo, and in a club's Scout band and at their end of the Match band
+a drawing of the mascot behind their nickname (cat for Geelong, crow for Adelaide, lion, magpie,
+claw marks for Richmond, Captain Carlton's mask, and so on), passed to the band as `--mark`. The Match
   band is laid out like the site's match card: the score big in the middle with goals.behinds
   under each side, then a "Won by 12" / "Lost by 7" pill. Palette in CSS variables at the top of
   `theme.inject_css`.

@@ -656,7 +656,10 @@ elif view == "Player":
                               placeholder="Compare with...", label_visibility="collapsed")
         with band:
             if vs:
-                compare_band(player, vs, season, D.games_together(pdf_season, player, vs))
+                photos = tuple(player_photo(D.player_details(player_df, n, season).get("player_id"),
+                                            season) for n in (player, vs))
+                compare_band(player, vs, season, D.games_together(pdf_season, player, vs),
+                             photos=photos)
             else:
                 details = D.player_details(player_df, player, season)
                 player_band(player, season, pdf_season[pdf_season["player"] == player],
