@@ -1,0 +1,52 @@
+name: data refresh
+
+# Scrapes the current season and commits any new games (refresh.py writes the
+# files only if the data tests pass), so the app redeploys with them.
+# In the season, twice a week: Tuesday and Wednesday 06:00 Perth (22:00 UTC the
+# day before), after the weekend round and any Monday game, with a second go if
+# one source was late. Run it by hand from the Actions tab, optionally for
+# another season.
+on:
+  schedule:
+    - cron: "0 22 * 3-9 1,2"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season to refresh (blank: this season)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP_USERNAME: ci-user      # the tests' login; not used to scrape
+      APP_PASSWORD: ci-pass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Scrape, merge and check
+        run: python refresh.py ${{ github.event.inputs.season }}
+      - name: Commit any new data
+        run: |
+          git add -- *.csv data_refresh.json
+          if git diff --cached --quiet; then
+            echo "No new data."
+            exit 0
+          fi
+          games=$(python -c "import json; m = json.load(open('data_refresh.json')); print(', '.join(f'{s}: {n}' for s, n in m['games'].items()))")
+          git config user.name "freo-data-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Data refresh ($games games)"
+          git push

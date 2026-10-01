@@ -92,3 +92,26 @@ def test_league_file_if_present():
     assert (lg.groupby("match_id").size() == 2).all()
     freo = lg[lg["team"] == "Fremantle"]
     assert len(freo) == len(D.load_team())
+
+
+def test_compare_players_matches_plain_pandas(players):
+    p = D.players_season(players, 2026)
+    a, b = "Caleb Serong", "Andrew Brayshaw"
+    cmp = D.compare_players(p, a, b).set_index("stat")
+    for who, key in ((a, "a"), (b, "b")):
+        me = p[p["player"] == who].sort_values("game_dt")
+        assert cmp.loc["Disposals", f"avg_{key}"] == pytest.approx(me["disposals"].mean())
+        assert cmp.loc["Disposals", f"last_{key}"] == pytest.approx(me["disposals"].tail(5).mean())
+    together = D.games_together(p, a, b)
+    both = set(p[p["player"] == a]["round"]) & set(p[p["player"] == b]["round"])
+    assert together["games"] == len(both) == together["wins"] + together["losses"]
+
+
+def test_draws_are_neither_wins_nor_losses(team):
+    from theme import record_text
+    for season in D.seasons(team):
+        rec = D.record(D.team_season(team, season))
+        assert rec["wins"] + rec["losses"] + rec["draws"] == rec["games"]
+        res = D.team_season(team, season)["result"]
+        assert rec["draws"] == int((res == "D").sum())
+    assert record_text(12, 10, 1) == "12-10-1" and record_text(21, 6) == "21-6"

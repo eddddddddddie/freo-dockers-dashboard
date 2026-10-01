@@ -150,6 +150,17 @@ def ext_check():
                     print(f"  team {a}: {n} games differ")
 
 
+def data_updated():
+    """When refresh.py last added data (datetime, Perth time), or None."""
+    import json
+    from datetime import datetime
+    try:
+        with open("data_refresh.json") as f:
+            return datetime.fromisoformat(json.load(f)["updated"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def seasons(df):
     return sorted(int(s) for s in df["season"].unique())
 
@@ -175,7 +186,8 @@ def record(tdf):
     games = len(tdf)
     win_pct = wins / games * 100 if games else 0.0
     return {
-        "games": games, "wins": wins, "losses": losses, "win_pct": win_pct,
+        "games": games, "wins": wins, "losses": losses, "draws": games - wins - losses,
+        "win_pct": win_pct,
         "score_for": tdf["freo_score"].mean() if games else 0.0,
         "score_against": tdf["opp_score"].mean() if games else 0.0,
         "margin": tdf["margin"].mean() if games else 0.0,
@@ -438,9 +450,9 @@ def similar_positions(team_df, brk, margin, window, seasons=None, game_type=None
         bm = bm[bm["type"] == game_type]
     m = bm[(bm[q] - margin).abs() <= window].copy()
     m["after_break"] = m["Q4"] - m[q]   # net scoring from the break to the siren
-    w = int((m["result"] == "W").sum())
+    w, lo = int((m["result"] == "W").sum()), int((m["result"] == "L").sum())
     return m.sort_values(q), {
-        "games": len(m), "wins": w, "losses": len(m) - w,
+        "games": len(m), "wins": w, "losses": lo, "draws": len(m) - w - lo,
         "win_pct": w / len(m) * 100 if len(m) else None,
         "avg_final": m["margin"].mean() if len(m) else None,
         "avg_after": m["after_break"].mean() if len(m) else None,
@@ -650,9 +662,9 @@ def opponent_grid(team_df):
     average margin). Returns [(opponent, record, avg margin, {season: [games]})]."""
     out = []
     for opp, g in team_df.sort_values("game_dt").groupby("opponent"):
-        w = int((g["result"] == "W").sum())
+        w, lo = int((g["result"] == "W").sum()), int((g["result"] == "L").sum())
         games = {int(s): gs.to_dict("records") for s, gs in g.groupby("season")}
-        out.append({"opponent": opp, "wins": w, "losses": len(g) - w,
+        out.append({"opponent": opp, "wins": w, "losses": lo, "draws": len(g) - w - lo,
                     "avg_margin": g["margin"].mean(), "games": games})
     return sorted(out, key=lambda r: r["avg_margin"])
 
@@ -849,6 +861,37 @@ def player_squad_ranks(pdf_season, player):
                      "rank": int(avgs.rank(ascending=False, method="min")[player]),
                      "squad": len(avgs)})
     return pd.DataFrame(rows)
+
+
+def compare_players(pdf_season, a, b, last_n=5):
+    """Two players side by side on every profile stat: per game average, the
+    last `last_n` games, and squad rank (players with MIN_GAMES+ games; None if
+    the player has fewer). One row per stat."""
+    squad = pdf_season.groupby("player").filter(lambda g: len(g) >= MIN_GAMES)
+    rows = []
+    for label, col in [("Goals + assists", "forward_threat")] + PROFILE_STATS:
+        if col not in pdf_season.columns:
+            continue
+        avgs = squad.groupby("player")[col].mean()
+        ranks = avgs.rank(ascending=False, method="min")
+        row = {"stat": label, "col": col, "squad": len(avgs)}
+        for key, who in (("a", a), ("b", b)):
+            me = pdf_season[pdf_season["player"] == who].sort_values("game_dt")
+            row[f"avg_{key}"] = me[col].mean() if len(me) else None
+            row[f"last_{key}"] = me[col].tail(last_n).mean() if len(me) else None
+            row[f"rank_{key}"] = int(ranks[who]) if who in ranks else None
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def games_together(pdf_season, a, b):
+    """The games both players played: count and Freo's record in them."""
+    ga = pdf_season[pdf_season["player"] == a][["season", "round", "result"]]
+    gb = pdf_season[pdf_season["player"] == b][["season", "round"]]
+    both = ga.merge(gb, on=["season", "round"])
+    wins, losses = int((both["result"] == "W").sum()), int((both["result"] == "L").sum())
+    return {"games": len(both), "wins": wins, "losses": losses, "draws": len(both) - wins - losses,
+            "games_a": len(ga), "games_b": len(gb)}
 
 
 def player_log(pdf_season, player):

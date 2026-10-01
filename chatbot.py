@@ -52,15 +52,20 @@ SOURCES = (
     if HAS_EXT else "afltables.com box scores"
 )
 
+_SEASONS = D.seasons(D.load_team())
+SEASONS = ", ".join(map(str, _SEASONS[:-1])) + f" and {_SEASONS[-1]}" if len(_SEASONS) > 1 else str(_SEASONS[0])
+
 SYSTEM_INTRO = f"""You are Wharf-ai, the analyst for a Fremantle Dockers (AFL) performance dashboard.
-You answer tactical and statistical questions about Fremantle's 2025 and 2026 seasons from
+You answer tactical and statistical questions about Fremantle's {SEASONS} seasons from
 the dashboard's data ({SOURCES}). Where both sources carry a stat, the AFL Tables figure is used.
 
 How to answer:
 - Use the data tools for every number you state. Call them as many times as you need,
   including several in parallel. Do not quote a figure from memory or work one out in
-  your head beyond restating tool output (a simple difference of two tool numbers is fine;
-  say which two).
+  your head beyond restating tool output. A simple step from two tool numbers is fine
+  (a difference, a total, a per game rate, a percentage) as long as both numbers are in
+  the answer, in plain words, e.g. "down from 27.4 to 24.5 a game (-2.9)". Never mention
+  tools, tool output or calculations to the reader; the app shows them under the answer.
 - If a tool returns an error, fix the call and try again.
 - If a question needs data we do not have, say so plainly. We do NOT have: {UNAVAILABLE}.
   Box-score data shows what happened, not why or where on the ground.
@@ -91,7 +96,8 @@ def system_text():
     lines = [SYSTEM_INTRO, "DATA AVAILABLE TO THE TOOLS", W.describe(), "", "HEADLINES"]
     for season in D.seasons(team):
         rec = D.record(D.team_season(team, season))
-        lines.append(f"{season}: {rec['wins']}-{rec['losses']} from {rec['games']} games, "
+        draws = f"-{rec['draws']} (wins-losses-draws)" if rec.get("draws") else ""
+        lines.append(f"{season}: {rec['wins']}-{rec['losses']}{draws} from {rec['games']} games, "
                      f"avg margin {rec['margin']:+.1f}.")
     return "\n".join(lines)
 
@@ -168,12 +174,13 @@ def _hold_back_marker(chunks, on_followups):
 
 
 def stream_answer(client, current_season, history, opening=None, on_tool=None,
-                  on_chart=None, focus=None, on_followups=None, on_usage=None, on_step=None):
+                  on_chart=None, focus=None, on_followups=None, on_usage=None, on_step=None,
+                  on_result=None):
     """Yield answer text (without the FOLLOWUPS line); see _stream_answer.
     on_usage(usage) receives each model request's token usage."""
     yield from _hold_back_marker(
         _stream_answer(client, current_season, history, opening, on_tool, on_chart, focus,
-                       on_usage, on_step),
+                       on_usage, on_step, on_result),
         on_followups)
 
 
@@ -194,7 +201,7 @@ def friendly_error(exc):
 
 
 def _stream_answer(client, current_season, history, opening=None, on_tool=None,
-                   on_chart=None, focus=None, on_usage=None, on_step=None):
+                   on_chart=None, focus=None, on_usage=None, on_step=None, on_result=None):
     """Yield answer text as it streams, running tool calls in between.
 
     history: prior turns as plain text ({"role", "content"}), ending with the
@@ -204,7 +211,9 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
     before each tool runs, for a progress line in the UI; on_chart(fig) receives
     each chart the model asks for. focus: what the user is looking at (a match).
     on_step(n) is called when model request n (0, 1, ...) starts, so the UI can
-    show that work is moving while the model thinks.
+    show that work is moving while the model thinks. on_result(name, args,
+    result, is_error) receives each tool's output (a wharf_tools.Result when it
+    is a table), so the app can show the numbers behind the answer.
     """
     note = f"The user is currently viewing the {current_season} season."
     if focus:
@@ -266,6 +275,8 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
                 text, is_error, fig = W.run(block.name, args)
                 if fig is not None and on_chart:
                     on_chart(fig)
+                if on_result:
+                    on_result(block.name, args, text, is_error)
             results.append({"type": "tool_result", "tool_use_id": block.id,
                             "content": text, "is_error": is_error})
         # All results for this step go back in one user message.

@@ -40,6 +40,16 @@ RAMP = ["#BEACE4", "#9F86CF", "#8061B5", "#5E3E8F", "#331C54"]
 DIVERGE = [COLORS["opp"], "#81C4D1", "#EDEDEF", "#B8A6DD", COLORS["freo"]]
 SERIES = [COLORS["freo"], COLORS["opp"], COLORS["series3"], COLORS["series4"]]
 
+def result_colour(result):
+    """Win green, loss red, a draw grey (every chip also carries its letter)."""
+    return {"W": COLORS["win"], "L": COLORS["loss"]}.get(result, COLORS["neutral"])
+
+
+def record_text(wins, losses, draws=0):
+    """'12-10', or '12-10-1' with a draw."""
+    return f"{int(wins)}-{int(losses)}" + (f"-{int(draws)}" if draws else "")
+
+
 # Club colours for the Scout view: colours only, no logos or other marks.
 # chart: the club's hue, with the lightness and chroma closest to the club colour that
 #   still passes the dataviz validator against Freo #61359C (CVD dE >= 8, normal dE >= 15,
@@ -277,6 +287,20 @@ def inject_css():
           .pl-initials { display:flex; align-items:center; justify-content:center; background:var(--brand-2);
             color:#fff; font-weight:800; font-size:.95rem; letter-spacing:.5px; }
           .cv-band.player { gap:clamp(9px, 1vw, 18px); }
+          .cmp-name { display:inline-flex; align-items:center; gap:5px; }
+          .cmp-v { margin:0 8px; font-weight:500; opacity:.75; }
+          .cmp-name i { width:10px; height:10px; border-radius:50%; display:inline-block;
+            box-shadow:0 0 0 1.5px #fff; }
+          .cmp-line { display:flex; align-items:baseline; gap:5px; font-size:.8rem; color:var(--muted);
+            line-height:1.35; }
+          .cmp-line i { width:8px; height:8px; border-radius:50%; flex:none; align-self:center; }
+          .cmp-line .nm { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+            white-space:nowrap; }
+          .cmp-line b { font-size:1rem; font-weight:600; color:var(--ink); }
+          .cmp-line.lead b { font-weight:800; }
+          .cmp-rk { font-size:.7rem; font-weight:700; color:var(--brand); }
+          .cmp-bar { display:flex; height:5px; border-radius:3px; overflow:hidden; gap:2px; margin-top:4px; }
+          .cmp-wrap { overflow-y:auto; }
           [data-testid="stChatMessage"] { padding:6px 4px; }
           [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li { font-size:.84rem; }
 
@@ -306,6 +330,8 @@ def inject_css():
             counter-reset:wa-s var(--wa-s); animation:wa-count 600s steps(600, end) forwards; }
           .wa-secs::after { content:counter(wa-s) " s"; }
           @keyframes wa-count { from { --wa-s:0; } to { --wa-s:600; } }
+          .wa-flag { font-size:.75rem; color:#8A5A00; background:#FFF6E0; border-radius:6px;
+            padding:4px 8px; margin:4px 0; }
           .wa-earlier { border-top:1px solid var(--line); padding-top:8px; margin-top:10px; }
           .st-key-wa_history div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
@@ -325,8 +351,10 @@ def inject_phone_css():
           /* Streamlit stacks columns below 640px; the controls row stays one line. */
           .st-key-m_ctrl div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
           .st-key-m_ctrl div[data-testid="stColumn"] { min-width:0 !important; width:auto !important; }
-          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(1) { flex:1 1 0 !important; }
-          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(2) { flex:1.25 1 0 !important; }
+          /* The season buttons (one per season) get the room they need; the view dropdown the rest. */
+          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(1) { flex:0 0 auto !important; }
+          .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(2) { flex:1 1 0 !important; }
+          .st-key-season div[data-testid="stButtonGroup"] button { padding:4px 8px; }
           .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(n+3) { flex:0 0 40px !important; }
           .st-key-tour_btn button, .st-key-signout_btn button { width:40px; height:40px; min-height:40px; }
           div[data-testid="stButtonGroup"] button { min-height:40px; padding:4px 10px; }
@@ -352,6 +380,9 @@ def inject_phone_css():
           .card-title .key { display:inline-block; margin-left:8px; }
           div[class*="st-key-card_"] { padding:10px 12px; }
           .tp-row { grid-template-columns:88px 50px 1fr 50px; gap:6px; }
+          /* Player vs player table: season averages and the gap only */
+          .cmp-wrap th:nth-child(3), .cmp-wrap td:nth-child(3),
+          .cmp-wrap th:nth-child(5), .cmp-wrap td:nth-child(5) { display:none; }
           .tp-f, .tp-o { font-size:.8rem; }
           .st-key-jump_dash { display:flex; justify-content:flex-end; }
           .st-key-jump_dash button p { font-weight:700; color:var(--brand); }
@@ -410,10 +441,10 @@ def header_band(season, rec, form, data_note):
     """form: list of (result, tooltip) for the last five games."""
     chips = "".join(
         f'<i title="{html.escape(t)}" style="background:'
-        f'{COLORS["win"] if r == "W" else COLORS["loss"]}">{r}</i>'
+        f'{result_colour(r)}">{r}</i>'
         for r, t in form)
     stats = [
-        (f'{rec["wins"]}-{rec["losses"]}', "Record"),        # the lead number
+        (record_text(rec["wins"], rec["losses"], rec.get("draws", 0)), "Record"),  # the lead number
         (f'{rec["win_pct"]:.0f}%', "Win rate"),
         (f'{rec["score_for"]:.1f}', "Avg for"),     # hidden on narrow windows
         (f'{rec["score_against"]:.1f}', "Avg against"),
@@ -540,8 +571,8 @@ def insight_card(text):
 
 def match_band(game, venue_date):
     """Header band for match mode: result, score line and margin."""
-    res = "Won" if game["result"] == "W" else "Lost"
-    color = COLORS["win"] if game["result"] == "W" else COLORS["loss"]
+    res = {"W": "Won", "L": "Lost"}.get(game["result"], "Drew")
+    color = result_colour(game["result"])
     fq, oq = game["freo_qtrs"].split()[-1], game["opp_qtrs"].split()[-1]
     st.markdown(
         f'<div class="cv-band match"><div class="ttl">{html.escape(game["round"])} v '
@@ -580,7 +611,7 @@ def scout_band(team, season, lad_row, last5):
     """Header band for the scout report: record, ladder spot, percentage, form."""
     chips = "".join(
         f'<i title="{html.escape(t)}" style="background:'
-        f'{COLORS["win"] if r == "W" else COLORS["loss"]}">{r}</i>' for r, t in last5)
+        f'{result_colour(r)}">{r}</i>' for r, t in last5)
     stats = [
         (f'{int(lad_row["wins"])}-{int(lad_row["losses"])}' +
          (f'-{int(lad_row["draws"])}' if lad_row["draws"] else ""), "H&A"),
@@ -615,7 +646,7 @@ def h2h_table(rows):
     """Freo's games against one club: result chip, score and two key counts."""
     body = ""
     for r in rows.itertuples():
-        color = COLORS["win"] if r.result == "W" else COLORS["loss"]
+        color = result_colour(r.result)
         body += (f'<tr><td>{r.season} {html.escape(r.round)}</td><td>{html.escape(r.venue)}</td>'
                  f'<td><span class="op-chip" style="background:{color}">{r.result} '
                  f'{int(r.margin):+d}</span></td><td class="op-num">{r.freo_score}-{r.opp_score}</td>'
@@ -690,3 +721,68 @@ def insight_rotator(texts, start=0, seconds=30):
         f'{show:.2f}% {{opacity:0; visibility:hidden}} 100% {{opacity:0; visibility:hidden}} }}'
         f'.wa-rot-item {{ animation: wa-rot-{n} {cycle}s linear infinite; }}</style>'
         f'<div class="wa-insight wa-rot">{items}</div>', unsafe_allow_html=True)
+
+
+# ---- Player vs player --------------------------------------------------------
+PAIR = (COLORS["freo"], COLORS["opp"])   # player A, player B (charts.PAIR)
+
+
+def compare_band(a, b, season, together):
+    """Header band for two players: both names (each with its chart colour as a
+    key) and how many games they played together, with Freo's record in them."""
+    keys = '<span class="cmp-v">v</span>'.join(
+        f'<span class="cmp-name"><i style="background:{c}"></i>{html.escape(n.split()[-1])}</span>'
+        for n, c in zip((a, b), PAIR))
+    rec = record_text(together["wins"], together["losses"], together.get("draws", 0))
+    st.markdown(
+        f'<div class="cv-band player cmp"><div class="ttl">{keys}'
+        f'<small>{season} · {together["games"]} games together, {rec}</small></div>'
+        f'<div class="cv-stat opt"><b>{together["games_a"]} / {together["games_b"]}</b>'
+        f'<span>Games each</span></div></div>',
+        unsafe_allow_html=True)
+
+
+def compare_tiles_row(cmp, names, labels):
+    """One tile per stat: each player's per game average and squad rank, the
+    leader in bold, and a bar showing their share of the two averages."""
+    cells = []
+    for _, r in cmp[cmp["stat"].isin(labels)].iterrows():
+        va, vb = r["avg_a"], r["avg_b"]
+        lines = ""
+        for key, n, c, v in (("a", names[0], PAIR[0], va), ("b", names[1], PAIR[1], vb)):
+            lead = v is not None and v == v and v >= max(x for x in (va, vb) if x == x)
+            rk = r[f"rank_{key}"]
+            rk_html = f' <span class="cmp-rk">{_ordinal(int(rk))}</span>' if rk == rk and rk else ""
+            val = f"{v:.1f}" if v == v and v is not None else "-"
+            lines += (f'<div class="cmp-line{" lead" if lead else ""}"><i style="background:{c}"></i>'
+                      f'<span class="nm">{html.escape(n.split()[-1])}</span><b>{val}</b>{rk_html}</div>')
+        tot = (va or 0) + (vb or 0)
+        share = (va or 0) / tot * 100 if tot else 50
+        bar = (f'<div class="cmp-bar"><span style="width:{share:.0f}%;background:{PAIR[0]}"></span>'
+               f'<span style="width:{100 - share:.0f}%;background:{PAIR[1]}"></span></div>')
+        cells.append(f'<div class="cv-tile"><div class="lbl">{html.escape(r["stat"])} a game</div>'
+                     f'{lines}{bar}</div>')
+    st.markdown(f'<div class="cv-tiles" style="--n:{len(cells)}">{"".join(cells)}</div>',
+                unsafe_allow_html=True)
+
+
+def compare_table(cmp, names, last_n=5):
+    """Every profile stat: each player's season and last-games average, and the gap."""
+    a, b = (n.split()[-1] for n in names)
+    body = ""
+    for _, r in cmp.iterrows():
+        if max(abs(r["avg_a"] or 0), abs(r["avg_b"] or 0)) < 0.05:
+            continue                        # e.g. hitouts for two midfielders
+        gap = (r["avg_a"] or 0) - (r["avg_b"] or 0)
+        if abs(gap) < 0.05:
+            gap = 0
+        who = a if gap > 0 else b if gap < 0 else "level"
+        ca, cb = ("op-num" if gap > 0 else ""), ("op-num" if gap < 0 else "")   # the leader in bold
+        body += (f'<tr><td class="op-name">{html.escape(r["stat"])}</td>'
+                 f'<td class="{ca}">{r["avg_a"]:.1f}</td><td>{r["last_a"]:.1f}</td>'
+                 f'<td class="{cb}">{r["avg_b"]:.1f}</td><td>{r["last_b"]:.1f}</td>'
+                 f'<td>{f"{abs(gap):.1f} {html.escape(who)}" if gap else "level"}</td></tr>')
+    st.markdown(f'<div class="cmp-wrap"><table class="op-grid"><thead><tr><th>Per game</th>'
+                f'<th>{html.escape(a)}</th><th>last {last_n}</th><th>{html.escape(b)}</th>'
+                f'<th>last {last_n}</th><th>Gap</th></tr></thead><tbody>{body}</tbody></table></div>',
+                unsafe_allow_html=True)

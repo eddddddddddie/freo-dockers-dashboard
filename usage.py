@@ -47,6 +47,9 @@ def _db():
         con.execute("ALTER TABLE questions ADD COLUMN sid TEXT")
     if "user_email" not in cols:  # logs from before Google sign-in
         con.execute("ALTER TABLE questions ADD COLUMN user_email TEXT")
+    for col, kind in (("answer", "TEXT"), ("rating", "INTEGER"), ("unbacked", "TEXT")):
+        if col not in cols:  # logs from before answer ratings
+            con.execute(f"ALTER TABLE questions ADD COLUMN {col} {kind}")
     return con
 
 
@@ -123,23 +126,33 @@ class Tally:
                 + self.cache_write * PRICES["cache_write"]) / 1e6
 
 
-def record(question, tally, ok=True, sid=None, user_email=None):
-    """Log one question (answered or failed: both count towards the caps)."""
+def record(question, tally, ok=True, sid=None, user_email=None, answer=None, unbacked=None):
+    """Log one question (answered or failed: both count towards the caps).
+    Returns its id, for rate()."""
     with _db() as con:
-        con.execute("INSERT INTO questions (ts, day, question, tools, steps, input_tokens, "
-                    "output_tokens, cache_read, cache_write, cost_usd, ok, sid, user_email) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (
-                        datetime.now(TZ).isoformat(timespec="seconds"), today(), question,
-                        json.dumps(tally.tools), tally.steps, tally.input, tally.output,
-                        tally.cache_read, tally.cache_write, round(tally.cost(), 5), int(ok), sid,
-                        user_email))
+        cur = con.execute(
+            "INSERT INTO questions (ts, day, question, tools, steps, input_tokens, "
+            "output_tokens, cache_read, cache_write, cost_usd, ok, sid, user_email, answer, "
+            "unbacked) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                datetime.now(TZ).isoformat(timespec="seconds"), today(), question,
+                json.dumps(tally.tools), tally.steps, tally.input, tally.output,
+                tally.cache_read, tally.cache_write, round(tally.cost(), 5), int(ok), sid,
+                user_email, answer, json.dumps(unbacked) if unbacked else None))
+        return cur.lastrowid
+
+
+def rate(qid, rating):
+    """A reader's thumbs up (1) or down (0) on an answer; None clears it."""
+    with _db() as con:
+        con.execute("UPDATE questions SET rating = ? WHERE rowid = ?", (rating, qid))
 
 
 def recent(limit=200):
     """Recent questions, newest first, as a list of dicts."""
     with _db() as con:
         con.row_factory = sqlite3.Row
-        rows = con.execute("SELECT * FROM questions ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
+        rows = con.execute("SELECT rowid AS id, * FROM questions ORDER BY ts DESC LIMIT ?",
+                           (limit,)).fetchall()
     return [dict(r) for r in rows]
 
 

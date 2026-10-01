@@ -27,7 +27,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   1680x950). `.github/workflows/checks.yml` runs both on every push with a test-only login.
   Locally the tests sign in with the login in `.streamlit/secrets.toml`, because Streamlit copies
   secrets into the environment at startup and overrides anything set before.
-- Wharf-ai accuracy eval: `python evals/wharf_eval.py` (27 questions, 2 of them league, expected answers computed
+- Data refresh: `python refresh.py` (this season; `python refresh.py 2024` adds or refreshes any
+  season; `--dry-run` writes nothing). Runs the three scrapers for one season in a temporary
+  folder, swaps that season's rows into the existing files, and writes them only if no source lost
+  games, every source has the same Fremantle games, and tests/test_data.py + test_tools.py pass
+  (otherwise the old files go back). Writes `data_refresh.json`, shown as "data <date>" in the
+  Season band. `.github/workflows/refresh.yml` runs it Tue and Wed 06:00 Perth, March to
+  September (and by hand from the Actions tab, optionally for a season) and commits any change,
+  which redeploys the app (and so, on Streamlit Cloud, wipes the usage log until it moves to a
+  database).
+- Wharf-ai feedback review: `python evals/review_feedback.py [usage.csv]` lists thumbs-down answers
+  and answers with unmatched numbers, from the local log or the CSV downloaded in Deep dives ->
+  Wharf-ai usage, as candidate test cases (`evals/results/feedback_<date>.md`).
+- Wharf-ai accuracy eval: `python evals/wharf_eval.py` (28 questions, 2 of them league, expected answers computed
   with plain pandas, deterministic grading; spends real money, about US$0.20 a run; results in
   `evals/results/`, gitignored). Run it after any change to the prompt, tools or model.
 - Check the merge: `python -c "import data; data.ext_check()"` (coverage, surname mismatches,
@@ -57,7 +69,14 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
     bounces, goal_assists, pct_played.
   - `freo_team_games.csv`: one row per game, Freo totals (`freo_*`) vs opposition totals (`opp_*`),
     plus scores, quarter-by-quarter scoring strings, crowd.
-- Scraped 2026-09-29 with no warnings: 51 games (2025: 24, 2026: 27), 23 players per game, 1173 player rows.
+- Scraped 2026-09-29 with no warnings: 51 games (2025: 24, 2026: 27); 2024 added 2026-10-01 with
+  `refresh.py 2024`: 74 games (2024: 23, no finals), 23 players per game, 1702 player rows. The
+  same refresh brought in Champion Data's later revisions to 2026 metres gained (a few metres in
+  some games).
+- Draws exist (2024 R12 v Collingwood, 75-75, result "D"). A draw is neither a win nor a loss:
+  `data.record` and the other record counts carry `draws`, `theme.record_text` shows "12-10-1",
+  and `theme.result_colour` gives draws the neutral grey (with the D letter). Never count
+  "not a win" as a loss.
   Player sums match team totals, score = 6 x goals + behinds, and margin = freo_score - opp_score.
 - Data quirks to handle in the dashboard:
   - Team `freo_behinds`/`opp_behinds` include rushed behinds; summed player behinds don't. Use team totals for goal accuracy.
@@ -172,9 +191,17 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   player's best squad ranking as the lead number, e.g. "1st · Metres gained in squad"), tiles with squad rank and change
   on last season, game-by-game trend (pick a stat), squad rank on 12 stats, every game shaded
   against the player's own average.
+- Player vs player: in the Player view, "Compare with..." (next to the player picker; `vs=` in
+  the address) swaps the profile for `views.render_compare`: a band with both surnames and their
+  games together and record in them (`data.games_together`), tiles with each player's average and
+  squad rank per stat and a share bar, game by game for both (gaps where one didn't play, dashed
+  season averages), squad rank on each stat as a dumbbell (as many stats as fit the height), and a
+  stat by stat table (season and last 5; phones show season and gap). Colours: player A Freo
+  purple, player B cyan (`charts.PAIR`, validated, CVD dE 17). `data.compare_players` builds the
+  rows. Wharf-ai gets comparison questions on that page.
 - Coach research: `docs/coach_sessions.md` is a 30-minute task script (five timed tasks with the
   correct answers, what to watch for, note sheet, debrief). Re-run it after each design round.
-- Header: season toggle (2025 / 2026), Season/Match view switch, Deep dives dropdown, and a band
+- Header: season toggle (one button per season in the data, 2024 to 2026; its column scales with the count), view switch, Deep dives dropdown, and a band
   with record, win rate, avg for/against/margin, last 5, data freshness (the two averages hide
   below 1380px wide).
 - Scout mode (`views.render_scout`, needs league_team_games.csv): pick any club (defaults to the
@@ -292,6 +319,17 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (thinking + tool_use blocks), as preserved thinking requires; only the final text is kept in the
   chat history between questions. Tools + the stable system prompt are cached; the per-view note
   (season, opening insight) sits after the cache breakpoint.
+- Under each answer (`app.answer_extras`): "Show the numbers" opens every calculation the answer
+  used, each tool's own table (`wharf_tools.Result` carries the DataFrame; `evidence.item` keeps
+  it with the message as CSV, so saved chats keep it too); a thumbs up or down (`st.feedback`,
+  `usage.rate`, logged with the answer text); and, if any, "Not matched to a calculation: ..."
+  for numbers `evidence.unbacked` can't trace to a table, the question, the insights or an
+  earlier answer's tables, directly, rounded, as a percentage, or by one simple step (a
+  difference, total, per game rate, percentage change, wins and losses from a win rate, or a
+  share of two numbers the answer itself states). It skips years, counts up to 3, ordinals and
+  names like "inside 50". On the eval (all answers correct) it flagged 1 of 230 numbers, a real
+  two-step sum the prompt doesn't allow. The prompt allows one simple step from two numbers if
+  both are stated, and never to mention tools to the reader.
 - Box-score data shows what happened, not structures or zones. The bot should say so
   when a question needs data we don't have.
 - Needs ANTHROPIC_API_KEY from the environment (never hard-code it). Multi-workspace

@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_tablet_css, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -30,6 +30,7 @@ import layout
 import data as D
 import views as V
 import chatbot as C
+import evidence as E
 import insights as I
 import deepdives as DD
 import usage as U
@@ -96,6 +97,18 @@ WAIT_PHRASES = [
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
+    if focus and focus.startswith("a comparison of "):
+        pair = focus[len("a comparison of "):].split(",")[0]
+        a, b = pair.split(" and ", 1)
+        sa, sb = a.split()[-1], b.split()[-1]
+        return [f"Who has had the better season, {a} or {b}?",
+                f"Where is {sa} ahead of {sb}, and where is {sb} ahead?",
+                f"Who is in better form over the last five games, {sa} or {sb}?",
+                f"How do {sa} and {sb} compare in wins and in losses?",
+                f"How do {sa} and {sb} compare with last season?",
+                f"What is our record when both {sa} and {sb} play?",
+                f"Who wins more of the contested ball, {sa} or {sb}?",
+                f"Which games were {sa}'s and {sb}'s best this season?"]
     if focus and focus.startswith("the player profile for "):
         who = focus.split(" for ", 1)[1].split(",")[0]
         first = who.split()[0]
@@ -238,6 +251,38 @@ def _show_chart(fig_json):
                     config={"displayModeBar": False})
 
 
+def answer_extras(msg, n, msgs):
+    """Under an answer: any number that couldn't be matched to a calculation,
+    the tables it was worked out from, and a thumbs up or down."""
+    if msg.get("unbacked"):
+        st.markdown(f'<div class="wa-flag">Not matched to a calculation: '
+                    f'{html.escape(", ".join(msg["unbacked"]))}. Check under Show the numbers.</div>',
+                    unsafe_allow_html=True)
+    found = msg.get("evidence") or []
+    if found:
+        with st.expander(f"Show the numbers ({len(found)} calculation{'s' if len(found) != 1 else ''})"):
+            for rec in found:
+                st.caption(E.describe(rec, TOOL_LABELS))
+                df = E.table(rec)
+                if df is not None:
+                    st.dataframe(df, hide_index=True, width="stretch",
+                                 height=min(36 + 35 * len(df), 260))
+                else:
+                    st.text(rec.get("text", ""))
+    if msg.get("qid"):
+        key = f"fb_{msg['qid']}"
+        if key not in st.session_state and msg.get("rating") is not None:
+            st.session_state[key] = msg["rating"]
+        st.feedback("thumbs", key=key, on_change=_rate, args=(msg["qid"], n, msgs))
+
+
+def _rate(qid, n, msgs):
+    rating = st.session_state.get(f"fb_{qid}")
+    U.rate(qid, rating)
+    msgs[n]["rating"] = rating
+    U.save_chat(st.session_state.get("sid"), msgs)
+
+
 @st.cache_data(show_spinner=False)
 def season_insights(season, baseline):
     """The season's insights, worked out once (the CSVs don't change while the
@@ -306,6 +351,8 @@ def chat_panel(season, baseline, focus=None):
                 st.markdown(msg["content"])
                 for fig_json in msg.get("charts", []):
                     _show_chart(fig_json)
+                if msg["role"] == "assistant":
+                    answer_extras(msg, n, msgs)
             # Follow-ups under the latest answer only, and only on the page they
             # were asked on (after a move, this page's questions sit above instead).
             if (msg["role"] == "assistant" and n == len(msgs) - 1 and msg.get("followups")
@@ -364,7 +411,7 @@ def chat_panel(season, baseline, focus=None):
             st.markdown(prompt)
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             status = st.empty()
-            steps, charts, followups = [], [], []
+            steps, charts, followups, found = [], [], [], []
             phrases = random.sample(WAIT_PHRASES, len(WAIT_PHRASES))
             started = time.time()
             status.markdown(wait_line(phrases[0], started=started), unsafe_allow_html=True)
@@ -390,7 +437,9 @@ def chat_panel(season, baseline, focus=None):
                     on_tool=on_tool,
                     on_chart=lambda fig: charts.append(fig.to_json()), focus=focus,
                     on_followups=followups.extend, on_usage=tally.add_usage,
-                    on_step=on_step))
+                    on_step=on_step,
+                    on_result=lambda name, args, out, err: None if err else found.append(
+                        E.item(name, args, out))))
                 for fig_json in charts:  # drawn under the answer text
                     _show_chart(fig_json)
                 if steps:
@@ -409,12 +458,18 @@ def chat_panel(season, baseline, focus=None):
                 else:
                     st.error(C.friendly_error(exc) or f"Sorry, Wharf-ai hit an error: {exc}")
                 return
-    U.record(prompt, tally, sid=sid, user_email=(auth.current_user() or {}).get("email"))
+    # Numbers in the answer that none of this chat's calculations (or the
+    # question, or the panel's insights) account for, listed under it to check.
+    earlier = [r for m in msgs if m["role"] == "assistant" for r in m.get("evidence", [])]
+    flagged = E.unbacked(reply, found + earlier, context="\n".join([prompt, focus or ""] + pool))
+    qid = U.record(prompt, tally, sid=sid, user_email=(auth.current_user() or {}).get("email"),
+                   answer=reply, unbacked=flagged)
     if not followups:  # the model left them out: offer unasked suggestions instead
         asked_now = {m["content"] for m in msgs if m["role"] == "user"}
         followups = [q for q in example_prompts(season, baseline, focus) if q not in asked_now][:3]
     msgs.append({"role": "assistant", "content": reply, "charts": charts,
-                 "followups": followups, "page": page, "steps": list(dict.fromkeys(steps))})
+                 "followups": followups, "page": page, "steps": list(dict.fromkeys(steps)),
+                 "evidence": found, "unbacked": flagged, "qid": qid})
     U.save_chat(st.session_state.get("sid"), msgs)
     # Redraw without the example prompts. A question handed over from a deep
     # dive arrives on a full-app run, where a fragment-only rerun is not allowed.
@@ -449,7 +504,7 @@ if PHONE:
     band_slot = st.container()
     with st.container(key="m_ctrl"):
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
-    pick_slot = st.container()
+    pick_slot = pick2_slot = st.container()
     chat_slot = st.container(border=True, key="card_wharfai")
     main = st.container()
 elif SCROLL:
@@ -461,15 +516,17 @@ elif SCROLL:
     with top:
         band_slot = st.container()
         with st.container(key="t_ctrl"):
-            h2, h3, h4, h5, h6 = st.columns([1.05, 2.3, 1.25, 0.3, 0.3], vertical_alignment="center")
-        pick_slot = st.columns([1, 1.6])[0]
+            h2, h3, h4, h5, h6 = st.columns([0.52 * len(all_seasons), 2.3, 1.25, 0.3, 0.3],
+                                            vertical_alignment="center")
+        pick_slot, pick2_slot, _ = st.columns([1, 1, 1.2])
     if LAYOUT == "stack":
         chat_slot = st.container(border=True, key="card_wharfai")
         main = st.container()
 else:
     main, side = st.columns([3.55, 1])
     with main:
-        h1, h2, h3, h4, h5, h6 = st.columns([4.4, 0.84, 1.66, 0.98, 0.24, 0.24],
+        seasons_w = 0.42 * len(all_seasons)       # the season buttons, about 0.42 each
+        h1, h2, h3, h4, h5, h6 = st.columns([5.24 - seasons_w, seasons_w, 1.66, 0.98, 0.24, 0.24],
                                              vertical_alignment="center")
 
 with h2:
@@ -492,17 +549,21 @@ pos = scout = player = game_round = None
 
 
 def _pick_and_band():
-    """The picker (game, player or club) and band slots for this view."""
+    """The picker slots (game, player or club; the Player view adds "compare
+    with") and the band slot for this view."""
     if SCROLL:
-        return pick_slot, band_slot
+        return pick_slot, pick2_slot, band_slot
     if view == "Season":
-        return None, h1
+        return None, None, h1
     with h1:
+        if view == "Player":
+            return st.columns([0.95, 0.95, 2.5], vertical_alignment="center")
         pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
-    return pick, band
+    return pick, None, band
 
 
-pick, band = _pick_and_band()
+pick, pick2, band = _pick_and_band()
+vs = None
 if view == "Scout" and league is not None:
     if st.session_state.get("scout_team") not in CLUBS:
         last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
@@ -522,11 +583,22 @@ elif view == "Player":
         st.session_state["player_pick"] = names[0]
     with pick:
         player = st.selectbox("Player", names, key="player_pick", label_visibility="collapsed")
+    others = [n for n in names if n != player]
+    if st.session_state.get("player_vs") not in [None] + others:
+        st.session_state["player_vs"] = None
+    with pick2:
+        vs = st.selectbox("Compare with", [None] + others, key="player_vs",
+                          format_func=lambda n: "Compare with..." if n is None else n,
+                          label_visibility="collapsed")
     with band:
-        details = D.player_details(player_df, player, season)
-        player_band(player, season, pdf_season[pdf_season["player"] == player],
-                    details=details, photo_url=player_photo(details.get("player_id"), season))
-    focus = f"the player profile for {player}, {season} season"
+        if vs:
+            compare_band(player, vs, season, D.games_together(pdf_season, player, vs))
+        else:
+            details = D.player_details(player_df, player, season)
+            player_band(player, season, pdf_season[pdf_season["player"] == player],
+                        details=details, photo_url=player_photo(details.get("player_id"), season))
+    focus = (f"a comparison of {player} and {vs}, {season} season" if vs else
+             f"the player profile for {player}, {season} season")
 elif view == "Match" and len(tdf):
     choices = D.game_choices(tdf)
     with pick:
@@ -538,7 +610,8 @@ elif view == "Match" and len(tdf):
     with band:
         match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
     focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
-             f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}")
+             + ("drew" if game["result"] == "D" else
+                f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
 else:
     last = tdf.tail(5)
     form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
@@ -547,6 +620,9 @@ else:
             f"{tdf['game_dt'].iloc[-1]:%d %b}") if len(tdf) else "No games"
     if baseline is not None:
         note += f" · vs {baseline}"
+    updated = D.data_updated()
+    if updated is not None:
+        note += f" · data {updated:%-d %b}"
     with band:
         header_band(season, D.record(tdf), form, note)
 
@@ -571,7 +647,7 @@ with h6:
     if st.button("", icon=":material/logout:", key="signout_btn",
                  help=f"Sign out ({who})" if who else "Sign out"):
         auth.sign_out()
-nav.write_url(season, view, game=game_round, player=player, opp=scout)
+nav.write_url(season, view, game=game_round, player=player, opp=scout, vs=vs)
 dive = st.session_state.pop("open_deep_dive", None)
 if dive == "Player map":
     DD.player_map(player_df, season)
@@ -593,6 +669,8 @@ with main:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
     if scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
+    elif player is not None and vs:
+        V.render_compare(player_df, season, player, vs, SZ)
     elif player is not None:
         V.render_player(player_df, season, baseline, player, SZ)
     elif pos is not None:

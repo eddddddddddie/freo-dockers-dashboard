@@ -73,6 +73,21 @@ def test_phone_layout(app):
     assert at.session_state["view"] == "Match"
 
 
+def test_player_comparison_view(app):
+    """Picking "compare with" swaps the Player view for the comparison, and a
+    move to another player without one clears it."""
+    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
+    at = at.button_group(key="view").set_value("Player").run()
+    a, b = at.selectbox(key="player_pick").value, at.selectbox(key="player_pick").options[1]
+    at = at.selectbox(key="player_vs").set_value(b).run()
+    assert not at.exception, at.exception
+    assert any('class="cv-band player cmp"' in m.value for m in at.markdown)
+    assert at.query_params.get("vs") == [b] or at.query_params.get("vs") == b
+    at.session_state["pending_nav"] = {"view": "Player", "player": b}
+    at = at.run()
+    assert at.session_state["player_vs"] is None and at.session_state["player_pick"] == b
+
+
 def test_layout_modes():
     import layout as L
     assert L.mode(390, 844) == L.mode(667, 340) == "phone"

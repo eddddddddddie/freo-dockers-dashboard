@@ -1,7 +1,7 @@
 """Navigation between views, and the view kept in the web address.
 
-The address holds season, view, game (round label, e.g. GF), opp (club) and
-player, e.g. ?season=2026&view=Match&game=GF, so a view can be bookmarked or
+The address holds season, view, game (round label, e.g. GF), opp (club),
+player and vs (the player compared with), e.g. ?season=2026&view=Match&game=GF, so a view can be bookmarked or
 sent, and the browser's Back and Forward buttons move between views (the
 viewport component reruns the app on popstate).
 
@@ -43,6 +43,8 @@ def _apply(state, seasons, game_label, players, clubs):
             st.session_state[f"game_{season}"] = label
     if state.get("player") in players(season):
         st.session_state["player_pick"] = state["player"]
+        # "vs": the player compared with; a move to a player without one clears it.
+        st.session_state["player_vs"] = state["vs"] if state.get("vs") in players(season) else None
     if state.get("opp") in clubs():
         st.session_state["scout_team"] = state["opp"]
 
@@ -74,13 +76,15 @@ def _back_forward():
     return dict(parse_qsl(str(v.get("search", "")).lstrip("?")))
 
 
-def write_url(season, view, game=None, player=None, opp=None):
+def write_url(season, view, game=None, player=None, opp=None, vs=None):
     """Keep the address in step with what is on screen."""
     state = {"season": str(season), "view": view}
     if view == "Match" and game:
         state["game"] = game
     if view == "Player" and player:
         state["player"] = player
+        if vs:
+            state["vs"] = vs
     if view == "Scout" and opp:
         state["opp"] = opp
     if dict(st.query_params) != state:

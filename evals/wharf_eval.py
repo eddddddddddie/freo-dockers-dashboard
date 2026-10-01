@@ -1,13 +1,13 @@
 """Wharf-ai accuracy test set.
 
-Asks Wharf-ai 27 questions whose answers are known, and checks each answer
+Asks Wharf-ai 28 questions whose answers are known, and checks each answer
 for the right number, record, name or refusal. Expected values are computed
 here with plain pandas from the CSVs (not through Wharf-ai's own tools), so
 the checks stay correct when the data is refreshed and a tool bug can't hide
 behind itself. Grading is deterministic string/number matching, no model.
 
 Run (needs ANTHROPIC_API_KEY, spends real money, about US$0.30-0.60 a run):
-    python evals/wharf_eval.py            # all cases (25 Freo + 2 league)
+    python evals/wharf_eval.py            # all cases (26 Freo + 2 league)
     python evals/wharf_eval.py 3 7 12     # just these case numbers
 
 Writes evals/results/<timestamp>.json. Exit code 1 if any case fails.
@@ -26,6 +26,7 @@ os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd  # noqa: E402
 
 import chatbot as C  # noqa: E402
+import evidence as E  # noqa: E402
 import data as D  # noqa: E402
 import usage as U  # noqa: E402
 
@@ -65,7 +66,7 @@ def build_cases():
     gf = t26[t26["round"] == "GF"].iloc[0]
     top_game = t26.loc[t26["freo_score"].idxmax()]
     best_goals = sorted(p26[p26["goals"] == p26["goals"].max()]["player"].unique())  # ties count
-    geel = t[t["opponent"] == "Geelong"]
+    geel = t[(t["opponent"] == "Geelong") & t["season"].isin([2025, 2026])]   # as the question says
     diff = lambda s: (t26[f"freo_{s}"] - t26[f"opp_{s}"]).mean()  # noqa: E731
 
     return [
@@ -113,6 +114,11 @@ def build_cases():
          best_goals),
         ("What was our record in 2026 finals?", "record", rec(t26[t26["type"] == "Final"])),
         ("What was our highest score in a game in 2026?", "num", (top_game["freo_score"], 0)),
+        # Player vs player: both averages must be right, not just the winner's.
+        ("Who averaged more contested possessions in 2026, Caleb Serong or Andrew Brayshaw, "
+         "and by how much?", "nums",
+         [round(p26[p26["player"] == n]["contested_poss"].mean(), 1)
+          for n in ("Caleb Serong", "Andrew Brayshaw")]),
     ] + league_cases()
 
 
@@ -153,11 +159,17 @@ def grade(kind, expected, answer):
                    for n in numbers(a))
     if kind == "nums":
         found = numbers(a)
-        return all(any(abs(n - v) < 1e-9 for n in found) for v in expected)
+        # Whole numbers exactly; decimals to the one place given (11.38 or 11.4 for 11.4).
+        return all(any(abs(n - v) <= (1e-9 if float(v).is_integer() else 0.05 + 1e-9)
+                       for n in found) for v in expected)
     if kind == "record":
         w, l = expected.split("-")
-        return bool(re.search(rf"\b{w}\s*-\s*{l}\b", a)) or bool(
-            re.search(rf"\b{w} wins?\b.*\b{l} loss", a, re.I | re.S))
+        losses = rf"(?:{l}|no)" if l == "0" else l       # "11 wins ... no losses" is 11-0
+        phrased = l == "0" and bool(re.search(rf"\ball {w}\b", a, re.I))   # "won all 11"
+        n = int(w) + int(l)                        # "11 wins from 11 games" (no draws in the cases)
+        phrased = phrased or bool(re.search(rf"\b{w} wins? (?:from|in|out of|of) {n} games", a, re.I))
+        return phrased or bool(re.search(rf"\b{w}\s*-\s*{l}\b", a)) or bool(
+            re.search(rf"\b{w} wins?\b.*\b{losses} loss", a, re.I | re.S))
     if kind == "text":
         return any(e.lower() in a.lower() for e in expected)
     raise ValueError(kind)
@@ -178,26 +190,35 @@ def main(only):
     for i, (q, kind, exp) in enumerate(cases, 1):
         if only and i not in only:
             continue
-        tally, start = U.Tally(), time.time()
+        tally, start, found = U.Tally(), time.time(), []
         try:
-            answer = "".join(C.stream_answer(client, S, [{"role": "user", "content": q}],
-                                             on_tool=lambda n, a: tally.tools.append(n),
-                                             on_usage=tally.add_usage))
+            answer = "".join(C.stream_answer(
+                client, S, [{"role": "user", "content": q}],
+                on_tool=lambda n, a: tally.tools.append(n), on_usage=tally.add_usage,
+                on_result=lambda n, a, out, err: None if err else found.append(E.item(n, a, out))))
             error = None
         except Exception as exc:  # record API failures as failed cases
             answer, error = "", str(exc)
         ok = error is None and grade(kind, exp, answer)
+        flagged = E.unbacked(answer, found, context=q)
         for k in ("input", "output", "cache_read", "cache_write", "steps"):
             setattr(total, k, getattr(total, k) + getattr(tally, k))
         results.append({"case": i, "question": q, "check": kind, "expected": show(exp),
                         "pass": ok, "answer": answer, "error": error, "tools": tally.tools,
-                        "seconds": round(time.time() - start, 1), "cost_usd": round(tally.cost(), 4)})
+                        "seconds": round(time.time() - start, 1), "cost_usd": round(tally.cost(), 4),
+                        "unbacked": flagged, "evidence": found})
         print(f"{'PASS' if ok else 'FAIL'}  {i:>2}. {q[:70]:<70} expected {show(exp)}")
         if not ok:
             print("        answer:", (error or answer).replace("\n", " ")[:300])
+        if flagged:
+            print("        not matched to a calculation:", ", ".join(flagged))
     passed = sum(r["pass"] for r in results)
     print(f"\n{passed}/{len(results)} passed · cost US${total.cost():.2f} · "
           f"{total.steps} model requests")
+    nums = sum(len(E.numbers(r["answer"])) for r in results)
+    flags = sum(len(r["unbacked"]) for r in results)
+    print(f"Unmatched numbers: {flags} of {nums} in {sum(bool(r['unbacked']) for r in results)} "
+          "answers (the answers are checked correct, so these are mostly the check's false alarms)")
     os.makedirs("evals/results", exist_ok=True)
     out = f"evals/results/{datetime.now():%Y%m%d-%H%M%S}.json"
     with open(out, "w") as f:

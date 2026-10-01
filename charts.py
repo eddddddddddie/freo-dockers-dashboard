@@ -133,9 +133,11 @@ def game_strip(rows, z, hover, labels, results, height):
     ))
     # Result row: its own trace so it can use win/loss colours and a letter.
     fig.add_trace(go.Heatmap(
-        z=[[1 if r == "W" else 0 for r in results]], x=labels, y=["Result"],
+        z=[[{"W": 1, "L": 0}.get(r, 0.5) for r in results]], x=labels, y=["Result"],
         text=[results], texttemplate="%{text}", textfont=dict(size=10, color="#FFFFFF"),
-        colorscale=[[0, COLORS["loss"]], [1, COLORS["win"]]], zmin=0, zmax=1,
+        colorscale=[[0, COLORS["loss"]], [0.45, COLORS["loss"]], [0.45, COLORS["neutral"]],
+                    [0.55, COLORS["neutral"]], [0.55, COLORS["win"]], [1, COLORS["win"]]],
+        zmin=0, zmax=1,
         xgap=1.5, ygap=2, showscale=False, hoverinfo="skip",
     ))
     tips = [[f"<b>{x}</b>: {r} · click to open this game" for x, r in zip(labels, results)]] + \
@@ -403,7 +405,7 @@ def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle", team_color=
 
 def form_bars(games, height):
     """A club's margin in each of its recent games, green win / red loss."""
-    colors = [COLORS["win"] if r == "W" else COLORS["loss"] for r in games["result"]]
+    colors = [{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["neutral"]) for r in games["result"]]
     x = (games["api_round"].str.replace("Round ", "R", regex=False)
          .str.replace(r"^(\w)\w* .*Finals?$", r"\1F", regex=True) + " " +
          games["opponent"].map(D.abbr)).tolist()
@@ -425,7 +427,7 @@ def player_trend(me, col, label, height):
     average as a dashed line."""
     x = (me["round"] + " " + me["opponent"].map(D.abbr)).tolist()
     avg = me[col].mean()
-    colors = [COLORS["win"] if r == "W" else COLORS["loss"] for r in me["result"]]
+    colors = [{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["neutral"]) for r in me["result"]]
     fig = go.Figure(go.Scatter(
         x=x, y=me[col], mode="lines+markers", line=dict(color=COLORS["freo"], width=2),
         marker=dict(size=8, color=colors, line=dict(color="#FFFFFF", width=2)),
@@ -456,4 +458,58 @@ def squad_rank_bars(pr, height):
     fig.update_layout(showlegend=False, margin=dict(l=4, r=70, t=4, b=4), bargap=0.3)
     fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, pr["squad"].max() + 0.5])
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=12))
+    return fig
+
+
+PAIR = (COLORS["freo"], COLORS["opp"])   # player A, player B (validated pair, CVD dE 17)
+
+
+def compare_trend(season_games, logs, names, col, label, height):
+    """Two players' numbers game by game across the season (a gap where one
+    didn't play), each with a dashed season average."""
+    order = season_games.sort_values("game_dt")
+    x = (order["round"] + " " + order["opponent"].map(D.abbr)).tolist()
+    fig = go.Figure()
+    for log, name, color in zip(logs, names, PAIR):
+        by_round = log.set_index("round")[col]
+        y = [by_round.get(r) for r in order["round"]]
+        fig.add_trace(go.Scatter(
+            x=x, y=y, name=name, mode="lines+markers", connectgaps=False,
+            line=dict(color=color, width=2), marker=dict(size=8, color=color,
+                                                         line=dict(color="#FFFFFF", width=2)),
+            hovertemplate="%{x}<br>" + name + ": <b>%{y:.0f}</b> " + label.lower()
+                          + "<extra></extra>"))
+        avg = log[col].mean()
+        if avg == avg:
+            fig.add_hline(y=avg, line=dict(color=color, width=1, dash="dash"))
+    fig = style_fig(fig, label, unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=8, t=10, b=4))
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10))
+    return fig
+
+
+def compare_ranks(cmp, names, height):
+    """Squad rank on each stat for two players, joined by a line (1st on the
+    right). Only stats where both have a rank."""
+    c = cmp.dropna(subset=["rank_a", "rank_b"])
+    c = c.head(max(6, int((height - 30) / 16))).iloc[::-1]   # as many as fit, 16px a row
+    squad = int(c["squad"].max()) if len(c) else 1
+    fig = go.Figure()
+    for _, r in c.iterrows():
+        fig.add_trace(go.Scatter(x=[r["rank_a"], r["rank_b"]], y=[r["stat"]] * 2, mode="lines",
+                                 line=dict(color=COLORS["grid"], width=6), hoverinfo="skip",
+                                 showlegend=False))
+    for key, name, color in (("a", names[0], PAIR[0]), ("b", names[1], PAIR[1])):
+        fig.add_trace(go.Scatter(
+            x=c[f"rank_{key}"], y=c["stat"], mode="markers", name=name,
+            marker=dict(size=11, color=color, line=dict(color="#FFFFFF", width=2)),
+            customdata=c[[f"avg_{key}", "squad"]].values,
+            hovertemplate="%{y}: " + name + " %{customdata[0]:.1f} a game, rank %{x} of "
+                          "%{customdata[1]}<extra></extra>"))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=12, t=4, b=4))
+    fig.update_xaxes(autorange=False, range=[squad + 0.5, 0.5], tickvals=[1, 5, 10, 15, 20, 25][: 1 + squad // 5],
+                     ticktext=["1st", "5th", "10th", "15th", "20th", "25th"][: 1 + squad // 5],
+                     tickfont=dict(size=10))
+    fig.update_yaxes(tickfont=dict(size=11), showgrid=False, dtick=1)   # label every stat
     return fig

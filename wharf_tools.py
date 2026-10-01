@@ -116,12 +116,22 @@ def _team_metrics():
     return set(t.select_dtypes("number").columns)
 
 
+class Result(str):
+    """A tool's output: the text the model reads, carrying the table it was made
+    from (`df`, the rows shown) and its note, so the app can show the numbers."""
+
+    def __new__(cls, text, df=None, note=""):
+        obj = super().__new__(cls, text)
+        obj.df, obj.note = df, note
+        return obj
+
+
 def _csv(df, note=""):
     total = len(df)
-    df = df.head(MAX_ROWS)
-    out = df.round(2).to_csv(index=False).strip()
+    df = df.head(MAX_ROWS).round(2)
+    out = df.to_csv(index=False).strip()
     extra = f"\n({total} rows, first {MAX_ROWS} shown)" if total > MAX_ROWS else f"\n({total} rows)"
-    return (note + "\n" if note else "") + out + extra
+    return Result((note + "\n" if note else "") + out + extra, df, note)
 
 
 def _games_note(df):

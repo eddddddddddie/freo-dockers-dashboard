@@ -18,7 +18,7 @@ import charts as CH
 import nav
 import takeaways as T
 from theme import (COLORS, RAMP, club_colours, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
-                   h2h_table)
+                   h2h_table, compare_tiles_row, compare_table)
 
 TK = 18  # height of a card's takeaway line (px); charts give it up
 
@@ -380,6 +380,56 @@ def _player_log(pdf, player, BOT_H):
             pct = vals / avgs.clip(lower=0.1) * 100
             grid_h = max(BOT_H - 10, 18 * len(vals) + 40)
             _plot(CH.match_player_grid(vals, pct, [l for l, _ in stats], grid_h))
+
+
+# ---- Player vs player -----------------------------------------------------------
+def render_compare(player_df, season, a, b, sz):
+    """Two players' seasons side by side.
+
+    Row 1: each tile stat, both players' averages and squad ranks.
+    Row 2: game by game for both (pick a stat) | squad rank on every stat.
+    Row 3: every stat, season and last 5 averages, and the gap.
+    """
+    MID_H, BOT_H = sz["mid"] - TK, sz["bot"] - TK
+    pdf = D.players_season(player_df, season)
+    names = (a, b)
+    logs = [pdf[pdf["player"] == n].sort_values("game_dt") for n in names]
+    cmp = D.compare_players(pdf, a, b)
+    trend_stats = {k: v for k, v in PLAYER_TREND_STATS.items() if v in pdf.columns}
+    compare_tiles_row(cmp, names, [lbl for lbl, _ in D.PLAYER_TILES])
+    keys = [(n, c) for n, c in zip(names, CH.PAIR)]
+
+    def trend_card():
+        with card("ctrend"):
+            label = st.session_state.get("ctrend_stat") or "Disposals"
+            col = trend_stats.get(label, "disposals")
+            t, s = st.columns([2.4, 1], vertical_alignment="center")
+            with t:
+                card_title("Game by game", "dashed: season average", keys=keys,
+                           takeaway=T.compare_last(logs, names, col, label))
+            with s:
+                st.selectbox("Compare stat", list(trend_stats), key="ctrend_stat",
+                             label_visibility="collapsed")
+            season_games = pdf.drop_duplicates(["round"])[["round", "opponent", "game_dt"]]
+            _plot(CH.compare_trend(season_games, logs, names, col, label, MID_H - 10))
+
+    def ranks_card():
+        with card("cranks"):
+            card_title("Squad rank", f"per game, of players with {D.MIN_GAMES}+ games",
+                       keys=keys, takeaway=T.compare_ahead(cmp, names))
+            if cmp[["rank_a", "rank_b"]].notna().all(axis=1).any():
+                _plot(CH.compare_ranks(cmp, names, MID_H))
+            else:
+                st.caption(f"Both need {D.MIN_GAMES} games for a squad rank.")
+
+    def table_card():
+        with card("ctable", height=_h(BOT_H + 40 + TK)):
+            card_title("Stat by stat", "per game, season and last 5", takeaway=T.compare_gap(cmp, names))
+            compare_table(cmp, names)
+
+    arrange(desktop=[([1.9, 1.1], [trend_card, ranks_card]), ([1], [table_card])],
+            grid=[[trend_card, ranks_card], [table_card]],
+            phone=[trend_card, ranks_card, table_card])
 
 
 # ---- Opponent scout report ----------------------------------------------------

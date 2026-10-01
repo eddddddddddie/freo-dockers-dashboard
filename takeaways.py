@@ -82,7 +82,11 @@ def tape(rows):
 def flow(game, result, margin):
     lead = game.max()
     at = game.idxmax()
-    word = "won" if result == "W" else "lost"
+    if result == "D":
+        return (f"Led by {lead:.0f} at {at}, drew" if lead > 0 else
+                f"Trailed by {abs(game.min()):.0f} at {game.idxmin()}, drew" if game.min() < 0
+                else "Drew; level at every break")
+    word = {"W": "won", "L": "lost"}.get(result, "drew")
     if lead > 0 and result == "L":
         return f"Led by {lead:.0f} at {at}, {word} by {abs(margin)}"
     if game.min() < 0 and result == "W":
@@ -156,3 +160,39 @@ def player_best(log, col, label):
         return ""
     b = log.loc[log[col].idxmax()]
     return f"Best: {b['season']} {b['round']} v {b['opponent']} ({b[col]:.0f} {label.lower()})"
+
+
+# ---- Player vs player ----------------------------------------------------------
+def _short(name):
+    return name.split()[-1]
+
+
+def compare_ahead(cmp, names):
+    """'Serong ahead on 8 of 15 stats, Brayshaw on 6'."""
+    a = int((cmp["avg_a"] > cmp["avg_b"]).sum())
+    b = int((cmp["avg_b"] > cmp["avg_a"]).sum())
+    if not a and not b:
+        return ""
+    first, second = ((names[0], a), (names[1], b)) if a >= b else ((names[1], b), (names[0], a))
+    return (f"{_short(first[0])} ahead on {first[1]} of {len(cmp)} stats, "
+            f"{_short(second[0])} on {second[1]}")
+
+
+def compare_gap(cmp, names):
+    """The biggest gap relative to the two averages."""
+    c = cmp.dropna(subset=["avg_a", "avg_b"])
+    c = c[(c["avg_a"] + c["avg_b"]) > 0.5]
+    if not len(c):
+        return ""
+    rel = (c["avg_a"] - c["avg_b"]).abs() / ((c["avg_a"] + c["avg_b"]) / 2)
+    r = c.loc[rel.idxmax()]
+    who = names[0] if r["avg_a"] > r["avg_b"] else names[1]
+    return (f"Biggest gap: {r['stat'].lower()}, {_short(who)} by "
+            f"{abs(r['avg_a'] - r['avg_b']):.1f} a game")
+
+
+def compare_last(logs, names, col, label, n=5):
+    """'Last 5: Serong 23.6, Brayshaw 24.0 disposals a game'."""
+    parts = [f"{_short(nm)} {log.sort_values('game_dt')[col].tail(n).mean():.1f}"
+             for log, nm in zip(logs, names) if len(log)]
+    return f"Last {n}: " + ", ".join(parts) + f" {label.lower()} a game" if parts else ""

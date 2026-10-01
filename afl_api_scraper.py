@@ -209,10 +209,6 @@ def main(years):
             print("  " + w)
 
 
-if __name__ == "__main__":
-    years = [int(a) for a in sys.argv[1:]] or [2025, 2026]
-    main(years)
-    scrape_squads(years)
 
 
 # ---- Squad details (age, height, position) -----------------------------------------
@@ -238,3 +234,9 @@ def scrape_squads(years, path="freo_squad.csv"):
     write_csv(path, rows, ["season", "player_id", "player", "jumper", "position",
                            "date_of_birth", "height_cm"])
     return rows
+
+
+if __name__ == "__main__":
+    years = [int(a) for a in sys.argv[1:]] or [2025, 2026]
+    main(years)
+    scrape_squads(years)

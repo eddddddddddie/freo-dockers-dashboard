@@ -2,7 +2,7 @@
 itself stays on one screen.
 
 - Player map: every player's per game averages on two chosen stats.
-- Year on year: per game averages 2025 vs 2026 for the top players.
+- Year on year: per game averages, the last two seasons, for the top players.
 - Opponents: every game against every club, both seasons, with a button that
   hands a question about that club to Wharf-ai.
 """
@@ -14,7 +14,7 @@ import streamlit as st
 import data as D
 import charts as CH
 import nav
-from theme import COLORS
+from theme import COLORS, record_text, result_colour
 
 CHART_H = 520
 
@@ -81,7 +81,7 @@ def year_on_year(player_df, all_seasons):
 
 
 def _chip(g):
-    color = COLORS["win"] if g["result"] == "W" else COLORS["loss"]
+    color = result_colour(g["result"])
     tip = (f"{g['season']} {g['round']} ({g['type']}) at {g['venue']}: "
            f"Freo {g['freo_score']} to {g['opp_score']}")
     return (f'<span class="op-chip" style="background:{color}" title="{html.escape(tip)}">'
@@ -98,7 +98,7 @@ def opponents(team_df, all_seasons):
             "<td>" + "".join(_chip(g) for g in r["games"].get(s, [])) + "</td>"
             for s in all_seasons)
         rows += (f'<tr><td class="op-name">{html.escape(r["opponent"])}</td>{cells}'
-                 f'<td class="op-num">{r["wins"]}-{r["losses"]}</td>'
+                 f'<td class="op-num">{record_text(r["wins"], r["losses"], r["draws"])}</td>'
                  f'<td class="op-num">{r["avg_margin"]:+.1f}</td></tr>')
     st.caption("Every game against each club, toughest first (lowest average margin). "
                "Chips show round and margin; hover for the score and venue.")
@@ -140,7 +140,7 @@ def quarter_time(team_df, all_seasons):
     with left:
         if sm["games"]:
             st.markdown(
-                f'<div class="qt-big">{sm["wins"]}-{sm["losses"]}</div>'
+                f'<div class="qt-big">{record_text(sm["wins"], sm["losses"], sm["draws"])}</div>'
                 f'<div class="qt-sub">from {sm["games"]} games within ±{int(window)} of '
                 f'{int(margin):+d} at {brk.lower()} ({sm["win_pct"]:.0f}% won, of '
                 f'{sm["pool"]} games checked)</div>'
@@ -184,14 +184,29 @@ def usage_log():
         st.info("No questions logged yet.")
         return
     df = pd.DataFrame(rows)
-    df["user_email"] = df.get("user_email", pd.Series([None] * len(df))).fillna("")
-    df = df[["ts", "user_email", "question", "tools", "steps", "input_tokens", "output_tokens",
-             "cache_read", "cost_usd", "ok"]]
+    for col in ("user_email", "answer", "unbacked"):
+        df[col] = df.get(col, pd.Series([None] * len(df))).fillna("")
+    df["rating"] = df.get("rating", pd.Series([None] * len(df))).map({1: "👍", 0: "👎"}).fillna("")
+    df["unbacked"] = df["unbacked"].str.replace(r'[\[\]"]', "", regex=True)
     df["tools"] = df["tools"].str.replace(r'[\[\]"]', "", regex=True)
     df["ok"] = df["ok"].map({1: "yes", 0: "failed"})
-    st.dataframe(df.rename(columns={"ts": "When", "user_email": "Who", "question": "Question", "tools": "Tools",
-                                    "steps": "Steps", "input_tokens": "Input", "output_tokens": "Output",
-                                    "cache_read": "Cache read", "cost_usd": "US$", "ok": "OK"}),
-                 hide_index=True, width="stretch", height=380)
+    rated = (df["rating"] != "").sum()
+    down = (df["rating"] == "👎").sum()
+    flagged = (df["unbacked"] != "").sum()
+    st.caption(f"Rated answers: {rated} ({down} thumbs down) · answers with a number not matched "
+               f"to a calculation: {flagged}")
+    view = df[["ts", "user_email", "rating", "question", "unbacked", "tools", "steps",
+               "input_tokens", "output_tokens", "cache_read", "cost_usd", "ok"]]
+    st.dataframe(view.rename(columns={
+        "ts": "When", "user_email": "Who", "rating": "Rated", "question": "Question",
+        "unbacked": "Not matched", "tools": "Tools", "steps": "Steps", "input_tokens": "Input",
+        "output_tokens": "Output", "cache_read": "Cache read", "cost_usd": "US$", "ok": "OK"}),
+        hide_index=True, width="stretch", height=340)
+    # With the answers, for review (evals/review_feedback.py turns thumbs down
+    # into candidate test cases). Download before a redeploy wipes the log.
+    st.download_button("Download the log with answers (CSV)",
+                       df.drop(columns=["sid"], errors="ignore").to_csv(index=False),
+                       file_name=f"wharf_usage_{U.today()}.csv", mime="text/csv")
     st.caption("Costs are estimates at claude-sonnet-5-5 list prices. The log is stored on the "
-               "app's own disk: on Streamlit Cloud it starts again after a restart or redeploy.")
+               "app's own disk: on Streamlit Cloud it starts again after a restart or redeploy, "
+               "so download it first if you want to keep the ratings.")
