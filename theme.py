@@ -138,7 +138,6 @@ def inject_css():
           }
           div[class*="st-key-card_"] { gap:2px; }
           div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
-          .st-key-deep_dive [data-baseweb="select"] * { font-size:.8rem; }
           .card-title {
             font-size:.82rem; font-weight:700; letter-spacing:-.2px; color:var(--ink);
             margin:0; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -189,6 +188,19 @@ def inject_css():
           .cv-lead .role { white-space:nowrap; }
           .cv-lead .name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .cv-lead:last-child { border-bottom:none; }
+          /* Match leaders, both sides */
+          .lp-row { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1.15fr);
+            gap:8px; align-items:baseline; padding:3px 0; border-bottom:1px solid #EFEFEF; }
+          .lp-row:last-child { border-bottom:none; }
+          .lp-head { padding:0 0 3px; }
+          .lp-side { font-size:.75rem; font-weight:700; color:var(--freo); white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+          .lp-role { color:var(--brand); font-size:.75rem; font-weight:700; white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+          .lp-cell { display:flex; justify-content:space-between; gap:4px; min-width:0; }
+          .lp-n { font-weight:700; font-size:.82rem; color:var(--ink); white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+          .lp-v { font-weight:800; font-size:.9rem; }
           .cv-lead .role { color:var(--brand); font-size:.75rem; font-weight:700; letter-spacing:0; }
           .cv-lead .name { font-weight:700; font-size:.84rem; color:var(--ink); line-height:1.2; letter-spacing:-.1px; }
           .cv-lead .num { text-align:right; font-weight:800; color:var(--ink); font-size:.95rem; line-height:1.1; }
@@ -208,11 +220,14 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .wa-rot),
           div[data-testid="stMarkdownContainer"]:has(> .card-title),
           div[data-testid="stMarkdownContainer"]:has(> .cv-lead),
+          div[data-testid="stMarkdownContainer"]:has(> .lp),
           div[data-testid="stMarkdownContainer"]:has(> .tp),
+          div[data-testid="stMarkdownContainer"]:has(> .qt-box),
+          div[data-testid="stMarkdownContainer"]:has(> .op-wrap),
           div[data-testid="stMarkdownContainer"]:has(> .wa-sub) { margin-bottom:0 !important; }
 
           /* Opponents grid (deep dive) */
-          .op-wrap { max-height:470px; overflow-y:auto; margin-bottom:12px; }
+          .op-wrap { overflow-y:auto; margin-bottom:8px; }
           .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
           .op-grid th { text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.07em;
             color:var(--brand); padding:4px 6px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
@@ -310,10 +325,10 @@ def inject_css():
           div[data-testid="stButton"] button p { font-size:.78rem; font-weight:500; text-align:left; }
           div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
           div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
-          .st-key-tour_btn button, .st-key-signout_btn button { width:34px; height:34px; min-height:34px;
+          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:34px; height:34px; min-height:34px;
             padding:0; border-radius:50%; justify-content:center; border:1.5px solid var(--brand);
             color:var(--brand); }
-          .st-key-signout_btn button:hover { background:var(--brand); color:#fff; }
+          .st-key-signout_btn button:hover, .st-key-usage_btn button:hover { background:var(--brand); color:#fff; }
           .st-key-tour_btn button p { font-size:1rem; font-weight:800; text-align:center; }
           .st-key-tour_btn button:hover { background:var(--brand); color:#fff; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
@@ -343,6 +358,22 @@ def inject_css():
     )
 
 
+def inject_side_panel_css():
+    """Wharf-ai down the side (desktop, split): the panel is a fixed height, its
+    header and question box stay put and only the chat scrolls, taking whatever
+    height the header leaves (it wraps on narrow windows)."""
+    st.markdown("""
+        <style>
+          .st-key-card_wharfai { overflow:hidden !important; }
+          .st-key-card_wharfai > [data-testid="stLayoutWrapper"] { flex:1 1 0; min-height:0; }
+          .st-key-card_wharfai > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+            height:100%; flex-wrap:nowrap; }
+          [data-testid="stLayoutWrapper"]:has(> .st-key-wa_history) { flex:1 1 0; min-height:0; }
+          .st-key-wa_history { height:100% !important; max-height:none !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+
 def inject_phone_css():
     """Extra rules for the phone layout (app.PHONE): one scrolling column,
     touch-sized targets, text that wraps instead of being cut off."""
@@ -358,7 +389,7 @@ def inject_phone_css():
           .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(2) { flex:1 1 0 !important; }
           .st-key-season div[data-testid="stButtonGroup"] button { padding:4px 8px; }
           .st-key-m_ctrl div[data-testid="stColumn"]:nth-child(n+3) { flex:0 0 40px !important; }
-          .st-key-tour_btn button, .st-key-signout_btn button { width:40px; height:40px; min-height:40px; }
+          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:40px; height:40px; min-height:40px; }
           div[data-testid="stButtonGroup"] button { min-height:40px; padding:4px 10px; }
           div[data-testid="stButtonGroup"] button p { font-size:.85rem; }
           div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:40px; font-size:.9rem; }
@@ -414,7 +445,7 @@ def inject_tablet_css(mode):
           div[data-testid="stButton"] button {{ min-height:38px; }}
           div[data-testid="stButtonGroup"] button {{ min-height:36px; }}
           div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ min-height:36px; }}
-          .st-key-tour_btn button, .st-key-signout_btn button {{ width:38px; height:38px; min-height:38px; }}
+          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button {{ width:38px; height:38px; min-height:38px; }}
           .st-key-jump_dash {{ display:flex; justify-content:flex-end; }}
           .st-key-jump_dash button p {{ font-weight:700; color:var(--brand); }}
           div[data-testid="stElementContainer"]:has(iframe[height="0"]) {{
@@ -547,6 +578,22 @@ def leaders_list(leaders):
     st.markdown(rows, unsafe_allow_html=True)
 
 
+def leaders_pair(freo, opp, opp_label, opp_color):
+    """Match leaders for both sides: a row per role, Freo's leader and the
+    opposition's (surnames, to fit), each with their number."""
+    def cell(r, colour):
+        name = r["player"].split()[-1] if r["player"] != "-" else "-"
+        return (f'<span class="lp-n" title="{html.escape(r["player"])}">{html.escape(name)}</span>'
+                f'<span class="lp-v" style="color:{colour}">{html.escape(r["value"])}</span>')
+    rows = (f'<div class="lp-row lp-head"><span></span><span class="lp-side">Freo</span>'
+            f'<span class="lp-side" style="color:{opp_color}">{html.escape(opp_label)}</span></div>')
+    for f, o in zip(freo, opp):
+        rows += (f'<div class="lp-row"><span class="lp-role">{html.escape(f["role"])}</span>'
+                 f'<span class="lp-cell">{cell(f, COLORS["freo"])}</span>'
+                 f'<span class="lp-cell">{cell(o, opp_color)}</span></div>')
+    st.markdown(f'<div class="lp">{rows}</div>', unsafe_allow_html=True)
+
+
 def _svg_data_uri(name):
     import base64, os
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", name)
@@ -576,8 +623,13 @@ def match_band(game, venue_date):
     res = {"W": "Won", "L": "Lost"}.get(game["result"], "Drew")
     color = result_colour(game["result"])
     fq, oq = game["freo_qtrs"].split()[-1], game["opp_qtrs"].split()[-1]
+    # Freo purple fading into the opposition's dark club colour, their second
+    # colour as a stripe on the right.
+    club = club_colours(game["opponent"])
+    style = (f'background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 40%, '
+             f'{club["band"]} 100%); border-right:6px solid {club["accent"]}')
     st.markdown(
-        f'<div class="cv-band match"><div class="ttl">{html.escape(game["round"])} v '
+        f'<div class="cv-band match" style="{style}"><div class="ttl">{html.escape(game["round"])} v '
         f'{html.escape(game["opponent"])}<small>{html.escape(venue_date)}</small></div>'
         f'<div class="cv-stat opt"><b><i class="cv-res" style="background:{color}">{res}</i></b>'
         f'<span>{html.escape(game["type"])}</span></div>'
@@ -587,10 +639,11 @@ def match_band(game, venue_date):
         unsafe_allow_html=True)
 
 
-def tape(rows):
+def tape(rows, opp_color=None):
     """Tale of the tape: one split bar per stat, Freo share (purple) against the
-    opposition (orange), numbers either side, and a tick at Freo's season
-    average share."""
+    opposition (in their club's chart colour), numbers either side, and a tick
+    at Freo's season average share."""
+    bar = f' style="background:{opp_color}"' if opp_color else ""
     out = ""
     for r in rows:
         f = f'{r["freo"]:,.0f}'
@@ -599,7 +652,7 @@ def tape(rows):
                f'{r["season_share"]:.0f}% (diff {r["season_diff"]:+.1f} a game)')
         out += (f'<div class="tp-row" title="{html.escape(tip)}">'
                 f'<span class="tp-lbl">{html.escape(r["stat"])}</span><span class="tp-f">{f}</span>'
-                f'<div class="tp-bar"><i style="width:{r["share"]:.1f}%"></i>'
+                f'<div class="tp-bar"{bar}><i style="width:{r["share"]:.1f}%"></i>'
                 f'<em style="left:{r["season_share"]:.1f}%"></em></div>'
                 f'<span class="tp-o">{o}</span></div>')
     st.markdown(f'<div class="tp">{out}</div>', unsafe_allow_html=True)
@@ -642,6 +695,29 @@ def scout_tiles_row(tiles, chip=None):
             f'<div class="val">{t["value"]}{rank}</div>'
             f'<div class="fr">Freo {t["freo"]}</div></div>')
     st.markdown(f'<div class="cv-tiles">{"".join(cells)}</div>', unsafe_allow_html=True)
+
+
+def opponents_table(grid, seasons, max_h=None):
+    """Every game against each club, a column per season: a chip per game with
+    round and margin (hover for the score and venue), then record and average margin."""
+    def chip(g):
+        tip = (f"{g['season']} {g['round']} ({g['type']}) at {g['venue']}: "
+               f"Freo {g['freo_score']} to {g['opp_score']}")
+        return (f'<span class="op-chip" style="background:{result_colour(g["result"])}" '
+                f'title="{html.escape(tip)}">{g["round"]} {g["margin"]:+d}</span>')
+    head = "".join(f"<th>{s}</th>" for s in seasons)
+    rows = ""
+    for r in grid:
+        cells = "".join("<td>" + "".join(chip(g) for g in r["games"].get(s, [])) + "</td>"
+                        for s in seasons)
+        rows += (f'<tr><td class="op-name">{html.escape(r["opponent"])}</td>{cells}'
+                 f'<td class="op-num">{record_text(r["wins"], r["losses"], r["draws"])}</td>'
+                 f'<td class="op-num">{r["avg_margin"]:+.1f}</td></tr>')
+    style = f' style="max-height:{int(max_h)}px"' if max_h else ""
+    st.markdown(
+        f'<div class="op-wrap"{style}><table class="op-grid"><thead><tr><th>Opponent</th>{head}'
+        f'<th>Record</th><th>Avg margin</th></tr></thead><tbody>{rows}</tbody></table></div>',
+        unsafe_allow_html=True)
 
 
 def h2h_table(rows):

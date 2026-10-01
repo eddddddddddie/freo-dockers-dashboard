@@ -5,6 +5,9 @@ Season: headline tiles | game strip, where we win, quarters | role leaders,
 Match:  one game against the season average.
 Player: one player's season.
 Scout:  any club's season against the league and Freo.
+Each picker also has a page across all of its options: Player -> Whole squad
+(player map, year on year), Scout -> All clubs (every game against every
+club), Match -> Quarter-time check (how Freo have gone from a margin at a break).
 
 Every card has a computed one-line takeaway under its title (takeaways.py).
 Clicking a game in the game strip opens it in Match; clicking a player in a
@@ -18,7 +21,8 @@ import charts as CH
 import nav
 import takeaways as T
 from theme import (COLORS, RAMP, club_colours, card_title, tiles_row, leaders_list, tape, scout_tiles_row,
-                   h2h_table, compare_tiles_row, compare_table)
+                   h2h_table, compare_tiles_row, compare_table, opponents_table, record_text,
+                   leaders_pair)
 
 TK = 18  # height of a card's takeaway line (px); charts give it up
 
@@ -259,30 +263,39 @@ def render_match(team_df, player_df, season, pos, sz):
     tdf = D.team_season(team_df, season)
     pdf = D.players_season(player_df, season)
     game = tdf.iloc[pos]
+    opp_c = club_colours(game["opponent"])["chart"]   # the opposition in their own colour
 
     tiles_row(D.match_tiles(team_df, season, pos), "Season avg")
 
     def tape_card():
         with card("tape", height=_h(MID_H + 40 + TK)):
             rows = D.tale_of_the_tape(tdf, pos)
-            card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"]),
+            card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]),
+                                                 (D.abbr(game["opponent"]), opp_c),
                                                  ("season avg share", COLORS["ink"])],
                        takeaway=T.tape(rows))
-            tape(rows)
+            tape(rows, opp_color=opp_c)
 
     def flow_card():
         with card("flow"):
             flow, avg = D.game_flow(tdf, pos)
             take = T.flow(flow.rename(index=BREAK_NAMES), game["result"], int(game["margin"]))
-            card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg win", COLORS["win"]),
-                                          ("Avg loss", COLORS["loss"])], takeaway=take)
-            _plot(CH.game_flow_lines(flow, avg, MID_H))
+            card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg W", COLORS["win"]),
+                                          ("Avg L", COLORS["loss"]),
+                                          ("Others", COLORS["neutral"])], takeaway=take)
+            others = D.season_flows(tdf).drop(index=pos)
+            _plot(CH.game_flow_lines(flow, avg, MID_H, others=others))
 
     def leaders_card():
         with card("gameleaders", height=_h(MID_H + 40 + TK)):
             leaders, goals = D.match_leaders(pdf, game)
-            card_title("Game leaders", takeaway=T.match_leaders(goals))
-            leaders_list(leaders)
+            theirs = D.opp_match_leaders(game)
+            if theirs is None:       # no opposition player stats for this game
+                card_title("Game leaders", takeaway=T.match_leaders(goals))
+                leaders_list(leaders)
+            else:
+                card_title("Game leaders", takeaway=T.match_leaders(goals, theirs[1], D.abbr(game["opponent"])))
+                leaders_pair(leaders, theirs[0], D.abbr(game["opponent"]), opp_c)
 
     def players_card():
         _match_players(pdf, game, season, pos, BOT_H)
@@ -479,7 +492,7 @@ def render_scout(team_df, lg, season, opp, sz):
     def h2h_card():
         with card("h2h", height=_h(BOT_H + 40 + TK)):
             rows = D.head_to_head(team_df, opp)
-            card_title("Against Fremantle", "every game, both seasons", takeaway=T.h2h(rows))
+            card_title("Against Fremantle", "every game, all seasons", takeaway=T.h2h(rows))
             if len(rows):
                 h2h_table(rows)
             else:
@@ -489,3 +502,179 @@ def render_scout(team_df, lg, season, opp, sz):
                      ([1.55, 1.45], [form_card, h2h_card])],
             grid=[[style_card, win_card], [quarters_card, form_card], [h2h_card]],
             phone=[style_card, win_card, quarters_card, form_card, h2h_card])
+
+
+# ---- Whole squad, all clubs, quarter-time check ---------------------------------
+# Pages with no tiles row: their cards take the height of the tiles and both
+# chart rows. On the scrolling layouts they get a fixed, readable height.
+SQUAD_STATS = {
+    "Disposals": "disposals", "Contested poss": "contested_poss",
+    "Uncontested poss": "uncontested_poss", "Metres gained": "metres_gained",
+    "Score involvements": "score_involvements", "Pressure acts": "pressure_acts",
+    "Tackles": "tackles", "Clearances": "clearances", "Inside 50s": "inside_50s",
+    "Rebound 50s": "rebound_50s", "Intercepts": "intercepts", "Marks": "marks",
+    "One percenters": "one_percenters", "Goals": "goals",
+}
+def _full_h(sz):
+    """Outer height of a card filling the page below the band: level with the
+    bottom of the Wharf-ai panel, which starts 58px higher (the header row)."""
+    return sz["panel"] - 58 if LAYOUT == "desktop" else 520
+
+
+def render_squad(player_df, season, baseline, sz):
+    """Every player at once: two chosen stats per game | year on year."""
+    H = _full_h(sz)
+    chart_h = H - 84            # the card's title, takeaway and padding
+    pdf = D.players_season(player_df, season)
+    stats = {k: v for k, v in SQUAD_STATS.items() if v in pdf.columns}
+    labels = list(stats)
+
+    def map_card():
+        with card("pmap", height=_h(H)):
+            t, cx, cy = st.columns([1.3, 1, 1], vertical_alignment="center")
+            with cx:
+                x = st.selectbox("Across", labels, index=labels.index("Contested poss"),
+                                 key="pmap_x", format_func=lambda v: f"Across: {v}",
+                                 label_visibility="collapsed")
+            with cy:
+                y_default = "Metres gained" if "Metres gained" in stats else "Uncontested poss"
+                y = st.selectbox("Up", labels, index=labels.index(y_default), key="pmap_y",
+                                 format_func=lambda v: f"Up: {v}", label_visibility="collapsed")
+            size_col = "time_on_ground_pct" if "time_on_ground_pct" in pdf.columns else "pct_played"
+            pa = D.player_averages(pdf, [stats[x], stats[y], size_col])
+            with t:
+                card_title("Player map", "per game, 5+ games, dot size: time on ground",
+                           takeaway=T.squad_map(pa, stats[x], stats[y], x, y))
+            if not len(pa):
+                st.caption("No players with 5 games yet.")
+                return
+            ev = _plot(CH.player_map(pa, stats[x], stats[y], x, y, size_col, chart_h),
+                       key=f"pmap_{season}_{x}_{y}")
+            point = nav.clicked(ev)
+            if point is not None and point.get("point_index") is not None:
+                nav.go(view="Player", season=season, player=pa.index[point["point_index"]])
+
+    def yoy_card():
+        with card("yoy", height=_h(H)):
+            if baseline is None:
+                card_title("Year on year")
+                st.caption(f"Needs the season before {season} in the data.")
+                return
+            base_stats = [k for k in labels if stats[k] in D.players_season(player_df, baseline)]
+            t, c = st.columns([1.6, 1], vertical_alignment="center")
+            with c:
+                stat = st.selectbox("Year on year stat", base_stats, key="yoy_stat",
+                                    label_visibility="collapsed")
+            yoy = D.year_on_year(player_df, baseline, season, stats[stat])
+            with t:
+                card_title("Year on year", "top 15, 8+ games in both",
+                           keys=[("up", COLORS["freo"]), ("down", COLORS["neutral"])],
+                           takeaway=T.year_on_year(yoy))
+            if not len(yoy):
+                st.caption("No players with enough games in both seasons.")
+                return
+            ev = _plot(CH.slope_chart(yoy, baseline, season, stat, chart_h),
+                       key=f"yoy_{season}_{stat}")
+            point = nav.clicked(ev)
+            if point is not None and point.get("curve_number") is not None:
+                nav.go(view="Player", season=season, player=yoy.index[point["curve_number"]])
+
+    arrange(desktop=[([1.25, 1], [map_card, yoy_card])],
+            grid=[[map_card], [yoy_card]], phone=[map_card, yoy_card])
+
+
+def render_clubs(team_df, all_seasons, sz):
+    """Every game against every club, all seasons, toughest first."""
+    grid = D.opponent_grid(team_df)
+    H = _full_h(sz)
+
+    def grid_card():
+        with card("clubs", height=_h(H)):
+            card_title("Every club", "every game, all seasons, toughest first · "
+                       "chips show round and margin, hover for the score",
+                       takeaway=T.clubs(grid))
+            opponents_table(grid, all_seasons, max_h=H - 128 if LAYOUT == "desktop" else None)
+            c1, c2, _ = st.columns([1.2, 1.4, 2], vertical_alignment="center")
+            opp = c1.selectbox("Ask about", [r["opponent"] for r in grid], key="clubs_ask",
+                               label_visibility="collapsed")
+            if c2.button(f"Ask Wharf-ai about {opp}", key="clubs_ask_btn"):
+                st.session_state["pending_prompt"] = (
+                    f"How have we gone against {opp} across {all_seasons[0]} to "
+                    f"{all_seasons[-1]}, and what decided those games?")
+                st.rerun()
+
+    arrange(desktop=[([1], [grid_card])], grid=[[grid_card]], phone=[grid_card])
+
+
+def render_quarter_time(team_df, all_seasons, sz):
+    """Enter the margin at a break; see how Freo have gone from similar positions.
+
+    Only quarter scores are in the data (AFL Tables has no quarter-by-quarter
+    stats), so positions are matched on the margin alone."""
+    H = _full_h(sz)
+    INPUT_H = 108                      # the inputs card, and the gap under it
+    rest = H - INPUT_H - 16            # for the two rows below
+    top_h = int(rest * 0.58) if LAYOUT == "desktop" else 340
+    low_h = rest - top_h + 4
+
+    with card("qtinput", height=_h(INPUT_H)):
+        card_title("Quarter-time check", "enter the margin at a break")
+        c1, c2, c3, c4, c5 = st.columns([1.2, 1, 1, 1.1, 1.6], vertical_alignment="bottom")
+        brk = c1.selectbox("Break", list(D.BREAKS), index=1, key="qt_brk")
+        margin = c2.number_input("Freo margin", value=0, step=1, key="qt_margin",
+                                 help="Freo score minus opposition score at the break")
+        window = c3.number_input("Within ± points", value=6, min_value=0, max_value=60, step=1,
+                                 key="qt_window")
+        scope = c4.selectbox("Seasons", ["All seasons"] + [str(s) for s in reversed(all_seasons)],
+                             key="qt_scope")
+        game_type = c5.segmented_control("Venue", ["Any", "Home", "Away", "Final"], default="Any",
+                                         key="qt_venue") or "Any"
+    seasons = None if scope == "All seasons" else [int(scope)]
+    gt = None if game_type == "Any" else game_type
+    games, sm = D.similar_positions(team_df, brk, int(margin), int(window), seasons, gt)
+    col = sm["col"]
+
+    def result_card():
+        with card("qtresult", height=_h(top_h)):
+            card_title("From there")
+            if sm["games"]:
+                st.markdown(
+                    f'<div class="qt-box"><div class="qt-big">{record_text(sm["wins"], sm["losses"], sm["draws"])}</div>'
+                    f'<div class="qt-sub">from {sm["games"]} games within ±{int(window)} of '
+                    f'{int(margin):+d} at {brk.lower()} ({sm["win_pct"]:.0f}% won, of '
+                    f'{sm["pool"]} games checked)</div>'
+                    f'<div class="qt-line">Average final margin <b>{sm["avg_final"]:+.1f}</b></div>'
+                    f'<div class="qt-line">Net scoring from the break to the siren '
+                    f'<b>{sm["avg_after"]:+.1f}</b></div></div>',
+                    unsafe_allow_html=True)
+            else:
+                st.info("No games from a position like that. Widen the ± window.")
+            st.caption("Matched on the score only: quarter-by-quarter stats (inside 50s, "
+                       "clearances) are not in the data. A small sample says little; check the count.")
+
+    def scatter_card():
+        with card("qtscatter", height=_h(top_h)):
+            card_title(f"Margin at {brk.lower()} and at the siren", "every game, shaded: your window")
+            bm = D.break_margins(team_df)
+            if seasons:
+                bm = bm[bm["season"].isin(seasons)]
+            if gt:
+                bm = bm[bm["type"] == gt]
+            _plot(CH.break_scatter(bm, col, int(margin), int(window), brk, top_h - 56))
+
+    def games_card():
+        with card("qtgames", height=_h(low_h)):
+            card_title("The matching games", f"{sm['games']} games" if sm["games"] else "")
+            if sm["games"]:
+                show = games[["season", "round", "type", "opponent", col, "margin", "result"]].rename(
+                    columns={col: f"At {brk.lower()}", "margin": "Final", "result": "Result",
+                             "season": "Season", "round": "Round", "type": "Type",
+                             "opponent": "Opponent"})
+                st.dataframe(show, hide_index=True, width="stretch",
+                             height=max(low_h - 56, 80) if LAYOUT == "desktop" else 260)
+            else:
+                st.caption("None yet.")
+
+    arrange(desktop=[([1, 1.6], [result_card, scatter_card]), ([1], [games_card])],
+            grid=[[result_card, scatter_card], [games_card]],
+            phone=[result_card, scatter_card, games_card])

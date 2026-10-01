@@ -7,6 +7,7 @@ is nothing sound to say (too few games, missing data).
 import pandas as pd
 
 import data as D
+from theme import record_text
 
 
 def _ordinal(n):
@@ -94,8 +95,12 @@ def flow(game, result, margin):
     return f"{word.capitalize()} by {abs(margin)}; {'never behind' if game.min() >= 0 else 'never ahead'} at a break"
 
 
-def match_leaders(goals):
-    return f"Goals: {goals}" if goals != "none" else "No goals recorded"
+def match_leaders(goals, opp_goals=None, opp_label=None):
+    """'Goals: Voss 3, Dudley 2 · BRL: Neale 3' (the opposition's when known)."""
+    text = f"Goals: {goals}" if goals != "none" else "No Freo goals recorded"
+    if opp_goals and opp_goals != "none":
+        text += f" · {opp_label}: {opp_goals}"
+    return text
 
 
 def match_players(vals):
@@ -196,3 +201,38 @@ def compare_last(logs, names, col, label, n=5):
     parts = [f"{_short(nm)} {log.sort_values('game_dt')[col].tail(n).mean():.1f}"
              for log, nm in zip(logs, names) if len(log)]
     return f"Last {n}: " + ", ".join(parts) + f" {label.lower()} a game" if parts else ""
+
+
+# ---- Whole squad, all clubs, quarter-time check -------------------------------
+def squad_map(pa, xcol, ycol, xlab, ylab):
+    """'Most contested poss: Serong 13.2 · most metres gained: Young 498.1'."""
+    if not len(pa):
+        return ""
+    a, b = pa[xcol].idxmax(), pa[ycol].idxmax()
+    return (f"Most {xlab.lower()}: {_short(a)} {pa.loc[a, xcol]:.1f} · "
+            f"most {ylab.lower()}: {_short(b)} {pa.loc[b, ycol]:.1f}")
+
+
+def year_on_year(yoy):
+    """'Biggest rise: Serong +3.1 · biggest drop: Fyfe -4.0'."""
+    if not len(yoy):
+        return ""
+    up, down = yoy["change"].idxmax(), yoy["change"].idxmin()
+    parts = []
+    if yoy.loc[up, "change"] > 0:
+        parts.append(f"Biggest rise: {_short(up)} {yoy.loc[up, 'change']:+.1f}")
+    if yoy.loc[down, "change"] < 0:
+        parts.append(f"biggest drop: {_short(down)} {yoy.loc[down, 'change']:+.1f}")
+    text = " · ".join(parts)
+    return text[:1].upper() + text[1:]
+
+
+def clubs(grid):
+    """'Toughest: Collingwood (0-3, -28.3) · best: West Coast (5-0, +61.2)'."""
+    grid = [r for r in grid if r["wins"] + r["losses"] + r["draws"] >= 2]
+    if len(grid) < 2:
+        return ""
+    lo, hi = grid[0], grid[-1]
+    rec = lambda r: record_text(r["wins"], r["losses"], r["draws"])  # noqa: E731
+    return (f"Toughest: {lo['opponent']} ({rec(lo)}, {lo['avg_margin']:+.1f}) · "
+            f"best: {hi['opponent']} ({rec(hi)}, {hi['avg_margin']:+.1f})")

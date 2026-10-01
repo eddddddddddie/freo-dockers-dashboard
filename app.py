@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -32,7 +32,7 @@ import views as V
 import chatbot as C
 import evidence as E
 import insights as I
-import deepdives as DD
+import admin
 import usage as U
 import tour
 import nav
@@ -60,6 +60,8 @@ if PHONE:
     inject_phone_css()
 elif SCROLL:
     inject_tablet_css(LAYOUT)
+if not CHAT_TOP:
+    inject_side_panel_css()
 tour.show(phone=PHONE)        # first-visit walkthrough (once per browser)
 if st.session_state.pop("restored", False) and "messages" not in st.session_state:
     # Signed back in from the cookie: carry on this session's Wharf-ai chat.
@@ -119,6 +121,26 @@ def example_prompts(season, baseline, focus=None):
                 f"What does {first} do in wins versus losses?",
                 f"Which games were {first}'s best?"] + [
             q for q in example_prompts(season, baseline) if "players" in q.lower()]
+    if focus and focus.startswith("the whole squad"):
+        since = f" since {baseline}" if baseline else ""
+        return [f"Who are our most improved players{since}?",
+                f"Whose numbers have dropped most{since}?",
+                "Which players gain the most metres per game?",
+                "Who wins the most contested ball in the squad?",
+                "Who leads our pressure acts, and does it matter?",
+                "Which players have the most score involvements?"]
+    if focus and focus.startswith("every Freo game against every club"):
+        return ["Which opponents have we struggled against?",
+                "Which clubs have we beaten most comfortably?",
+                "What decided our losses to the toughest clubs?",
+                "How do we go against this season's top eight?",
+                "Have we improved against any club over the seasons?"]
+    if focus and focus.startswith("the quarter-time check"):
+        return ["How often do we win from behind at three quarter time?",
+                "How often do we hold a half-time lead?",
+                "Which quarter do we fade in, and against whom?",
+                "How do we go in the last quarter of close games?",
+                "Do we finish games better at home or away?"]
     if focus and focus.startswith("the opponent scout report for "):
         club = focus.split(" for ", 1)[1].split(",")[0]
         scout = [f"What wins {club} games?",
@@ -190,16 +212,6 @@ def fitting_prompts(prompts, insight, win_w, history_h):
 
 
 # ------------------------------------------------------------ Wharf-ai
-DEEP_DIVES = ["Player map", "Year on year", "Opponents", "Quarter-time check",
-              "Wharf-ai usage"]
-
-
-def _pick_deep_dive():
-    """Open the chosen deep dive on this run and reset the dropdown."""
-    st.session_state["open_deep_dive"] = st.session_state.get("deep_dive")
-    st.session_state["deep_dive"] = None
-
-
 AFL_PHOTO = ("https://s.afl.com.au/staticfile/AFL%20Tenant/AFL/Players/ChampIDImages/AFL/"
              "{season}014/{number}.png")
 
@@ -320,10 +332,10 @@ def chat_panel(season, baseline, focus=None):
     asked, limit = U.questions_today(), U.cap()
     mine, mine_limit = U.questions_this_login(sid), U.login_cap()
     if U.is_unlimited(email):   # WHARF_UNLIMITED: no per-person or daily limit
-        chat_header(f"Answers from the match data only · {mine} questions today, no limit")
+        chat_header(f"From the match data · {mine} questions today, no limit")
         day_capped = login_capped = False
     else:
-        chat_header(f"Answers from the match data only · {mine}/{mine_limit} of your questions today")
+        chat_header(f"From the match data · {mine}/{mine_limit} questions today")
         day_capped, login_capped = asked >= limit, mine >= mine_limit
     capped = day_capped or login_capped
     # On a phone the panel is as tall as its content until a chat starts, then
@@ -497,6 +509,8 @@ CLUBS = sorted(t for t in league["team"].unique() if t != "Fremantle") if league
 
 def _game_label(season, rnd):
     """The game picker's label for a round in a season (for links like ?game=GF)."""
+    if rnd == nav.QT_ROUND:
+        return nav.QT
     tdf_ = D.team_season(team_df, season)
     for label, i in D.game_choices(tdf_):
         if tdf_["round"].iloc[i] == rnd:
@@ -506,7 +520,8 @@ def _game_label(season, rnd):
 
 # A queued move from a click, or the web address on a visit's first run.
 nav.apply_pending(all_seasons, _game_label,
-                  lambda s: D.player_list(D.players_season(player_df, s)), lambda: CLUBS)
+                  lambda s: [nav.SQUAD] + D.player_list(D.players_season(player_df, s)),
+                  lambda: [nav.ALL_CLUBS] + CLUBS)
 
 if PHONE:
     band_slot = st.container()
@@ -524,7 +539,7 @@ elif SCROLL:
     with top:
         band_slot = st.container()
         with st.container(key="t_ctrl"):
-            h2, h3, h4, h5, h6 = st.columns([0.52 * len(all_seasons), 2.3, 1.25, 0.3, 0.3],
+            h2, h3, h4, h5, h6 = st.columns([0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
                                             vertical_alignment="center")
         pick_slot, pick2_slot, _ = st.columns([1, 1, 1.2])
     if LAYOUT == "stack":
@@ -534,7 +549,7 @@ else:
     main, side = st.columns([3.55, 1])
     with main:
         seasons_w = 0.42 * len(all_seasons)       # the season buttons, about 0.42 each
-        h1, h2, h3, h4, h5, h6 = st.columns([5.24 - seasons_w, seasons_w, 1.66, 0.98, 0.24, 0.24],
+        h1, h2, h3, h4, h5, h6 = st.columns([5.98 - seasons_w, seasons_w, 1.66, 0.24, 0.24, 0.24],
                                              vertical_alignment="center")
 
 with h2:
@@ -554,6 +569,7 @@ baseline = D.baseline_season(season, all_seasons)
 tdf = D.team_season(team_df, season)
 pdf_season = D.players_season(player_df, season)
 pos = scout = player = game_round = None
+page = None   # "squad", "clubs" or "qt": a picker's page across all its options
 
 
 def _pick_and_band():
@@ -564,63 +580,20 @@ def _pick_and_band():
     if view == "Season":
         return None, None, h1
     with h1:
-        if view == "Player":
+        # The player view has a second picker ("compare with"), but not on the
+        # whole squad page; the quarter-time check's label needs a wider picker.
+        if view == "Player" and st.session_state.get("player_pick") != nav.SQUAD:
             return st.columns([0.95, 0.95, 2.5], vertical_alignment="center")
-        pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
+        pick, band = st.columns([1.3 if view == "Match" else 1.12, 3.3],
+                                vertical_alignment="center")
     return pick, None, band
 
 
 pick, pick2, band = _pick_and_band()
 vs = None
-if view == "Scout" and league is not None:
-    if st.session_state.get("scout_team") not in CLUBS:
-        last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
-        st.session_state["scout_team"] = last_opp if last_opp in CLUBS else CLUBS[0]
-    with pick:
-        scout = st.selectbox("Opponent", CLUBS, key="scout_team", label_visibility="collapsed")
-    with band:
-        lad = D.ladder(league, season)
-        games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
-        last5 = [(r.result, f"{r.api_round} v {r.opponent}: {r.score_for} to {r.score_against}")
-                 for r in games.itertuples()]
-        scout_band(scout, season, lad.loc[scout], last5)
-    focus = f"the opponent scout report for {scout}, {season} season"
-elif view == "Player":
-    names = D.player_list(pdf_season)
-    if st.session_state.get("player_pick") not in names:
-        st.session_state["player_pick"] = names[0]
-    with pick:
-        player = st.selectbox("Player", names, key="player_pick", label_visibility="collapsed")
-    others = [n for n in names if n != player]
-    if st.session_state.get("player_vs") not in [None] + others:
-        st.session_state["player_vs"] = None
-    with pick2:
-        vs = st.selectbox("Compare with", [None] + others, key="player_vs",
-                          format_func=lambda n: "Compare with..." if n is None else n,
-                          label_visibility="collapsed")
-    with band:
-        if vs:
-            compare_band(player, vs, season, D.games_together(pdf_season, player, vs))
-        else:
-            details = D.player_details(player_df, player, season)
-            player_band(player, season, pdf_season[pdf_season["player"] == player],
-                        details=details, photo_url=player_photo(details.get("player_id"), season))
-    focus = (f"a comparison of {player} and {vs}, {season} season" if vs else
-             f"the player profile for {player}, {season} season")
-elif view == "Match" and len(tdf):
-    choices = D.game_choices(tdf)
-    with pick:
-        label = st.selectbox("Game", [c[0] for c in choices], key=f"game_{season}",
-                             label_visibility="collapsed")
-    pos = dict(choices)[label]
-    game = tdf.iloc[pos]
-    game_round = game["round"]
-    with band:
-        match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
-    focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
-             + ("drew" if game["result"] == "D" else
-                f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
-else:
+
+
+def season_band():
     last = tdf.tail(5)
     form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
             for r in last.itertuples()]
@@ -635,16 +608,91 @@ else:
         header_band(season, D.record(tdf), form, note)
 
 
-def deep_dive_menu():
-    # A dropdown rather than a popover: it closes itself on a pick, so it
-    # never sits on top of the dialog it opens.
-    st.selectbox("Deep dives", list(DEEP_DIVES), index=None, placeholder="Deep dives",
-                 key="deep_dive", label_visibility="collapsed", on_change=_pick_deep_dive)
+if view == "Scout" and league is not None:
+    clubs = [nav.ALL_CLUBS] + CLUBS
+    if st.session_state.get("scout_team") not in clubs:
+        last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
+        st.session_state["scout_team"] = last_opp if last_opp in CLUBS else CLUBS[0]
+    with pick:
+        scout = st.selectbox("Opponent", clubs, key="scout_team", label_visibility="collapsed")
+    if scout == nav.ALL_CLUBS:
+        page = "clubs"
+        season_band()
+        focus = "every Freo game against every club, all seasons"
+    else:
+        with band:
+            lad = D.ladder(league, season)
+            games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
+            last5 = [(r.result, f"{r.api_round} v {r.opponent}: {r.score_for} to {r.score_against}")
+                     for r in games.itertuples()]
+            scout_band(scout, season, lad.loc[scout], last5)
+        focus = f"the opponent scout report for {scout}, {season} season"
+elif view == "Player":
+    names = D.player_list(pdf_season)
+    if st.session_state.get("player_pick") not in [nav.SQUAD] + names:
+        st.session_state["player_pick"] = names[0]
+    with pick:
+        player = st.selectbox("Player", [nav.SQUAD] + names, key="player_pick",
+                              label_visibility="collapsed")
+    if player == nav.SQUAD:
+        page = "squad"
+        st.session_state["player_vs"] = None
+        season_band()
+        focus = f"the whole squad (player map and year on year), {season} season"
+    else:
+        others = [n for n in names if n != player]
+        if st.session_state.get("player_vs") not in [None] + others:
+            st.session_state["player_vs"] = None
+        with pick2:
+            vs = st.selectbox("Compare with", [None] + others, key="player_vs",
+                              format_func=lambda n: "Compare with..." if n is None else n,
+                              label_visibility="collapsed")
+        with band:
+            if vs:
+                compare_band(player, vs, season, D.games_together(pdf_season, player, vs))
+            else:
+                details = D.player_details(player_df, player, season)
+                player_band(player, season, pdf_season[pdf_season["player"] == player],
+                            details=details,
+                            photo_url=player_photo(details.get("player_id"), season))
+        focus = (f"a comparison of {player} and {vs}, {season} season" if vs else
+                 f"the player profile for {player}, {season} season")
+elif view == "Match" and len(tdf):
+    choices = D.game_choices(tdf)
+    labels = [c[0] for c in choices]
+    if st.session_state.get(f"game_{season}") not in [nav.QT] + labels:
+        st.session_state[f"game_{season}"] = labels[0]   # the latest game
+    with pick:
+        label = st.selectbox("Game", [nav.QT] + labels, key=f"game_{season}",
+                             label_visibility="collapsed")
+    if label == nav.QT:
+        page = "qt"
+        game_round = nav.QT_ROUND
+        season_band()
+        focus = "the quarter-time check (how Freo have gone from a margin at a break)"
+    else:
+        pos = dict(choices)[label]
+        game = tdf.iloc[pos]
+        game_round = game["round"]
+        with band:
+            match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
+        focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
+                 + ("drew" if game["result"] == "D" else
+                    f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
+else:
+    season_band()
+
+
+def usage_button():
+    """Wharf-ai usage, for the people listed in WHARF_ADMINS only."""
+    if U.is_admin((auth.current_user() or {}).get("email")):
+        if st.button("", icon=":material/monitoring:", key="usage_btn", help="Wharf-ai usage"):
+            admin.usage_log()
 
 
 if not PHONE:
     with h4:
-        deep_dive_menu()
+        usage_button()
 with h5:
     # The walkthrough has its own button (it also runs once, on first sign-in).
     if st.button("?", key="tour_btn", help="Take the app tour"):
@@ -656,17 +704,6 @@ with h6:
                  help=f"Sign out ({who})" if who else "Sign out"):
         auth.sign_out()
 nav.write_url(season, view, game=game_round, player=player, opp=scout, vs=vs)
-dive = st.session_state.pop("open_deep_dive", None)
-if dive == "Player map":
-    DD.player_map(player_df, season)
-elif dive == "Year on year":
-    DD.year_on_year(player_df, all_seasons)
-elif dive == "Opponents":
-    DD.opponents(team_df, all_seasons)
-elif dive == "Quarter-time check":
-    DD.quarter_time(team_df, all_seasons)
-elif dive == "Wharf-ai usage":
-    DD.usage_log()
 
 if CHAT_TOP:
     with chat_slot:
@@ -675,7 +712,13 @@ if CHAT_TOP:
 with main:
     if CHAT_TOP:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
-    if scout is not None:
+    if page == "squad":
+        V.render_squad(player_df, season, baseline, SZ)
+    elif page == "clubs":
+        V.render_clubs(team_df, all_seasons, SZ)
+    elif page == "qt":
+        V.render_quarter_time(team_df, all_seasons, SZ)
+    elif scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
     elif player is not None and vs:
         V.render_compare(player_df, season, player, vs, SZ)
@@ -685,10 +728,10 @@ with main:
         V.render_match(team_df, player_df, season, pos, SZ)
     else:
         V.render(team_df, player_df, season, baseline, SZ)
-    if PHONE:
+    if PHONE and U.is_admin((auth.current_user() or {}).get("email")):
         with st.container(key="m_more"):
             st.markdown('<div class="wa-sub">More</div>', unsafe_allow_html=True)
-            deep_dive_menu()
+            usage_button()
 
 if not CHAT_TOP:
     with side, st.container(border=True, height=PANEL_H, key="card_wharfai"):

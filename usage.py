@@ -12,7 +12,8 @@ again after one; for permanent history, point USAGE_DB at persistent storage.
 Settings (environment or Streamlit secrets): WHARF_DAILY_CAP (default 100, shared
 by everyone), WHARF_USER_CAP (default 10 questions per person per day; with the
 username/password fallback a "person" is one sign-in), USAGE_DB (default
-wharf_usage.sqlite), WHARF_UNLIMITED (comma separated emails with no limits,
+wharf_usage.sqlite), WHARF_ADMINS (comma separated emails that see the usage log),
+WHARF_UNLIMITED (comma separated emails with no limits,
 e.g. the app owner; their questions don't count towards the shared daily cap;
 needs Google sign-in, which is how the app knows who someone is). Keep emails in
 secrets, not the code: the repo is public. WHARF_LOGIN_CAP is read as a fallback
@@ -64,13 +65,22 @@ def today():
     return datetime.now(TZ).strftime("%Y-%m-%d")
 
 
-def unlimited_emails():
-    raw = settings.get("WHARF_UNLIMITED") or ""
+def _emails(key):
+    raw = settings.get(key) or ""
     return {e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()}
+
+
+def unlimited_emails():
+    return _emails("WHARF_UNLIMITED")
 
 
 def is_unlimited(email):
     return bool(email) and email.strip().lower() in unlimited_emails()
+
+
+def is_admin(email):
+    """WHARF_ADMINS: who sees the Wharf-ai usage log (Google sign-in only)."""
+    return bool(email) and email.strip().lower() in _emails("WHARF_ADMINS")
 
 
 def questions_today():

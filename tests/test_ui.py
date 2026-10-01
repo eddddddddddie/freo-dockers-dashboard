@@ -90,12 +90,17 @@ def test_every_view_fits_one_screen(browser, server, w, h):
         assert f["exceptions"] == 0, (view, f)
         assert f["scroll"] <= f["client"] + 1, (view, w, h, f)
         assert f["cards"] and f["white"] == f["cards"], (view, f)
-    # Player vs player (a link with ?vs= opens it; the sign-in cookie carries over)
-    pg.goto(server + "/?season=2026&view=Player&player=Caleb%20Serong&vs=Andrew%20Brayshaw")
-    pg.wait_for_selector(".cv-band.cmp", timeout=60000)
-    pg.wait_for_timeout(3000)
-    f = fit(pg)
-    assert f["exceptions"] == 0 and f["scroll"] <= f["client"] + 1, ("compare", w, h, f)
+    # Player vs player and the pickers' whole-list pages (links; the sign-in
+    # cookie carries over): whole squad, all clubs, quarter-time check.
+    for name, query in [("compare", "view=Player&player=Caleb%20Serong&vs=Andrew%20Brayshaw"),
+                        ("squad", "view=Player&player=Whole%20squad"),
+                        ("clubs", "view=Scout&opp=All%20clubs"), ("qt", "view=Match&game=QT")]:
+        pg.goto(f"{server}/?season=2026&{query}")
+        pg.wait_for_selector(".cv-band", timeout=60000)
+        pg.wait_for_timeout(3000)
+        f = fit(pg)
+        assert f["exceptions"] == 0 and f["scroll"] <= f["client"] + 1, (name, w, h, f)
+        assert f["cards"] and f["white"] == f["cards"], (name, f)
     pg.close()
 
 

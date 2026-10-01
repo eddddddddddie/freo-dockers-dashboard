@@ -15,8 +15,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Scrape: `python freo_scraper.py 2025 2026` (no args defaults to 2025 and 2026). Takes about
   1.5 s per match, so plan for a minute or so per season. Writes both CSVs into the current directory.
 - Advanced stats: `python afl_api_scraper.py 2025 2026` (same defaults, about 3 minutes for both
-  seasons). Writes `freo_player_games_ext.csv` and `freo_team_games_ext.csv`. Optional: the
-  dashboard runs on the AFL Tables CSVs alone and hides the extra stats.
+  seasons). Writes `freo_player_games_ext.csv`, `freo_team_games_ext.csv` and
+  `opp_player_games_ext.csv` (the opposition's players in each Freo game, for the Match view's
+  leaders; matched to games by season + opponent + date within a day, `data.opp_match_leaders`).
+  Optional: the dashboard runs on the AFL Tables CSVs alone and hides the extra stats.
 - League data (opponent scout report, ladder): `python league_scraper.py 2025 2026` (about 22
   minutes: 2 requests a match for ~430 matches). Writes `league_team_games.csv`, one row per team
   per match, team totals summed from player stats, cumulative quarter scores (the API's
@@ -37,8 +39,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   which redeploys the app (and so, on Streamlit Cloud, wipes the usage log until it moves to a
   database).
 - Wharf-ai feedback review: `python evals/review_feedback.py [usage.csv]` lists thumbs-down answers
-  and answers with unmatched numbers, from the local log or the CSV downloaded in Deep dives ->
-  Wharf-ai usage, as candidate test cases (`evals/results/feedback_<date>.md`).
+  and answers with unmatched numbers, from the local log or the CSV downloaded from the Wharf-ai
+  usage page, as candidate test cases (`evals/results/feedback_<date>.md`).
 - Wharf-ai accuracy eval: `python evals/wharf_eval.py` (28 questions, 2 of them league, expected answers computed
   with plain pandas, deterministic grading; spends real money, about US$0.20 a run; results in
   `evals/results/`, gitignored). Run it after any change to the prompt, tools or model.
@@ -149,7 +151,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   columns below 640px), the picker for Match/Player/Scout, Wharf-ai (insight, 3 suggestions,
   chat box; once a chat starts it scrolls inside about half the screen, with a "Dashboard ↓"
   button that scrolls by script, since a #anchor link lands in the wrong place in Streamlit's
-  scrolling container), then the cards one per row, and Deep dives at the bottom. Season on a
+  scrolling container), then the cards one per row, and (admins only) Wharf-ai usage at the bottom. Season on a
   phone: tiles 2 to a row, recent games as tappable buttons (8, then "Show all") instead of the
   game strip, then where we win, drivers, quarters, role leaders, player form (the 6-game
   heatmap reads fine at 390px). Player grids keep 6 columns (`views.PHONE_GRID`). Cards grow
@@ -165,7 +167,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   and stack (everything else: portrait tablets, landscape phones, small windows). The one-screen
   layout breaks below about 1280px (clipped controls, overlapping heatmap rows), hence the cut-off.
   Stack and split both scroll (`theme.inject_tablet_css`, `layout.scroll_sizes`): band on its own
-  line, then a controls row (season, view buttons, Deep dives, ?, sign out) and the picker; tiles
+  line, then a controls row (season, view buttons, usage for admins, ?, sign out) and the picker; tiles
   three to a row; cards two to a row with wide ones (game strip, player grids, player form, game
   flow) across the row; card heights follow content. Stack puts Wharf-ai above the dashboard (4
   suggestions, 3 when the window is under 500px tall) with the "Dashboard ↓" button; split keeps
@@ -201,7 +203,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   rows. Wharf-ai gets comparison questions on that page.
 - Coach research: `docs/coach_sessions.md` is a 30-minute task script (five timed tasks with the
   correct answers, what to watch for, note sheet, debrief). Re-run it after each design round.
-- Header: season toggle (one button per season in the data, 2024 to 2026; its column scales with the count), view switch, Deep dives dropdown, and a band
+- Header: season toggle (one button per season in the data, 2024 to 2026; its column scales with the count), view switch, a Wharf-ai usage button (admins only), and a band
   with record, win rate, avg for/against/margin, last 5, data freshness (the two averages hide
   below 1380px wide).
 - Scout mode (`views.render_scout`, needs league_team_games.csv): pick any club (defaults to the
@@ -215,15 +217,20 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   the validator against Freo purple and the opponent grey (navy clubs therefore chart as a strong
   blue). Collingwood charts in charcoal with a lighter grey for their opponents.
 - First-visit tour (`tour.py`, `components/tour`): driver.js 1.8.0 from jsDelivr, loaded into the
-  app page; 13 steps spotlighting each part; runs once per browser (localStorage
+  app page; 12 steps spotlighting each part; runs once per browser (localStorage
   `freoCoachTourDone_v1`): on a first visit a "New here?" prompt points at the pulsing ? button
-(Take the tour / close); the tour runs from there or from the ? button any time. It waits until every target card
-  has rendered, and never starts over a running tour. The CSS that hides Streamlit's footer must
+(Take the tour / close); the tour runs from there or from the ? button any time. driver.js is
+  fetched as soon as the component loads, and the ? click is caught by a capture listener on the
+  page (so no app rerun) and starts the tour at once (about 0.2 s); steps for cards the current
+  view doesn't have are skipped. It never starts over a running tour. The CSS that hides Streamlit's footer must
   not match `footer` generally: driver.js draws its buttons in a `<footer>`.
 - Match mode (`views.render_match`): pick one game (most recent first); the band shows the score
-  line; tiles show this game against the season average (sparkline accents that game); tale of the
-  tape (Freo vs opposition share per stat, tick at Freo's season average share); game flow (running
-  margin at each break vs the season's average win and loss); game leaders + goals; every Freo
+  line, Freo purple fading into the opposition's dark club colour with their accent stripe; tiles
+  show this game against the season average (sparkline accents that game); tale of the tape (Freo
+  vs opposition share per stat, the opposition in their club chart colour, tick at Freo's season
+  average share); game flow (running margin at each break vs the season's average win and loss,
+  the season's other games faint grey behind, no hover); game leaders for both sides
+  (`theme.leaders_pair`, surnames, from `opp_player_games_ext.csv`; Freo only without it) + goals; every Freo
   player's numbers shaded against their own season average (scrolls inside its card). Wharf-ai is
   told which match is on screen.
 - 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
@@ -237,16 +244,25 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (last 6 games, one-hue light to dark purple by the game as a % of the player's own season average,
   50% to 150%; stat picker), what drives our margin (Pearson r of each differential with margin;
   label it association, not cause).
-- Deep dives menu in the header opens full-size dialogs (`deepdives.py`), keeping the main view on
-  one screen: player map (per game averages on two chosen stats, median quadrants, dot size = time
-  on ground), year on year (slope chart of per game averages, top 15 with 8+ games in both seasons),
-  opponents (every game vs each club, both seasons, toughest first), quarter-time check (enter the
-  margin at a break: record, average final margin and net scoring after the break in games within
-  a +/- window, plus a scatter of margin at the break vs final margin; matched on score only, since
-  there are no quarter-by-quarter stats). Deep dives is a selectbox, not a popover: a popover stays
-  open on top of the dialog it launches. The opponents dialog can hand a
-  question to Wharf-ai via `st.session_state["pending_prompt"]`; that arrives on a full-app run, so
-  the chat panel must not call `st.rerun(scope="fragment")` then (Streamlit raises).
+- Each view's picker has a first option for a page across all its options (no tiles row; the
+  cards fill the height, level with the Wharf-ai panel, `views._full_h`; `nav.SQUAD`,
+  `nav.ALL_CLUBS`, `nav.QT`, kept in the address as `player=Whole squad`, `opp=All clubs`,
+  `game=QT`). The band is the season band. Defaults stay a real player, the last opponent and the
+  latest game.
+  - Player -> Whole squad (`views.render_squad`): player map (per game averages on two chosen
+    stats, median quadrants, dot size = time on ground) | year on year (slope chart, the season
+    before -> this one, top 15 with 8+ games in both). Clicking a player opens their profile.
+  - Scout -> All clubs (`views.render_clubs`): every game vs each club, all seasons, toughest
+    first, and "Ask Wharf-ai about <club>", which hands the question over via
+    `st.session_state["pending_prompt"]`; that arrives on a full-app run, so the chat panel must
+    not call `st.rerun(scope="fragment")` then (Streamlit raises).
+  - Match -> Quarter-time check (`views.render_quarter_time`): enter the margin at a break:
+    record, average final margin and net scoring after the break in games within a +/- window, a
+    scatter of margin at the break vs final margin, and the matching games. Matched on score
+    only, since there are no quarter-by-quarter stats.
+- Wharf-ai usage (`admin.usage_log`, a dialog from the chart icon by the ? button) shows only to
+  the emails in `WHARF_ADMINS` (comma separated, in secrets; Google sign-in only, so it never
+  shows with the password login).
 - Cards are `views.card(name)` / keyed containers (`key="card_<name>"`); the card CSS targets the
   `st-key-card_*` class, because Streamlit 1.64 removed the old bordered-container wrapper element.
   In 1.64 segmented controls render as radio buttons (tests: `get_by_role("radio", ...)`).
@@ -260,7 +276,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
 - The insight card rotates through all of the season's insights every 30 s, in the browser with
   CSS (no reruns, so it can't interrupt a streaming answer; pauses on hover); "Another insight"
   moves on straight away. Wharf-ai is told the whole rotation.
-- Named Wharf-ai; right-hand panel. With no messages it shows as many suggested prompts as fit
+- Named Wharf-ai; right-hand panel. Beside the dashboard (desktop, split) the panel is a fixed
+  height and `theme.inject_side_panel_css` makes it a flex column: the purple header and the
+  question box stay put and only the chat (`wa_history`) scrolls, taking whatever height the
+  header leaves. With no messages it shows as many suggested prompts as fit
   under the insight (`app.fitting_prompts` estimates each button's height from its length and the
   panel width, calibrated at 1440 and 1920 wide); match mode leads with match questions. Every
   answer ends with a hidden `FOLLOWUPS: q | q | q` line that `chatbot._hold_back_marker` strips
@@ -283,8 +302,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   `WHARF_UNLIMITED` (comma separated emails, Google sign-in only) skips both limits and isn't
   counted in the shared total; keep it in secrets (the repo is public).
   `WHARF_DAILY_CAP` (default 100) per day, shared by everyone, resets at midnight Perth time, is the
-  overall ceiling; log in Deep dives
-  -> Wharf-ai usage. The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
+  overall ceiling; log on the Wharf-ai usage page (admins only, `WHARF_ADMINS`). The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
   starts again after a restart or redeploy.
 - While Wharf-ai works, the status line shows a spinning red AFL ball (`app.WAIT_BALL`, inline SVG, fixed size so the
   line doesn't shift; still under reduced motion) and an AFL phrase (`app.WAIT_PHRASES`,

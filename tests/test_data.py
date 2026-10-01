@@ -115,3 +115,20 @@ def test_draws_are_neither_wins_nor_losses(team):
         res = D.team_season(team, season)["result"]
         assert rec["draws"] == int((res == "D").sum())
     assert record_text(12, 10, 1) == "12-10-1" and record_text(21, 6) == "21-6"
+
+
+def test_opposition_players_if_present(team):
+    """The opposition's players: every Freo game has them, kicks + handballs =
+    disposals, and their goals add up to the opposition's score in AFL Tables."""
+    o = D.load_opp_players()
+    if o is None:
+        pytest.skip("opp_player_games_ext.csv not scraped")
+    assert (o["kicks"] + o["handballs"] == o["disposals"]).all()
+    for _, g in team.iterrows():
+        assert D.opp_match_leaders(g) is not None, (g["season"], g["round"], g["opponent"])
+    goals = o.groupby(["season", "opponent", "date_local"])["goals"].sum().rename("goals_players")
+    t = team[["season", "opponent", "opp_goals"]].assign(date_local=team["game_dt"].dt.strftime("%Y-%m-%d"))
+    joined = t.join(goals, on=["season", "opponent", "date_local"])
+    matched = joined.dropna(subset=["goals_players"])
+    assert len(matched) >= len(team) * 0.9           # most dates agree exactly (some are a day apart)
+    assert (matched["goals_players"] == matched["opp_goals"]).all()

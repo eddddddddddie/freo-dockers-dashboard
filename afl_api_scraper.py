@@ -17,6 +17,7 @@ Usage:
 Writes into the current directory:
     freo_player_games_ext.csv  one row per Freo player per game
     freo_team_games_ext.csv    one row per game, freo_* vs opp_* totals
+    opp_player_games_ext.csv   one row per opposition player per Freo game
     freo_squad.csv             listed squad per season: id, date of birth, height, position
 
 Join keys: season, opponent (AFL Tables naming), local match date (date_local)
@@ -172,7 +173,7 @@ def scrape_match(game, warnings):
                 warnings.append(f"{mid}: {prefix}{col} players {summed} vs team {team[prefix + col]}")
         for col in SUMMED:
             team[prefix + col] = sum(r.get(col) or 0 for r in players)
-    return rows["freo_"], team
+    return rows["freo_"], team, rows["opp_"]
 
 
 def write_csv(path, rows, lead):
@@ -185,24 +186,28 @@ def write_csv(path, rows, lead):
 
 def main(years):
     session.headers["x-media-mis-token"] = session.post(TOKEN_URL, data=b"", timeout=30).json()["token"]
-    players, teams, warnings = [], [], []
+    players, teams, opp_players, warnings = [], [], [], []
     for year in years:
         games = freo_matches(year)
         print(f"{year}: {len(games)} Freo matches")
         for g in games:
             print(f"  {g['api_round']:<34} {g['opponent']:<24} {g['date_local']}")
             try:
-                p, t = scrape_match(g, warnings)
+                p, t, o = scrape_match(g, warnings)
             except requests.RequestException as exc:
                 warnings.append(f"{g['match_id']}: request failed ({exc})")
                 continue
             players += p
             teams.append(t)
+            opp_players += o
 
     game_cols = ["season", "api_round", "date_local", "opponent", "freo_side", "match_id"]
     write_csv("freo_player_games_ext.csv", players, game_cols + ["jumper", "player", "player_id"])
     write_csv("freo_team_games_ext.csv", teams, game_cols)
-    print(f"\nWrote {len(players)} player rows and {len(teams)} team rows.")
+    # The opposition's players in Freo games (for the match view's leaders).
+    write_csv("opp_player_games_ext.csv", opp_players, game_cols + ["jumper", "player", "player_id"])
+    print(f"\nWrote {len(players)} player rows, {len(teams)} team rows and "
+          f"{len(opp_players)} opposition player rows.")
     if warnings:
         print(f"\n{len(warnings)} warning(s):")
         for w in warnings:

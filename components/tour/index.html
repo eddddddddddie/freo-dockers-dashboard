@@ -26,9 +26,7 @@
     {el: ".st-key-season", title: "Pick a season",
      text: "Switch seasons. Every number on the page follows, compared with the season before."},
     {el: ".st-key-view", title: "Four views",
-     text: "Season, Match (one game against the season average), Player (one player's season) and Scout (any club against the league). The web address keeps your place, so you can bookmark or send a view."},
-    {el: ".st-key-deep_dive", title: "Deep dives",
-     text: "Bigger views: player map, year on year, opponents, a quarter-time check and Wharf-ai usage."},
+     text: "Season, Match (one game against the season average), Player (one player's season) and Scout (any club against the league). The picker next to the band also has a page across them all: Whole squad in Player, All clubs in Scout, and a Quarter-time check in Match. The web address keeps your place, so you can bookmark or send a view."},
     {el: ".cv-tiles", title: "Key numbers",
      text: "Season value, change on last season (green is good, red is not, grey has no good or bad) and a trend line with a point per game. Hover the line for each game."},
     {el: ".st-key-card_strip", title: "Game strip",
@@ -86,10 +84,13 @@
         ".freo-pulse{animation:freo-pulse 1.6s ease-out infinite}";
       doc.head.appendChild(st);
     }
-    var s = doc.createElement("script");
-    s.src = LIB + "driver.js.iife.js";
-    s.onload = cb;
-    doc.head.appendChild(s);
+    var s = doc.getElementById("freo-driver-js");
+    if (!s) {
+      s = doc.createElement("script");
+      s.id = "freo-driver-js"; s.src = LIB + "driver.js.iife.js";
+      doc.head.appendChild(s);
+    }
+    s.addEventListener("load", function () { cb(); });
   }
 
   function start() {
@@ -141,26 +142,50 @@
     d.drive();
   }
 
+  // Start once the page has drawn: the band and a chart for the tour (steps for
+  // cards this view doesn't have are skipped), the ? button for the prompt.
+  // Checked every 100 ms, for up to 6 s.
+  function whenReady(sel, cb) {
+    var tries = 0, timer = setInterval(function () {
+      if (sel.every(function (q) { return doc.querySelector(q); }) || ++tries > 60) {
+        clearInterval(timer);
+        load(cb);
+      }
+    }, 100);
+  }
+
+  function runTour() {
+    if (P.__freoTourRunning || P.__freoTourActive) return;
+    P.__freoTourRunning = true;
+    whenReady([".cv-band", ".js-plotly-plot"], function () { P.__freoTourRunning = false; start(); });
+  }
+
   function maybeStart(force) {
     var seen = false;
     try { seen = P.localStorage.getItem(DONE_KEY) === "1"; } catch (e) {}
     var forced = force && force !== P.__freoTourForce;
     if (forced) P.__freoTourForce = force;
+    if (forced) return runTour();
     // Reruns re-render this frame; never start a second tour over a running one.
-    if ((seen && !forced) || P.__freoTourRunning || P.__freoTourActive) return;
+    if (seen || P.__freoTourRunning || P.__freoTourActive) return;
     P.__freoTourRunning = true;
-    // Wait until every card the tour highlights has rendered (or 10 s), so no
-    // step is dropped for an element that simply hasn't drawn yet.
-    var targets = (P.__freoTourPhone ? PHONE_STEPS : STEPS).filter(function (s) { return s.el; }).map(function (s) { return s.el; });
-    var tries = 0, timer = setInterval(function () {
-      var ready = targets.every(function (sel) { return doc.querySelector(sel); });
-      if ((ready && doc.querySelector(".js-plotly-plot")) || ++tries > 40) {
-        clearInterval(timer);
-        // A first visit gets the prompt; the ? button (forced) gets the tour.
-        load(function () { P.__freoTourRunning = false; if (forced) { start(); } else { prompt(); } });
-      }
-    }, 250);
+    whenReady([".st-key-tour_btn", ".js-plotly-plot"], function () {
+      P.__freoTourRunning = false; prompt(); });
   }
+
+  // The ? button starts the tour here, straight away, instead of rerunning the
+  // app first: a capture listener on the page sees the click before Streamlit
+  // does and stops it. (Python's tour.replay() stays as the fallback.) Replaced
+  // on each load of this frame, so it never calls into an old frame.
+  if (P.__freoTourClick) doc.removeEventListener("click", P.__freoTourClick, true);
+  P.__freoTourClick = function (e) {
+    if (!e.target.closest || !e.target.closest(".st-key-tour_btn button")) return;
+    e.preventDefault(); e.stopPropagation();
+    markSeen();
+    runTour();
+  };
+  doc.addEventListener("click", P.__freoTourClick, true);
+  load(function () {});   // fetch driver.js now, so the first ? click doesn't wait for it
 
   window.addEventListener("message", function (e) {
     if (e.data && e.data.type === "streamlit:render") {

@@ -271,11 +271,17 @@ def slope_chart(yoy, s0, s1, stat_label, height):
 
 
 # ---- Match mode ---------------------------------------------------------------
-def game_flow_lines(game, avg, height):
+def game_flow_lines(game, avg, height, others=None):
     """Running margin at each break in one game, against the season's average
-    running margin in wins and in losses (thin dashed reference lines)."""
+    running margin in wins and in losses (thin dashed reference lines), with
+    the season's other games faint grey behind (no hover)."""
     qs = ["Start", "Q1", "Q2", "Q3", "Q4"]
     fig = go.Figure()
+    others = others if others is not None else []
+    for _, row in (others.iterrows() if len(others) else []):
+        fig.add_trace(go.Scatter(
+            x=qs, y=[0] + row.tolist(), mode="lines", hoverinfo="skip", showlegend=False,
+            line=dict(color=COLORS["neutral"], width=1), opacity=0.28))
     for res, name, color in [("W", "Avg win", COLORS["win"]), ("L", "Avg loss", COLORS["loss"])]:
         if res in avg.index:
             fig.add_trace(go.Scatter(
@@ -292,8 +298,10 @@ def game_flow_lines(game, avg, height):
     fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
     fig = style_fig(fig, "Margin", unified=False, height=height)
     fig.update_layout(showlegend=False, margin=dict(l=4, r=10, t=14, b=4))
-    lo = min(min(y), float(avg.min().min()) if len(avg) else 0)
-    hi = max(max(y), float(avg.max().max()) if len(avg) else 0)
+    lo = min(min(y), float(avg.min().min()) if len(avg) else 0,
+             float(others.min().min()) if len(others) else 0)
+    hi = max(max(y), float(avg.max().max()) if len(avg) else 0,
+             float(others.max().max()) if len(others) else 0)
     pad = (hi - lo) * 0.15 or 5
     fig.update_yaxes(range=[lo - pad, hi + pad])
     return fig
@@ -324,12 +332,15 @@ def match_player_grid(vals, pct, labels, height):
 # ---- Quarter-time check ---------------------------------------------------------
 def break_scatter(bm, col, margin, window, brk_label, height):
     """Every game: margin at the break (across) against the final margin (up),
-    W green / L red, with the chosen position shaded."""
+    W green / L red / draw grey, with the chosen position shaded."""
     fig = go.Figure()
     fig.add_vrect(x0=margin - window, x1=margin + window, fillcolor=COLORS["freo"],
                   opacity=0.10, line_width=0)
-    for res, name, color in [("W", "Won", COLORS["win"]), ("L", "Lost", COLORS["loss"])]:
+    for res, name, color in [("W", "Won", COLORS["win"]), ("L", "Lost", COLORS["loss"]),
+                             ("D", "Drew", COLORS["neutral"])]:
         g = bm[bm["result"] == res]
+        if not len(g):
+            continue
         fig.add_trace(go.Scatter(
             x=g[col], y=g["margin"], mode="markers", name=name,
             marker=dict(size=9, color=color, line=dict(color="#FFFFFF", width=2)),

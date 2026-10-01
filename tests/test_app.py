@@ -78,7 +78,8 @@ def test_player_comparison_view(app):
     move to another player without one clears it."""
     at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
     at = at.button_group(key="view").set_value("Player").run()
-    a, b = at.selectbox(key="player_pick").value, at.selectbox(key="player_pick").options[1]
+    a = at.selectbox(key="player_pick").value
+    b = [n for n in at.selectbox(key="player_pick").options[1:] if n != a][0]   # [0] is the whole squad
     at = at.selectbox(key="player_vs").set_value(b).run()
     assert not at.exception, at.exception
     assert any('class="cv-band player cmp"' in m.value for m in at.markdown)
@@ -86,6 +87,26 @@ def test_player_comparison_view(app):
     at.session_state["pending_nav"] = {"view": "Player", "player": b}
     at = at.run()
     assert at.session_state["player_vs"] is None and at.session_state["player_pick"] == b
+
+
+def test_whole_squad_all_clubs_and_quarter_time_pages(app):
+    """Each picker's page across all its options draws, keeps its place in the
+    address, and the deep dives menu and usage log are gone for everyone else."""
+    import nav
+    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
+    assert not [s for s in at.selectbox if s.key == "deep_dive"]
+    assert not [b for b in at.button if b.key == "usage_btn"]   # password sign-in: not an admin
+    for view, key, value, param in [("Player", "player_pick", nav.SQUAD, ("player", nav.SQUAD)),
+                                    ("Scout", "scout_team", nav.ALL_CLUBS, ("opp", nav.ALL_CLUBS)),
+                                    ("Match", "game_2026", nav.QT, ("game", nav.QT_ROUND))]:
+        at = at.button_group(key="view").set_value(view).run()
+        at = at.selectbox(key=key).set_value(value).run()
+        assert not at.exception, (view, at.exception)
+        assert any(BAND in m.value for m in at.markdown), view
+        got = at.query_params.get(param[0])
+        assert got in (param[1], [param[1]]), (view, got)
+    at = at.number_input(key="qt_margin").set_value(-12).run()   # behind by 2 goals at half time
+    assert not at.exception, at.exception
 
 
 def test_layout_modes():
@@ -146,3 +167,9 @@ def test_unlimited_users_skip_the_caps_and_the_shared_count(tmp_path, monkeypatc
     assert U.is_unlimited("OWNER@example.com ") and not U.is_unlimited("coach@example.com")
     assert not U.is_unlimited(None) and not U.is_unlimited("")
     assert U.questions_today() == 2   # the owner's question isn't counted
+
+
+def test_usage_log_only_for_admins(monkeypatch):
+    monkeypatch.setenv("WHARF_ADMINS", "Owner@Example.com")
+    assert U.is_admin(" owner@example.com") and not U.is_admin("coach@example.com")
+    assert not U.is_admin(None) and not U.is_admin("")

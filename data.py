@@ -18,6 +18,7 @@ PLAYER_CSV = "freo_player_games.csv"
 TEAM_CSV = "freo_team_games.csv"
 PLAYER_EXT_CSV = "freo_player_games_ext.csv"
 TEAM_EXT_CSV = "freo_team_games_ext.csv"
+OPP_PLAYER_CSV = "opp_player_games_ext.csv"   # the opposition's players in Freo games
 DATE_FMT = "%a %d-%b-%Y %I:%M %p"
 EXT_META = ["api_round", "date_local", "freo_side", "match_id", "player_id"]
 # API names for stats AFL Tables already has (AFL Tables name on the right).
@@ -384,13 +385,19 @@ def tale_of_the_tape(tdf, pos):
     return rows
 
 
-def game_flow(tdf, pos):
-    """Running margin at each break for one game, plus the season's average
-    running margin in wins and in losses, for comparison."""
+def season_flows(tdf):
+    """Running margin at each break (Q1 to Q4) in every game of the season."""
     f = tdf["freo_qtrs"].map(_qtr_points)
     o = tdf["opp_qtrs"].map(_qtr_points)
     run = pd.DataFrame([pd.Series(a) - pd.Series(b) for a, b in zip(f, o)]).cumsum(axis=1)
     run.columns = ["Q1", "Q2", "Q3", "Q4"]
+    return run.astype(float)
+
+
+def game_flow(tdf, pos):
+    """Running margin at each break for one game, plus the season's average
+    running margin in wins and in losses, for comparison."""
+    run = season_flows(tdf)
     run["result"] = tdf["result"].values
     avg = run.groupby("result")[["Q1", "Q2", "Q3", "Q4"]].mean()
     return run.iloc[pos][["Q1", "Q2", "Q3", "Q4"]].astype(float), avg
@@ -414,6 +421,11 @@ def match_leaders(pdf_season, game_row):
     """Who led each role in one game."""
     g = pdf_season[(pdf_season["round"] == game_row["round"])
                    & (pdf_season["opponent"] == game_row["opponent"])]
+    return _leaders(g)
+
+
+def _leaders(g):
+    """One side's players in one game -> (leader of each role, goalkickers)."""
     out = []
     for label, col in ROLES:
         top = g.loc[g[col].idxmax()]
@@ -422,6 +434,34 @@ def match_leaders(pdf_season, game_row):
     kickers = g[g["goals"] > 0].sort_values("goals", ascending=False)
     goals = ", ".join(f"{r.player.split()[-1]} {int(r.goals)}" for r in kickers.itertuples())
     return out, goals or "none"
+
+
+# The match leader roles in the AFL match centre's names (opposition players).
+OPP_ROLE_COLS = {"contested_poss": "contested_possessions", "tackles": "tackles",
+                 "clearances": "total_clearances", "rebound_50s": "rebound50s",
+                 "one_percenters": "one_percenters"}
+
+
+@st.cache_data
+def load_opp_players():
+    """The opposition's players in every Freo game (AFL match centre), or None."""
+    if not os.path.exists(OPP_PLAYER_CSV):
+        return None
+    o = pd.read_csv(OPP_PLAYER_CSV)
+    o["forward_threat"] = o["goals"] + o["goal_assists"]
+    o["_d"] = pd.to_datetime(o["date_local"])
+    return o.rename(columns={v: k for k, v in OPP_ROLE_COLS.items()})
+
+
+def opp_match_leaders(game_row):
+    """Who led each role for the opposition in one game (same roles as
+    match_leaders), or None without the opposition's player stats."""
+    o = load_opp_players()
+    if o is None:
+        return None
+    g = o[(o["season"] == game_row["season"]) & (o["opponent"] == game_row["opponent"])
+          & ((o["_d"] - game_row["game_dt"].normalize()).abs() <= pd.Timedelta(days=1))]
+    return _leaders(g) if len(g) else None
 
 
 # ---- Quarter-time check ---------------------------------------------------------

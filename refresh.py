@@ -42,7 +42,7 @@ META = "data_refresh.json"
 STEPS = [
     ("freo_scraper.py", ["freo_player_games.csv", "freo_team_games.csv"]),
     ("afl_api_scraper.py", ["freo_player_games_ext.csv", "freo_team_games_ext.csv",
-                            "freo_squad.csv"]),
+                            "opp_player_games_ext.csv", "freo_squad.csv"]),
     ("league_scraper.py", ["league_team_games.csv"]),
 ]
 GAMES = {"freo_team_games.csv": "Fremantle games (AFL Tables)",
