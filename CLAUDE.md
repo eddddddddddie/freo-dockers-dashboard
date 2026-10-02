@@ -193,6 +193,12 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (record, margin, the player's main average, ladder spot); secondary figures hide below 1760px.
   Tiles are 6 per view (grid sized from the count). Text is 12px minimum. Every card has a
   computed one-line takeaway under its title (`takeaways.py`, `card_title(takeaway=...)`).
+  Each chart also shows its takeaway: the focus functions in `takeaways.py` (`swing_stat`,
+  `best_worst_quarter`, `top_driver`, `hot_player`, `rank_focus`, `style_marks`) pick the mark
+  the text names and the chart gets it as `focus=`: those marks stay full strength (and their
+  labels bold), the rest drop to `charts.FADE` opacity in the same hue with muted labels. Trend
+  and form charts shade the last 5 games with their average (`charts._last_n_band`, label above
+  the plot), and the player trend labels the best and lowest games.
 - Navigation (`nav.py`): the web address holds season / view / game / player / opp
   (`?season=2026&view=Match&game=GF`), so views can be bookmarked and sent. Clicking a game in the
   game strip opens it in Match; clicking a player in Player form, the match player grid, the player

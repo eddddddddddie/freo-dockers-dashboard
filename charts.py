@@ -7,20 +7,41 @@ from theme import COLORS, DIVERGE, RAMP, SERIES, style_fig
 
 import data as D
 
+# Highlighting the finding: the marks a card's takeaway names keep full strength,
+# the rest drop to this opacity (same hue, so identity never changes), and their
+# labels go from ink to muted. focus=None draws every mark at full strength.
+FADE = 0.4
 
 
-def win_conditions_bars(wc, height, names=("Freo won it", "Opp won it"), colors=None):
-    """Win rate when a side wins vs loses the count on each stat."""
+def _alpha(keys, focus):
+    focus = set(focus) if focus is not None and not isinstance(focus, str) else {focus}
+    return [1.0 if (None in focus or k in focus) else FADE for k in keys]
+
+
+def _ink(alphas):
+    return [COLORS["ink"] if a == 1.0 else COLORS["muted"] for a in alphas]
+
+
+def _bold(labels, focus):
+    focus = set(focus) if focus is not None and not isinstance(focus, str) else {focus}
+    return [f"<b>{l}</b>" if l in focus else l for l in labels]
+
+
+def win_conditions_bars(wc, height, names=("Freo won it", "Opp won it"), colors=None,
+                        focus=None):
+    """Win rate when a side wins vs loses the count on each stat. focus: the stat
+    the takeaway names (the biggest swing)."""
     colors = colors or (COLORS["freo"], COLORS["opp"])
+    alpha = _alpha(wc["stat"], focus)
     fig = go.Figure()
     for key, name, color in [("ahead", names[0], colors[0]), ("behind", names[1], colors[1])]:
         rate = wc[f"{key}_winrate"]
         n = wc[f"{key}_games"]
         fig.add_trace(go.Bar(
             y=wc["stat"], x=rate, name=name, orientation="h",
-            marker=dict(color=color, cornerradius=3),
+            marker=dict(color=color, cornerradius=3, opacity=alpha),
             text=[f"{r:.0f}%" if r == r and r is not None else "" for r in rate],
-            textposition="outside", textfont=dict(size=10, color=COLORS["ink"]),
+            textposition="outside", textfont=dict(size=10, color=_ink(alpha)),
             customdata=n,
             hovertemplate="%{y}: " + name + "<br>Won <b>%{x:.0f}%</b> of "
                           "%{customdata} games<extra></extra>",
@@ -29,7 +50,9 @@ def win_conditions_bars(wc, height, names=("Freo won it", "Opp won it"), colors=
     fig.update_layout(barmode="group", bargap=0.25, bargroupgap=0.08, showlegend=False,
                       margin=dict(l=4, r=4, t=4, b=4))
     fig.update_xaxes(range=[0, 118], showticklabels=False, showgrid=False)
-    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11))
+    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11),
+                     tickmode="array", tickvals=list(wc["stat"]),
+                     ticktext=_bold(list(wc["stat"]), focus if focus is not None else []))
     return fig
 
 
@@ -57,29 +80,40 @@ def _inline_key(fig, items):
     return fig
 
 
-def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None):
+def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None, focus=None):
     """Average points for and against in each quarter. names/colors let the
-    scout report show an opponent (orange) against the teams it played (grey)."""
+    scout report show an opponent (orange) against the teams it played (grey).
+    focus: (best quarter, worst quarter): the best stays strong, the worst's
+    margin is labelled in ink, the rest step back."""
     colors = colors or (COLORS["freo"], COLORS["opp"])
+    best, worst = focus if focus else (None, None)
+    alpha = _alpha(qp["quarter"], best)
     fig = go.Figure()
     for col, name, color in [("freo", names[0], colors[0]), ("opp", names[1], colors[1])]:
         fig.add_trace(go.Bar(
             x=qp["quarter"], y=qp[col], name=name,
-            marker=dict(color=color, cornerradius=3),
+            marker=dict(color=color, cornerradius=3, opacity=alpha),
             customdata=qp[["margin", "won", "games"]].values,
             hovertemplate="%{x} " + name + ": <b>%{y:.1f}</b> pts avg<br>"
                           + names[0].split()[0] + " won %{customdata[1]} of %{customdata[2]} "
                           "(avg %{customdata[0]:+.1f})<extra></extra>",
         ))
     for _, r in qp.iterrows():
-        fig.add_annotation(x=r["quarter"], y=max(r["freo"], r["opp"]),
-                           text=f"{r['margin']:+.1f}", showarrow=False, yshift=10,
-                           font=dict(size=11, color=COLORS["ink"]))
+        q = r["quarter"]
+        strong = best is None or q in (best, worst)
+        fig.add_annotation(x=q, y=max(r["freo"], r["opp"]),
+                           text=f"<b>{r['margin']:+.1f}</b>" if q == best else f"{r['margin']:+.1f}",
+                           showarrow=False, yshift=10,
+                           font=dict(size=12 if q == best else 11,
+                                     color=COLORS["ink"] if strong else COLORS["muted"]))
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.06, showlegend=False,
                       margin=dict(l=4, r=6, t=8, b=4))
     top = max(qp["freo"].max(), qp["opp"].max())
     fig.update_yaxes(range=[0, top * 1.22])
+    if best is not None:
+        fig.update_xaxes(tickmode="array", tickvals=list(qp["quarter"]),
+                         ticktext=_bold(list(qp["quarter"]), best))
     short = [n if len(n) <= 10 else D.abbr(n) for n in names]
     return _inline_key(fig, [(short[0], colors[0]), (short[1], colors[1])])
 
@@ -88,7 +122,7 @@ def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None):
 FORM_SCALE = [[i / (len(RAMP) - 1), c] for i, c in enumerate(RAMP)]
 
 
-def form_heatmap(vals, avgs, stat_label, height):
+def form_heatmap(vals, avgs, stat_label, height, focus=None):
     """Player form: each cell is the player's number in that game, shaded on a
     light to dark purple scale by that number as a % of the player's own season
     average (half the average or less is lightest, 1.5x or more darkest).
@@ -112,8 +146,9 @@ def form_heatmap(vals, avgs, stat_label, height):
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=4, b=4))
     fig.update_xaxes(side="top", tickfont=dict(size=11))
+    hot = [r for r, p in zip(rows, avgs.index) if p == focus]   # the takeaway's hottest player
     fig.update_yaxes(showgrid=False, tickfont=dict(size=12),
-                     tickmode="array", tickvals=rows, ticktext=rows)  # never thin row labels
+                     tickmode="array", tickvals=rows, ticktext=_bold(rows, hot))  # never thin
     return fig
 
 
@@ -122,7 +157,7 @@ def form_heatmap(vals, avgs, stat_label, height):
 DIVERGING = [[i / (len(DIVERGE) - 1), c] for i, c in enumerate(DIVERGE)]
 
 
-def game_strip(rows, z, hover, labels, results, height):
+def game_strip(rows, z, hover, labels, results, height, focus=None):
     """One column per game: a W/L row on top, then margin and key differentials,
     each row shaded by who won it (scaled to that row's biggest gap)."""
     fig = go.Figure()
@@ -147,33 +182,39 @@ def game_strip(rows, z, hover, labels, results, height):
     fig.update_layout(margin=dict(l=4, r=4, t=8, b=4))
     fig.update_xaxes(tickangle=-90, tickfont=dict(size=10), showgrid=False)
     fig.update_yaxes(showgrid=False, tickfont=dict(size=11),
-                     categoryorder="array", categoryarray=["Result"] + rows)
+                     categoryorder="array", categoryarray=["Result"] + rows,
+                     tickmode="array", tickvals=["Result"] + rows,
+                     ticktext=_bold(["Result"] + rows, focus if focus is not None else []))
     return fig
 
 
-def drivers_bar(dr, height):
+def drivers_bar(dr, height, focus=None):
     """Correlation of each differential with margin, strongest first. Positive
-    (goes with winning) in Freo purple, negative in muted grey."""
+    (goes with winning) in Freo purple, negative in muted grey. focus: the stat
+    the takeaway names (the strongest)."""
     colors = [COLORS["freo"] if r > 0 else COLORS["neutral"] for r in dr["r"]]
+    alpha = _alpha(dr["stat"], focus)
     fig = go.Figure(go.Bar(
         y=dr["stat"], x=dr["r"], orientation="h",
-        marker=dict(color=colors, cornerradius=3),
+        marker=dict(color=colors, cornerradius=3, opacity=alpha),
         text=[f"{r:+.2f}" if r > 0 else "" for r in dr["r"]], textposition="outside",
-        textfont=dict(size=10, color=COLORS["ink"]), cliponaxis=False,
+        textfont=dict(size=10, color=_ink(alpha)), cliponaxis=False,
         customdata=dr["games"],
         hovertemplate="%{y} differential vs margin<br>r = <b>%{x:+.2f}</b> over "
                       "%{customdata} games<extra></extra>",
     ))
     # Negative values labelled just right of zero, clear of the stat names.
-    for stat, r in zip(dr["stat"], dr["r"]):
+    for stat, r, a in zip(dr["stat"], dr["r"], alpha):
         if r <= 0:
             fig.add_annotation(x=0, y=stat, text=f"{r:+.2f}", showarrow=False,
-                               xanchor="left", xshift=4, font=dict(size=10, color=COLORS["ink"]))
+                               xanchor="left", xshift=4,
+                               font=dict(size=10, color=COLORS["ink"] if a == 1 else COLORS["muted"]))
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, margin=dict(l=4, r=30, t=4, b=4), bargap=0.3)
     fig.update_xaxes(range=[-0.8, 1.15], showticklabels=False, showgrid=False,
                      zeroline=True, zerolinecolor=COLORS["grid"], zerolinewidth=1)
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11))
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), tickmode="array",
+                     tickvals=list(dr["stat"]), ticktext=_bold(list(dr["stat"]), focus or []))
     return fig
 
 
@@ -389,9 +430,10 @@ def answer_chart(series, title, y_title, kind="line", height=210):
 
 
 # ---- Opponent scout report ------------------------------------------------------
-def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle", team_color=None):
+def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle", team_color=None, focus=None):
     """League rank (18th on the left, 1st on the right) on each stat for the
-    opponent (in its club colour) and Freo (purple), joined by a line."""
+    opponent (in its club colour) and Freo (purple), joined by a line. focus:
+    (top 3 stats, bottom 3 stats) for the club, marked up and down in the labels."""
     team_color = team_color or COLORS["opp"]
     fig = go.Figure()
     labels = [l for l, _, _ in stats]
@@ -410,12 +452,30 @@ def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle", team_color=
     fig.update_layout(showlegend=False, margin=dict(l=4, r=8, t=22, b=4))
     fig.update_xaxes(range=[18.6, 0.4], tickvals=[18, 12, 6, 1],
                      ticktext=["18th", "12th", "6th", "1st"], showgrid=True, gridcolor=COLORS["grid"])
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11))
+    top, low = focus if focus else ([], [])
+    ticks = [f"<b>▲ {l}</b>" if l in top else f"<b>▼ {l}</b>" if l in low else l for l in labels]
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), tickmode="array",
+                     tickvals=labels, ticktext=ticks)
     return _inline_key(fig, [(team, team_color), ("Fremantle", COLORS["freo"])])
 
 
+def _last_n_band(fig, n_points, n, label):
+    """Shade the last n points of a category axis and label the stretch (the
+    "last 5" a takeaway talks about)."""
+    if n_points < n + 2:
+        return
+    fig.add_vrect(x0=n_points - n - 0.5, x1=n_points - 0.5, fillcolor=COLORS["freo"],
+                  opacity=0.07, line_width=0, layer="below")
+    # Above the plot area, so no bar or point ever covers it.
+    fig.add_annotation(x=n_points - n - 0.5, y=1, xref="x", yref="paper", text=label,
+                       showarrow=False, xanchor="left", yanchor="bottom", xshift=2,
+                       font=dict(size=10, color=COLORS["ink"]))
+    fig.update_layout(margin=dict(t=max(fig.layout.margin.t or 0, 16)))
+
+
 def form_bars(games, height):
-    """A club's margin in each of its recent games, green win / red loss."""
+    """A club's margin in each of its recent games, green win / red loss, the last
+    five shaded (the takeaway's "Last 5")."""
     colors = [{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["neutral"]) for r in games["result"]]
     x = (games["api_round"].str.replace("Round ", "R", regex=False)
          .str.replace(r"^(\w)\w* .*Finals?$", r"\1F", regex=True) + " " +
@@ -429,6 +489,9 @@ def form_bars(games, height):
     fig.update_layout(showlegend=False, bargap=0.2, margin=dict(l=4, r=6, t=6, b=4))
     fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
     fig.update_yaxes(zeroline=True, zerolinecolor=COLORS["grid"])
+    last = games.tail(5)
+    w = int((last["result"] == "W").sum())
+    _last_n_band(fig, len(games), 5, f"last 5: {w}-{len(last) - w}")
     return fig
 
 
@@ -448,27 +511,51 @@ def player_trend(me, col, label, height):
     fig.add_hline(y=avg, line=dict(color=COLORS["muted"], width=1, dash="dash"),
                   annotation_text=f"season avg {avg:.1f}", annotation_position="top left",
                   annotation_font=dict(size=11, color=COLORS["muted"]))
+    # The takeaway's last 5: shaded, with its own average drawn across just those games.
+    n = len(me)
+    if n >= 7:
+        last5 = me[col].tail(5).mean()
+        fig.add_trace(go.Scatter(x=x[-5:], y=[last5] * 5, mode="lines", hoverinfo="skip",
+                                 line=dict(color=COLORS["freo"], width=2, dash="dot"),
+                                 showlegend=False))
+    # Best and lowest games, labelled on the point.
+    if n >= 3 and me[col].max() > me[col].min():
+        vals = me[col].tolist()
+        for i, where, word in ((vals.index(max(vals)), "top center", "best"),
+                               (vals.index(min(vals)), "bottom center", "low")):
+            fig.add_annotation(x=x[i], y=vals[i], text=f"{word} {vals[i]:.0f}", showarrow=False,
+                               yshift=12 if word == "best" else -12,
+                               font=dict(size=10, color=COLORS["ink"]))
     fig = style_fig(fig, label, unified=False, height=height)
-    fig.update_layout(margin=dict(l=4, r=8, t=10, b=4))
+    fig.update_layout(margin=dict(l=4, r=8, t=14, b=4))
+    if n >= 7:   # after style_fig, which resets the margins
+        _last_n_band(fig, n, 5, f"last 5: {last5:.1f} a game")
     fig.update_xaxes(tickangle=-90, tickfont=dict(size=10))
+    lo, hi = me[col].min(), me[col].max()
+    pad = (hi - lo) * 0.18 or 2
+    fig.update_yaxes(range=[lo - pad, hi + pad])
     return fig
 
 
-def squad_rank_bars(pr, height):
-    """Squad rank on each stat as a bar (longer = better rank), value labelled."""
+def squad_rank_bars(pr, height, focus=None):
+    """Squad rank on each stat as a bar (longer = better rank), value labelled.
+    focus: the stats the takeaway names (1sts, or top 3s)."""
     score = pr["squad"] - pr["rank"] + 1
+    alpha = _alpha(pr["stat"], focus)
     fig = go.Figure(go.Bar(
-        y=pr["stat"], x=score, orientation="h", marker=dict(color=COLORS["freo"], cornerradius=3),
+        y=pr["stat"], x=score, orientation="h",
+        marker=dict(color=COLORS["freo"], cornerradius=3, opacity=alpha),
         text=[f"{int(r)}{'st' if r == 1 else 'nd' if r == 2 else 'rd' if r == 3 else 'th'} · {v:.1f}"
               for r, v in zip(pr["rank"], pr["value"])],
-        textposition="outside", textfont=dict(size=11, color=COLORS["ink"]), cliponaxis=False,
+        textposition="outside", textfont=dict(size=11, color=_ink(alpha)), cliponaxis=False,
         customdata=pr[["rank", "squad", "value"]].values,
         hovertemplate="%{y}: %{customdata[2]:.1f} a game<br>Rank %{customdata[0]} of "
                       "%{customdata[1]} in the squad<extra></extra>"))
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, margin=dict(l=4, r=70, t=4, b=4), bargap=0.3)
     fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, pr["squad"].max() + 0.5])
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=12))
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=12), tickmode="array",
+                     tickvals=list(pr["stat"]), ticktext=_bold(list(pr["stat"]), focus or []))
     return fig
 
 

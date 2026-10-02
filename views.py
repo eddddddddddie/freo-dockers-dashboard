@@ -137,7 +137,8 @@ def render(team_df, player_df, season, baseline, sz):
                        keys=[("Freo", COLORS["freo"]), ("Opp", COLORS["opp"])],
                        takeaway=T.strip(tdf))
             rows, z, hover, labels = D.game_strip(tdf)
-            ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), MID_H),
+            ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), MID_H,
+                                     focus=T.top_driver(D.margin_drivers(tdf))),
                        key=f"strip_{season}")
             _open_game(ev, labels, season)
 
@@ -151,7 +152,7 @@ def render(team_df, player_df, season, baseline, sz):
             card_title("Where we win", keys=[("Freo won it", COLORS["freo"]),
                                              ("Opp won it", COLORS["opp"])],
                        takeaway=T.where_we_win(wc))
-            _plot(CH.win_conditions_bars(wc, MID_H))
+            _plot(CH.win_conditions_bars(wc, MID_H, focus=T.swing_stat(wc)))
 
     def quarters():
         with card("quarters"):
@@ -166,7 +167,7 @@ def render(team_df, player_df, season, baseline, sz):
             st.markdown(f'<div class="card-take">{T.quarters(qp) if qview == "Points" else T.running(rm)}'
                         '</div>', unsafe_allow_html=True)
             if qview == "Points":
-                _plot(CH.quarter_bars(qp, MID_H - 12))
+                _plot(CH.quarter_bars(qp, MID_H - 12, focus=T.best_worst_quarter(qp)))
             else:
                 _plot(CH.running_margin_lines(rm, MID_H - 12))
 
@@ -198,7 +199,8 @@ def render(team_df, player_df, season, baseline, sz):
                 st.selectbox("Form stat", list(form_stats), key="form_stat",
                              label_visibility="collapsed")
             if len(vals):
-                ev = _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38),
+                ev = _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38,
+                                           focus=T.hot_player(vals, avgs)),
                            key=f"form_{season}_{stat}")
                 _open_player(ev, season, strip_avg=True)
             else:
@@ -208,7 +210,7 @@ def render(team_df, player_df, season, baseline, sz):
         with card("drivers"):
             dr = D.margin_drivers(tdf)
             card_title("What drives our margin", "r, not cause", takeaway=T.drivers(dr))
-            _plot(CH.drivers_bar(dr, BOT_H))
+            _plot(CH.drivers_bar(dr, BOT_H, focus=T.top_driver(dr)))
 
     arrange(desktop=[([2.2, 1.35, 1.15], [strip, wherewin, quarters]),
                      ([1.05, 2.45, 1.2], [role_leaders, form, drivers])],
@@ -367,7 +369,7 @@ def render_player(player_df, season, baseline, player, sz):
             card_title("Squad rank", f"per game, of players with {D.MIN_GAMES}+ games",
                        takeaway=T.player_ranks(pr))
             if len(pr):
-                _plot(CH.squad_rank_bars(pr, MID_H))
+                _plot(CH.squad_rank_bars(pr, MID_H, focus=T.rank_focus(pr)))
             else:
                 st.caption(f"Needs {D.MIN_GAMES} games for a squad rank.")
 
@@ -465,7 +467,8 @@ def render_scout(team_df, lg, season, opp, sz):
         with card("style"):
             avg, ranks = D.team_ranks(lg, season)
             card_title("Style vs league", "rank of 18 on each stat", takeaway=T.style(ranks, opp))
-            _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H, team_color=tint))
+            _plot(CH.rank_dumbbell(avg, ranks, opp, D.SCOUT_STATS, MID_H, team_color=tint,
+                                   focus=T.style_marks(ranks, opp)))
 
     def win_card():
         with card("howtheywin"):
@@ -476,13 +479,14 @@ def render_scout(team_df, lg, season, opp, sz):
                        takeaway=T.where_we_win(wc))
             _plot(CH.win_conditions_bars(wc, MID_H,
                                          names=(f"{short} won it", "Their opponent won it"),
-                                         colors=(tint, grey)))
+                                         colors=(tint, grey), focus=T.swing_stat(wc)))
 
     def quarters_card():
         with card("theirquarters"):
             qp = D.scout_quarters(lg, opp, season)
             card_title("Their quarters", "avg points", takeaway=T.quarters(qp))
-            _plot(CH.quarter_bars(qp, MID_H - 12, names=(opp, "Opponents"), colors=(tint, grey)))
+            _plot(CH.quarter_bars(qp, MID_H - 12, names=(opp, "Opponents"), colors=(tint, grey),
+                                  focus=T.best_worst_quarter(qp)))
 
     def form_card():
         with card("theirform"):

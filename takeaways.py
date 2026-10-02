@@ -27,14 +27,28 @@ def strip(tdf):
             f"when ahead on it")
 
 
-def where_we_win(wc):
+# The focus functions say which mark a card's chart should pick out: the same
+# thing its takeaway names, so the words and the highlight always agree.
+def swing_stat(wc):
+    """The stat with the biggest win-rate swing (both sides 4+ games), or None."""
     wc = wc.dropna(subset=["ahead_winrate", "behind_winrate"])
     wc = wc[(wc["ahead_games"] >= 4) & (wc["behind_games"] >= 4)]
     if not len(wc):
+        return None
+    return wc.loc[(wc["ahead_winrate"] - wc["behind_winrate"]).idxmax(), "stat"]
+
+
+def where_we_win(wc):
+    stat = swing_stat(wc)
+    if stat is None:
         return ""
-    r = wc.loc[(wc["ahead_winrate"] - wc["behind_winrate"]).idxmax()]
+    r = wc[wc["stat"] == stat].iloc[0]
     return (f"Biggest swing: {r['stat'].lower()} "
             f"({r['ahead_winrate']:.0f}% v {r['behind_winrate']:.0f}%)")
+
+
+def best_worst_quarter(qp):
+    return qp.loc[qp["margin"].idxmax(), "quarter"], qp.loc[qp["margin"].idxmin(), "quarter"]
 
 
 def quarters(qp):
@@ -57,14 +71,27 @@ def leaders(rows):
     return f"{top} leads {n} roles" if n > 1 else f"{rows[0]['player']} wins the ball most"
 
 
-def form(vals, avgs):
+def _form_pct(vals, avgs):
     last3 = vals.iloc[:, -3:]
     pct = (last3.mean(axis=1) / avgs.clip(lower=0.1) * 100).dropna()
-    pct = pct[last3.notna().sum(axis=1) >= 2]
+    return pct[last3.notna().sum(axis=1) >= 2]
+
+
+def hot_player(vals, avgs):
+    pct = _form_pct(vals, avgs)
+    return pct.idxmax() if len(pct) else None
+
+
+def form(vals, avgs):
+    pct = _form_pct(vals, avgs)
     if not len(pct):
         return ""
     hot = pct.idxmax()
     return f"Hottest: {hot}, {pct[hot] - 100:+.0f}% on own average over the last 3"
+
+
+def top_driver(dr):
+    return dr.iloc[0]["stat"] if len(dr) else None
 
 
 def drivers(dr):
@@ -112,11 +139,15 @@ def match_players(vals):
 
 
 # ---- Scout view -----------------------------------------------------------------
-def style(ranks, team):
+def style_marks(ranks, team):
+    """The club's top 3 and bottom 3 stats (labels), as the style takeaway names them."""
     r = ranks.loc[team]
     labels = {c: l for l, c, _ in D.SCOUT_STATS}
-    top = [labels[c].lower() for c in r.index if r[c] <= 3]
-    low = [labels[c].lower() for c in r.index if r[c] >= 16]
+    return ([labels[c] for c in r.index if r[c] <= 3], [labels[c] for c in r.index if r[c] >= 16])
+
+
+def style(ranks, team):
+    top, low = (list(map(str.lower, x)) for x in style_marks(ranks, team))
     parts = []
     if top:
         parts.append("top 3 for " + ", ".join(top[:3]))
@@ -145,6 +176,15 @@ def player_trend(me, col, label):
     last5, season = me.tail(5)[col].mean(), me[col].mean()
     change = (last5 - season) / season * 100 if season else 0
     return f"Last 5: {last5:.1f} {label.lower()} a game, {change:+.0f}% on the season average"
+
+
+def rank_focus(pr):
+    """The stats the squad-rank takeaway names: 1sts, else top 3s, else the best."""
+    if not len(pr):
+        return set()
+    first = set(pr[pr["rank"] == 1]["stat"])
+    top3 = set(pr[pr["rank"] <= 3]["stat"])
+    return first or top3 or {pr.loc[pr["rank"].idxmin(), "stat"]}
 
 
 def player_ranks(pr):
