@@ -623,8 +623,8 @@ def login_hero():
         f'<div class="sp-hero"><div class="sp-top"><b>Coach View</b>'
         f'<span>Fremantle Dockers · performance analysis</span></div>'
         f'<div class="sp-title">{title}</div>'
-        f'<div class="sp-sub">{BALL_SVG}Every game, every player and every club, with Wharf-ai, '
-        f'an analyst you can question.</div></div>',
+        f'<div class="sp-sub">{BALL_SVG}Every game, every player and every club, '
+        f'powered by Wharf-ai</div></div>',
         unsafe_allow_html=True)
 
 
