@@ -182,6 +182,40 @@ def players_season(player_df, season):
     return player_df[player_df["season"] == season].sort_values("game_dt").reset_index(drop=True)
 
 
+# ---- Game slices: the filter on the Season and Player views -----------------------
+GAME_SLICES = ["All games", "Home games", "Away games", "Finals", "Wins", "Losses",
+               "vs top 8", "Last 10 games"]
+
+
+def slice_games(team_df, player_df, which, league=None):
+    """Only the games in one slice, in every season (so a season is compared with
+    the same slice of the season before). "vs top 8" uses each season's own
+    home-and-away ladder (from the league file; without it, nothing is cut);
+    "Last 10 games" is the last 10 of each season. Player rows follow their games."""
+    if which in (None, "All games"):
+        return team_df, player_df
+    t = team_df
+    if which in ("Home games", "Away games", "Finals"):
+        keep = t["type"] == {"Home games": "Home", "Away games": "Away", "Finals": "Final"}[which]
+    elif which in ("Wins", "Losses"):
+        keep = t["result"] == which[0]
+    elif which == "vs top 8":
+        if league is None:
+            return team_df, player_df
+        top8 = {s: set(ladder(league, s).index[:8]) for s in t["season"].unique()
+                if (league["season"] == s).any()}
+        keep = pd.Series([o in top8.get(s, ()) for s, o in zip(t["season"], t["opponent"])],
+                         index=t.index)
+    elif which == "Last 10 games":
+        keep = t.groupby("season")["game_dt"].rank(ascending=False) <= 10
+    else:
+        raise ValueError(which)
+    games = t[keep]
+    keys = games[["season", "round"]].drop_duplicates()
+    players = player_df.merge(keys, on=["season", "round"])
+    return games, players
+
+
 def record(tdf):
     wins = int((tdf["result"] == "W").sum())
     losses = int((tdf["result"] == "L").sum())

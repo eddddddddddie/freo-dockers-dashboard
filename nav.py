@@ -28,7 +28,7 @@ def go(**state):
     st.rerun()
 
 
-def _apply(state, seasons, game_label, players, clubs):
+def _apply(state, seasons, game_label, players, clubs, from_url=False):
     season = state.get("season")
     if season is not None:
         try:
@@ -51,6 +51,13 @@ def _apply(state, seasons, game_label, players, clubs):
         st.session_state["player_vs"] = state["vs"] if state.get("vs") in players(season) else None
     if state.get("opp") in clubs():
         st.session_state["scout_team"] = state["opp"]
+    # The games slice: a click elsewhere keeps the one picked; an address (a link,
+    # Back/Forward) sets it, no "games" meaning all games.
+    import data as D
+    if state.get("games") in D.GAME_SLICES:
+        st.session_state["games_slice"] = state["games"]
+    elif from_url and view in ("Season", "Player"):
+        st.session_state["games_slice"] = D.GAME_SLICES[0]
 
 
 def apply_pending(seasons, game_label, players, clubs):
@@ -63,9 +70,9 @@ def apply_pending(seasons, game_label, players, clubs):
     if pending:
         _apply(pending, seasons, game_label, players, clubs)
     elif back is not None:
-        _apply(back, seasons, game_label, players, clubs)
+        _apply(back, seasons, game_label, players, clubs, from_url=True)
     elif not st.session_state.get("_url_loaded"):
-        _apply(dict(st.query_params), seasons, game_label, players, clubs)
+        _apply(dict(st.query_params), seasons, game_label, players, clubs, from_url=True)
     st.session_state["_url_loaded"] = True
 
 
@@ -80,9 +87,11 @@ def _back_forward():
     return dict(parse_qsl(str(v.get("search", "")).lstrip("?")))
 
 
-def write_url(season, view, game=None, player=None, opp=None, vs=None):
+def write_url(season, view, game=None, player=None, opp=None, vs=None, games=None):
     """Keep the address in step with what is on screen."""
     state = {"season": str(season), "view": view}
+    if view in ("Season", "Player") and games:
+        state["games"] = games
     if view == "Match" and game:
         state["game"] = game
     if view == "Player" and player:

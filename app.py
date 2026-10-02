@@ -99,6 +99,8 @@ WAIT_PHRASES = [
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
+    if focus and focus.startswith(f"the {season} season"):   # the season, cut to a slice
+        focus = None
     if focus and focus.startswith("a comparison of "):
         pair = focus[len("a comparison of "):].split(",")[0]
         a, b = pair.split(" and ", 1)
@@ -521,7 +523,7 @@ if PHONE:
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
         htk = st.container()                  # the insights ticker, under the controls
     band_slot = st.container()
-    pick_slot = pick2_slot = st.container()
+    pick_slot = pick2_slot = pick3_slot = st.container()
     chat_slot = st.container(border=True, key="card_wharfai")
     main = st.container()
 elif SCROLL:
@@ -536,7 +538,7 @@ elif SCROLL:
         top = main
     with top:
         band_slot = st.container()
-        pick_slot, pick2_slot, _ = st.columns([1, 1, 1.2])
+        pick_slot, pick2_slot, pick3_slot = st.columns([1, 1, 1.2])
     if LAYOUT == "stack":
         chat_slot = st.container(border=True, key="card_wharfai")
         main = st.container()
@@ -577,23 +579,47 @@ page = None   # "squad", "clubs" or "qt": a picker's page across all its options
 
 def _pick_and_band():
     """The picker slots (game, player or club; the Player view adds "compare
-    with") and the band slot for this view."""
+    with"; Season and Player add the games slice) and the band slot."""
     if SCROLL:
-        return pick_slot, pick2_slot, band_slot
-    if view == "Season":
-        return None, None, h1
+        return pick_slot, pick2_slot, pick3_slot, band_slot
     with h1:
-        # The player view has a second picker ("compare with"), but not on the
-        # whole squad page; the quarter-time check's label needs a wider picker.
-        if view == "Player" and st.session_state.get("player_pick") != nav.SQUAD:
-            return st.columns([0.95, 0.95, 2.5], vertical_alignment="center")
+        if view == "Season":          # the slice is Season's only picker
+            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
+            return pick, None, None, band
+        if view == "Player":
+            if st.session_state.get("player_pick") != nav.SQUAD:
+                return st.columns([0.95, 0.95, 0.85, 2.3], vertical_alignment="center")
+            pick, pick3, band = st.columns([1.12, 0.85, 2.6], vertical_alignment="center")
+            return pick, None, pick3, band
+        # The quarter-time check's label needs a wider picker.
         pick, band = st.columns([1.3 if view == "Match" else 1.12, 3.3],
                                 vertical_alignment="center")
-    return pick, None, band
+    return pick, None, None, band
 
 
-pick, pick2, band = _pick_and_band()
+def slice_picker(slot):
+    """The games slice (all, home, away, finals, wins, losses, v top 8, last 10):
+    every card on the view is worked out from those games only."""
+    if st.session_state.get("games_slice") not in D.GAME_SLICES:
+        st.session_state["games_slice"] = D.GAME_SLICES[0]
+    with slot:
+        return st.selectbox("Games", D.GAME_SLICES, key="games_slice",
+                            label_visibility="collapsed",
+                            help="Work out every card from these games only")
+
+
+pick, pick2, pick3, band = _pick_and_band()
 vs = None
+games_slice = None
+team_view, player_view = team_df, player_df   # the slice's games (all of them by default)
+
+
+def apply_slice(which):
+    """Cut the data to a games slice for this view's cards (and the band)."""
+    global team_view, player_view, tdf, pdf_season
+    team_view, player_view = D.slice_games(team_df, player_df, which, league)
+    tdf = D.team_season(team_view, season)
+    pdf_season = D.players_season(player_view, season)
 
 
 def season_band():
@@ -607,6 +633,8 @@ def season_band():
     updated = D.data_updated()
     if updated is not None:
         note += f" · data {updated:%-d %b}"
+    if games_slice not in (None, D.GAME_SLICES[0]):
+        note = f"{games_slice} only · " + note
     with band:
         header_band(season, D.record(tdf), form, note, last=tdf.iloc[-1] if len(tdf) else None)
 
@@ -637,6 +665,8 @@ elif view == "Player":
     with pick:
         player = st.selectbox("Player", [nav.SQUAD] + names, key="player_pick",
                               label_visibility="collapsed")
+    games_slice = slice_picker(pick3)
+    apply_slice(games_slice)
     if player == nav.SQUAD:
         page = "squad"
         st.session_state["player_vs"] = None
@@ -663,6 +693,8 @@ elif view == "Player":
                             photo_url=player_photo(details.get("player_id"), season))
         focus = (f"a comparison of {player} and {vs}, {season} season" if vs else
                  f"the player profile for {player}, {season} season")
+        if games_slice != D.GAME_SLICES[0]:
+            focus += f", {games_slice.lower()} only"
 elif view == "Match" and len(tdf):
     choices = D.game_choices(tdf)
     labels = [c[0] for c in choices]
@@ -686,7 +718,11 @@ elif view == "Match" and len(tdf):
                  + ("drew" if game["result"] == "D" else
                     f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
 else:
+    games_slice = slice_picker(pick)
+    apply_slice(games_slice)
     season_band()
+    if games_slice != D.GAME_SLICES[0]:
+        focus = f"the {season} season, {games_slice.lower()} only"
 
 
 def usage_button():
@@ -709,7 +745,8 @@ with h6:
     if st.button("", icon=":material/logout:", key="signout_btn",
                  help=f"Sign out ({who})" if who else "Sign out"):
         auth.sign_out()
-nav.write_url(season, view, game=game_round, player=player, opp=scout, vs=vs)
+nav.write_url(season, view, game=game_round, player=player, opp=scout, vs=vs,
+              games=games_slice if games_slice != D.GAME_SLICES[0] else None)
 
 if CHAT_TOP:
     with chat_slot:
@@ -719,21 +756,25 @@ with main:
     if CHAT_TOP:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
     if page == "squad":
-        V.render_squad(player_df, season, baseline, SZ)
+        V.render_squad(player_view, season, baseline, SZ)
     elif page == "clubs":
         V.render_clubs(team_df, all_seasons, SZ)
     elif page == "qt":
         V.render_quarter_time(team_df, all_seasons, SZ)
     elif scout is not None:
         V.render_scout(team_df, league, season, scout, SZ)
+    elif view in ("Season", "Player") and not len(tdf):
+        st.info(f"No {games_slice.lower()} in {season}. Pick another slice of games.")
     elif player is not None and vs:
-        V.render_compare(player_df, season, player, vs, SZ)
+        V.render_compare(player_view, season, player, vs, SZ)
+    elif player is not None and not (pdf_season["player"] == player).any():
+        st.info(f"{player} didn't play in {games_slice.lower()} in {season}.")
     elif player is not None:
-        V.render_player(player_df, season, baseline, player, SZ)
+        V.render_player(player_view, season, baseline, player, SZ)
     elif pos is not None:
         V.render_match(team_df, player_df, season, pos, SZ)
     else:
-        V.render(team_df, player_df, season, baseline, SZ)
+        V.render(team_view, player_view, season, baseline, SZ)
     if PHONE and U.is_admin((auth.current_user() or {}).get("email")):
         with st.container(key="m_more"):
             st.markdown('<div class="wa-sub">More</div>', unsafe_allow_html=True)

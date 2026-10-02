@@ -282,6 +282,13 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (last 6 games, one-hue light to dark purple by the game as a % of the player's own season average,
   50% to 150%; stat picker), what drives our margin (Pearson r of each differential with margin;
   label it association, not cause).
+- Games slice (`D.slice_games`, `D.GAME_SLICES`, `app.slice_picker`): on Season (its picker
+  slot) and Player (a third picker), All games / Home / Away / Finals / Wins / Losses / vs top 8
+  (each season's own ladder) / Last 10. The data is cut in every season, so tiles compare with the
+  same slice of the season before; player rows follow their games. The band says "<slice> only",
+  the address keeps `games=`, a click elsewhere keeps the slice and an address sets it (none =
+  all games), and Wharf-ai's focus carries ", <slice> only". An empty slice (no 2024 finals) shows
+  a plain message instead of the cards.
 - Each view's picker has a first option for a page across all its options (no tiles row; the
   cards fill the height, level with the Wharf-ai panel, `views._full_h`; `nav.SQUAD`,
   `nav.ALL_CLUBS`, `nav.QT`, kept in the address as `player=Whole squad`, `opp=All clubs`,

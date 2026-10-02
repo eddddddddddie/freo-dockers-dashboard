@@ -147,3 +147,22 @@ def test_quarter_strip_and_driver_points(team):
     assert fit["r"] == pytest.approx(diff.corr(t["margin"]), abs=1e-9)
     assert fit["ahead"] == int((diff > 0).sum())
     assert fit["ahead_won"] == int(((diff > 0) & (t["result"] == "W")).sum())
+
+
+def test_game_slices_cut_games_and_their_player_rows(team, players):
+    """Each slice keeps the right games in every season, and only those games'
+    player rows; "vs top 8" uses each season's own ladder."""
+    lg = D.load_league()
+    for which in D.GAME_SLICES:
+        t, p = D.slice_games(team, players, which, lg)
+        if which == "Home games":
+            assert (t["type"] == "Home").all() and len(t) == (team["type"] == "Home").sum()
+        if which in ("Wins", "Losses"):
+            assert (t["result"] == which[0]).all()
+        if which == "Last 10 games":
+            assert (t.groupby("season").size() <= 10).all()
+        if which == "vs top 8" and lg is not None:
+            for s, g in t.groupby("season"):
+                assert set(g["opponent"]) <= set(D.ladder(lg, s).index[:8])
+        keys = set(zip(t["season"], t["round"]))
+        assert set(zip(p["season"], p["round"])) == keys        # player rows follow their games

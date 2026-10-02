@@ -109,6 +109,21 @@ def test_whole_squad_all_clubs_and_quarter_time_pages(app):
     assert not at.exception, at.exception
 
 
+def test_games_slice_cuts_season_and_player_views(app):
+    """The games picker on Season (and Player) recuts every card, names the slice
+    in the band, and keeps it in the address."""
+    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
+    at = at.selectbox(key="games_slice").set_value("Away games").run()
+    assert not at.exception, at.exception
+    band = next(m.value for m in at.markdown if BAND in m.value)
+    assert "Away games only" in band
+    assert at.query_params.get("games") in ("Away games", ["Away games"])
+    at = at.button_group(key="view").set_value("Player").run()
+    assert not at.exception and at.selectbox(key="games_slice").value == "Away games"
+    at = at.selectbox(key="games_slice").set_value("Finals").run()
+    assert not at.exception, at.exception
+
+
 def test_layout_modes():
     import layout as L
     assert L.mode(390, 844) == L.mode(667, 340) == "phone"
