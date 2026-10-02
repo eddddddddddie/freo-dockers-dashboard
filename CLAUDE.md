@@ -51,7 +51,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   Secrets on Streamlit Cloud, read through `settings.get()`: `APP_USERNAME` / `APP_PASSWORD`
   (login, required: the app stays locked without them), optional `APP_COOKIE_SECRET` (signs the
   stay-signed-in cookie; defaults to a key derived from APP_PASSWORD), `ANTHROPIC_API_KEY`, optional
-  `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_BASE_URL`, `FREO_CHAT_MODEL`. The repo is public, so
+  `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_BASE_URL`, `FREO_CHAT_MODEL`, `USAGE_DATABASE_URL`
+  (Postgres for the usage log). The repo is public, so
   never put credentials in code.
 
 ## Goal
@@ -320,9 +321,16 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   `WHARF_UNLIMITED` (comma separated emails, Google sign-in only) skips both limits and isn't
   counted in the shared total; keep it in secrets (the repo is public).
   `WHARF_DAILY_CAP` (default 100) per day, shared by everyone, resets at midnight Perth time, is the
-  overall ceiling; log on the Wharf-ai usage page (admins only, `WHARF_ADMINS`). The file is on the app's disk (`USAGE_DB` to move it): on Streamlit Cloud it
-  starts again after a restart or redeploy.
-- While Wharf-ai works, the status line shows a spinning red AFL ball (`app.WAIT_BALL`, inline SVG, fixed size so the
+  overall ceiling; log on the Wharf-ai usage page (admins only, `WHARF_ADMINS`). Storage
+  (`usage._run`): with `USAGE_DATABASE_URL` (a Postgres URL; Supabase's Session pooler, see
+  `docs/supabase_setup.md`) the log and saved chats go to `wharf_questions` / `wharf_chats`,
+  created on first use with row-level security on, through a small psycopg pool with prepared
+  statements off; they survive redeploys. If the database is down, Wharf-ai keeps working
+  (counts 0, writes skipped, retried after 60 s) and the usage page warns. Without it: a SQLite
+  file on the app's disk (`USAGE_DB`), wiped on Streamlit Cloud at every restart or redeploy.
+  `tests/test_usage_pg.py` (empties the tables) runs only with `USAGE_TEST_DATABASE_URL`, which
+  CI points at a throwaway Postgres service.
+- While Wharf-ai works, the status line shows a spinning red AFL ball (`theme.BALL_SVG`, inline SVG, fixed size so the
   line doesn't shift; still under reduced motion) and an AFL phrase (`app.WAIT_PHRASES`,
   20 of them, shuffled; a new one each time a tool runs, with what it is calculating alongside,
   and "writing the answer" when the next model request starts), plus a seconds counter the browser

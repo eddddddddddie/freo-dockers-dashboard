@@ -1,7 +1,8 @@
 """Turn Wharf-ai feedback into candidate test cases.
 
-Reads the usage log (the CSV from Deep dives -> Wharf-ai usage -> Download, or
-the local wharf_usage.sqlite), and lists every answer rated thumbs down or with
+Reads the usage log (the CSV downloaded from the Wharf-ai usage page, or the
+log itself: Postgres when USAGE_DATABASE_URL is set in the environment or
+.streamlit/secrets.toml, otherwise the local wharf_usage.sqlite), and lists every answer rated thumbs down or with
 a number not matched to a calculation: question, answer, tools and flags.
 Writes evals/results/feedback_<date>.md. For each one worth keeping, work out
 the right answer with plain pandas and add it to build_cases() in
@@ -12,23 +13,26 @@ wharf_eval.py, so the test set grows from real questions.
 """
 
 import os
-import sqlite3
 import sys
 from datetime import datetime
 
 import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 
 def load(path=None):
     if path:
         return pd.read_csv(path)
-    db = os.environ.get("USAGE_DB") or os.path.join(ROOT, "wharf_usage.sqlite")
-    if not os.path.exists(db):
-        sys.exit(f"No usage log at {db}. Download the CSV from the app and pass its path.")
-    with sqlite3.connect(db) as con:
-        return pd.read_sql("SELECT * FROM questions ORDER BY ts", con)
+    import usage as U
+    rows = U.recent(limit=100000)
+    if U.last_error:
+        sys.exit(f"Couldn't read the usage log ({U.store_name()}): {U.last_error}")
+    if not rows:
+        sys.exit(f"The usage log ({U.store_name()}) is empty. Download the CSV from the app "
+                 "and pass its path.")
+    return pd.DataFrame(rows).sort_values("ts")
 
 
 def main(path=None):

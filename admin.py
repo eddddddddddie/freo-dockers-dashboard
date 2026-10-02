@@ -19,6 +19,9 @@ def usage_log():
     c[1].metric("Cost today (US$)", f"{s['today_cost']:.2f}")
     c[2].metric("Questions, last 7 days", s["week"])
     c[3].metric("Cost, last 7 days (US$)", f"{s['week_cost']:.2f}")
+    if s.get("error"):
+        st.warning(f"The usage database can't be reached, so questions aren't being logged "
+                   f"and the caps read 0: {s['error']}")
     rows = U.recent()
     if not rows:
         st.info("No questions logged yet.")
@@ -47,6 +50,9 @@ def usage_log():
     st.download_button("Download the log with answers (CSV)",
                        df.drop(columns=["sid"], errors="ignore").to_csv(index=False),
                        file_name=f"wharf_usage_{U.today()}.csv", mime="text/csv")
-    st.caption("Costs are estimates at claude-sonnet-5-5 list prices. The log is stored on the "
-               "app's own disk: on Streamlit Cloud it starts again after a restart or redeploy, "
-               "so download it first if you want to keep the ratings.")
+    where = (f"The log is kept in {s['store']}, so it survives restarts and redeploys."
+             if s["store"].startswith("Postgres") else
+             "The log is stored on the app's own disk: on Streamlit Cloud it starts again after a "
+             "restart or redeploy, so download it first if you want to keep the ratings (or set "
+             "USAGE_DATABASE_URL to keep it in Postgres).")
+    st.caption(f"Costs are estimates at claude-sonnet-5-5 list prices. {where}")
