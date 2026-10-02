@@ -65,6 +65,11 @@ last_error = None      # the last database error, shown on the usage page
 
 
 def _pg_url():
+    # Under the tests (FREO_TESTS, set by tests/conftest.py, also for the app the UI
+    # tests start) the live database is never used, even though .streamlit/secrets.toml
+    # holds its URL: only a test database a test switches on (USAGE_TEST_DB_ACTIVE).
+    if os.environ.get("FREO_TESTS"):
+        return os.environ.get("USAGE_TEST_DB_ACTIVE") or None
     return settings.get("USAGE_DATABASE_URL")
 
 
@@ -86,7 +91,7 @@ def _pool(url):
     pool = ConnectionPool(url, min_size=1, max_size=4, timeout=5, open=False,
                           kwargs={"autocommit": True, "prepare_threshold": None,
                                   "connect_timeout": 5},
-                          check=ConnectionPool.check_connection)
+                          max_idle=240)   # no check on every use: a broken connection is replaced
     try:
         pool.open(wait=True, timeout=6)
         with pool.connection() as con:
@@ -181,6 +186,23 @@ def is_admin(email):
     return bool(email) and email.strip().lower() in _emails("WHARF_ADMINS")
 
 
+# The Wharf-ai panel reads the counts on every redraw; with a database across the
+# network each read is a round trip, so they're kept for a short while. Logging a
+# question clears them, so a person's own count is always current.
+_COUNT_TTL = 30
+_counts = {}
+
+
+def _cached(key, fn):
+    import time
+    hit = _counts.get(key)
+    if hit and time.time() - hit[0] < _COUNT_TTL and _pg_url():
+        return hit[1]
+    value = fn()
+    _counts[key] = (time.time(), value)
+    return value
+
+
 def questions_today():
     """Questions asked today by everyone except unlimited users (the shared cap)."""
     exempt = sorted(unlimited_emails())
@@ -188,8 +210,10 @@ def questions_today():
     sql = "SELECT COUNT(*) FROM questions WHERE day = ?"
     if exempt:
         sql += f" AND (user_email IS NULL OR lower(user_email) NOT IN ({marks}))"
-    row = _run(sql.replace("FROM questions", "FROM {Q}"), (today(), *exempt), "one")
-    return row[0] if row else 0
+    def count():
+        row = _run(sql.replace("FROM questions", "FROM {Q}"), (today(), *exempt), "one")
+        return row[0] if row else 0
+    return _cached(("today", today(), tuple(exempt)), count)
 
 
 def login_cap():
@@ -205,8 +229,10 @@ def questions_this_login(sid):
     """Questions this person (or sign-in) has asked today."""
     if not sid:
         return 0
-    row = _run("SELECT COUNT(*) FROM {Q} WHERE sid = ? AND day = ?", (sid, today()), "one")
-    return row[0] if row else 0
+    def count():
+        row = _run("SELECT COUNT(*) FROM {Q} WHERE sid = ? AND day = ?", (sid, today()), "one")
+        return row[0] if row else 0
+    return _cached(("login", today(), sid), count)
 
 
 def can_ask(sid=None):
@@ -236,6 +262,7 @@ class Tally:
 def record(question, tally, ok=True, sid=None, user_email=None, answer=None, unbacked=None):
     """Log one question (answered or failed: both count towards the caps).
     Returns its id, for rate()."""
+    _counts.clear()
     sql = ("INSERT INTO {Q} (ts, day, question, tools, steps, input_tokens, "
            "output_tokens, cache_read, cache_write, cost_usd, ok, sid, user_email, answer, "
            "unbacked) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")

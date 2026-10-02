@@ -329,7 +329,11 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   (counts 0, writes skipped, retried after 60 s) and the usage page warns. Without it: a SQLite
   file on the app's disk (`USAGE_DB`), wiped on Streamlit Cloud at every restart or redeploy.
   `tests/test_usage_pg.py` (empties the tables) runs only with `USAGE_TEST_DATABASE_URL`, which
-  CI points at a throwaway Postgres service.
+  CI points at a throwaway Postgres service. Every test run sets `FREO_TESTS` (conftest), so
+  `usage._pg_url` ignores `USAGE_DATABASE_URL` and only uses a test database a test switches
+  on (`USAGE_TEST_DB_ACTIVE`); the UI tests' app gets its own secrets file (`--secrets.files`,
+  just the test login), never `.streamlit/secrets.toml`. Counts are cached for 30 s with
+  Postgres (each read is a network round trip; logging a question clears them).
 - While Wharf-ai works, the status line shows a spinning red AFL ball (`theme.BALL_SVG`, inline SVG, fixed size so the
   line doesn't shift; still under reduced motion) and an AFL phrase (`app.WAIT_PHRASES`,
   20 of them, shuffled; a new one each time a tool runs, with what it is calculating alongside,

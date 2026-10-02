@@ -1,7 +1,8 @@
 """The usage log on Postgres (the Supabase path). Runs only when
 USAGE_TEST_DATABASE_URL points at a database that may be wiped: it empties the
 wharf_ tables. CI runs it against a throwaway Postgres container. Never point
-it at the live database."""
+it at the live database. (Every test run sets FREO_TESTS, so usage.py ignores
+USAGE_DATABASE_URL and only uses the test database switched on here.)"""
 
 import os
 
@@ -15,7 +16,7 @@ needs_pg = pytest.mark.skipif(not URL, reason="USAGE_TEST_DATABASE_URL not set")
 
 @pytest.fixture
 def pg(monkeypatch):
-    monkeypatch.setenv("USAGE_DATABASE_URL", URL)
+    monkeypatch.setenv("USAGE_TEST_DB_ACTIVE", URL)
     monkeypatch.setenv("WHARF_UNLIMITED", "owner@example.com")
     U._run("SELECT 1")                                       # makes the tables
     U._run("TRUNCATE wharf_questions, wharf_chats")
@@ -63,7 +64,7 @@ def test_unreachable_database_never_breaks_wharf_ai(monkeypatch):
     usage page, and after the first failure it isn't retried on every call."""
     import time
     url = "postgresql://nobody:x@127.0.0.1:1/none"
-    monkeypatch.setenv("USAGE_DATABASE_URL", url)
+    monkeypatch.setenv("USAGE_TEST_DB_ACTIVE", url)
     U._POOLS.pop(url, None)
     U._DOWN_UNTIL.pop(url, None)
     assert U.questions_today() == 0 and U.last_error

@@ -15,13 +15,20 @@ SIZES = [(1440, 790), (1920, 960), (1280, 680), (1680, 950)]
 
 
 @pytest.fixture(scope="module")
-def server():
+def server(tmp_path_factory):
+    """The app on a free port, with its own secrets file: just the test login. Not
+    .streamlit/secrets.toml, which may hold Google sign-in, API keys or the live
+    usage database."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
+    secrets = tmp_path_factory.mktemp("secrets") / "secrets.toml"
+    secrets.write_text(f'APP_USERNAME = "{os.environ["APP_USERNAME"]}"\n'
+                       f'APP_PASSWORD = "{os.environ["APP_PASSWORD"]}"\n')
     env = {**os.environ, "ANTHROPIC_API_KEY": ""}
     proc = subprocess.Popen([sys.executable, "-m", "streamlit", "run", "app.py",
-                             "--server.port", str(port), "--server.headless", "true"],
+                             "--server.port", str(port), "--server.headless", "true",
+                             "--secrets.files", str(secrets)],
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     import urllib.request
     for _ in range(120):

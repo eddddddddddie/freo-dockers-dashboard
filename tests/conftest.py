@@ -19,6 +19,12 @@ except (FileNotFoundError, ValueError):
 for _key, _test_value in (("APP_USERNAME", "ci-user"), ("APP_PASSWORD", "ci-pass")):
     os.environ[_key] = str(_local.get(_key) or os.environ.get(_key) or _test_value)
 
+# Never the live usage database (its URL may be in the local secrets file): the
+# usage log uses a temporary SQLite file, or a test database that
+# tests/test_usage_pg.py switches on. Inherited by the app the UI tests start.
+os.environ["FREO_TESTS"] = "1"
+os.environ.pop("USAGE_TEST_DB_ACTIVE", None)
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ui: browser tests (need Playwright and a browser)")
