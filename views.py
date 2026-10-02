@@ -198,18 +198,19 @@ def render(team_df, player_df, season, baseline, sz):
                                           n_players=sz["form_rows"])
             t, s = st.columns([2.6, 1], vertical_alignment="center")
             with t:
-                card_title("Player form", "last 6 games vs own season avg · "
+                card_title("Who's up, who's down", "last 3 games against own season avg · "
                            + ("tap a player" if PHONE else "click a player"),
-                           keys=[("below", RAMP[0]), ("above", RAMP[-1])],
+                           keys=[("up", COLORS["freo"]), ("down", COLORS["neutral"])],
                            takeaway=T.form(vals, avgs) if len(vals) else "")
             with s:
                 st.selectbox("Form stat", list(form_stats), key="form_stat",
                              label_visibility="collapsed")
-            if len(vals):
-                ev = _plot(CH.form_heatmap(vals, avgs, stat, BOT_H - 38,
-                                           focus=T.hot_player(vals, avgs)),
+            last3, pct = T.form_change(vals, avgs) if len(vals) else ([], [])
+            if len(pct):
+                ev = _plot(CH.form_dumbbell(last3, avgs, pct, stat, BOT_H - 38,
+                                            focus=T.hot_player(vals, avgs)),
                            key=f"form_{season}_{stat}")
-                _open_player(ev, season, strip_avg=True)
+                _open_player(ev, season)
             else:
                 st.caption("Not enough games yet.")
 

@@ -77,6 +77,14 @@ def _form_pct(vals, avgs):
     return pct[last3.notna().sum(axis=1) >= 2]
 
 
+def form_change(vals, avgs):
+    """(last-3 average, % of season average) for the players the takeaway ranks:
+    2 or more of the last 3 games."""
+    last3 = vals.iloc[:, -3:].mean(axis=1)
+    pct = _form_pct(vals, avgs)
+    return last3[pct.index], pct
+
+
 def hot_player(vals, avgs):
     pct = _form_pct(vals, avgs)
     return pct.idxmax() if len(pct) else None

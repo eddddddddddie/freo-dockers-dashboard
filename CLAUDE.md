@@ -283,9 +283,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   orange to purple by who won the count, each row scaled to its 90th percentile gap), "where we win"
   (win rate when each side wins the count), quarters (points per quarter, or average running margin
   at each break in wins vs losses; from the cumulative quarter score strings).
-- Bottom row: role leaders (most games led + per game avg, plus top goalkicker), player form heatmap
-  (last 6 games, one-hue light to dark purple by the game as a % of the player's own season average,
-  50% to 150%; stat picker), what drives our margin (Pearson r of each differential with margin;
+- Bottom row: role leaders (most games led + per game avg, plus top goalkicker), who's up, who's
+  down (`charts.form_dumbbell`: each top player's season average, a ring, to his last-3 average,
+  purple up, grey down, sorted by the change, which is labelled at the right; as many rows as fit,
+  the biggest risers and drops; stat picker), what drives our margin (Pearson r of each differential with margin;
   label it association, not cause).
 - Games slice (`D.slice_games`, `D.GAME_SLICES`, `app.slice_picker`): on Season (its picker
   slot) and Player (a third picker), All games / Home / Away / Finals / Wins / Losses / vs top 8

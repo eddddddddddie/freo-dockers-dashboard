@@ -122,33 +122,45 @@ def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None, foc
 FORM_SCALE = [[i / (len(RAMP) - 1), c] for i, c in enumerate(RAMP)]
 
 
-def form_heatmap(vals, avgs, stat_label, height, focus=None):
-    """Player form: each cell is the player's number in that game, shaded on a
-    light to dark purple scale by that number as a % of the player's own season
-    average (half the average or less is lightest, 1.5x or more darkest).
-    Plotly picks a contrasting text colour per cell."""
-    pct = vals.div(avgs.clip(lower=0.1), axis=0) * 100
-    rows = [f"{p}  ({a:.1f})" for p, a in avgs.items()]
-    text = vals.map(lambda v: "" if v != v else f"{v:.0f}").values
-    fig = go.Figure(go.Heatmap(
-        z=pct.values, x=list(vals.columns), y=rows, text=text,
-        texttemplate="%{text}", textfont=dict(size=11),
-        colorscale=FORM_SCALE, zmin=50, zmax=150, xgap=2, ygap=2, showscale=False,
-        hoverinfo="skip",
-    ))
-    tips = []
-    for (p, a), row, prow in zip(avgs.items(), vals.values, pct.values):
-        for g, v, pc in zip(vals.columns, row, prow):
-            tips.append(f"<b>{p}</b> · {g}: " + ("did not play" if v != v else
-                        f"{v:.0f} {stat_label.lower()} ({pc:.0f}% of season avg)")
-                        + "<br>Click for the player profile")
-    _click_layer(fig, list(vals.columns), rows, tips, size=20)
-    fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(margin=dict(l=4, r=4, t=4, b=4))
-    fig.update_xaxes(side="top", tickfont=dict(size=11))
-    hot = [r for r, p in zip(rows, avgs.index) if p == focus]   # the takeaway's hottest player
-    fig.update_yaxes(showgrid=False, tickfont=dict(size=12),
-                     tickmode="array", tickvals=rows, ticktext=_bold(rows, hot))  # never thin
+def form_dumbbell(last3, avgs, pct, stat_label, height, focus=None):
+    """Who's up, who's down: per player, his season average (hollow ring) to his
+    last-3 average (filled: purple up, grey down), sorted by the change, which is
+    labelled in a column at the right. focus: the takeaway's hottest player."""
+    order = pct.sort_values(ascending=False).index.tolist()
+    # As many rows as fit at about 17px each: the biggest risers and the biggest drops.
+    fit = max(4, int((height - 40) / 17))
+    if len(order) > fit:
+        order = order[: (fit + 1) // 2] + order[len(order) - fit // 2:]
+    alpha = _alpha(order, focus) if focus is not None else [1.0] * len(order)
+    fig = go.Figure()
+    for p in order:
+        fig.add_trace(go.Scatter(x=[avgs[p], last3[p]], y=[p, p], mode="lines", hoverinfo="skip",
+                                 showlegend=False, line=dict(color=COLORS["grid"], width=4)))
+    fig.add_trace(go.Scatter(
+        x=[avgs[p] for p in order], y=order, mode="markers", showlegend=False, hoverinfo="skip",
+        marker=dict(size=10, color="#FFFFFF", line=dict(color=COLORS["muted"], width=2))))
+    up = [pct[p] >= 100 for p in order]
+    fig.add_trace(go.Scatter(
+        x=[last3[p] for p in order], y=order, mode="markers", showlegend=False,
+        marker=dict(size=11, color=[COLORS["freo"] if u else COLORS["neutral"] for u in up],
+                    line=dict(color="#FFFFFF", width=1.5)),
+        customdata=[[avgs[p], pct[p] - 100] for p in order],
+        hovertemplate="<b>%{y}</b><br>Last 3: %{x:.1f} " + stat_label.lower() + " a game<br>"
+                      "Season: %{customdata[0]:.1f} (%{customdata[1]:+.0f}%)<br>"
+                      "Click for the player profile<extra></extra>"))
+    for p, a in zip(order, alpha):
+        ch = pct[p] - 100
+        fig.add_annotation(x=1, xref="paper", y=p, xanchor="left", xshift=8, showarrow=False,
+                           text=f"<b>{ch:+.0f}%</b>" if p == focus else f"{ch:+.0f}%",
+                           font=dict(size=11, color=COLORS["ink"] if a == 1 else COLORS["muted"]))
+    fig = style_fig(fig, stat_label + " a game", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=44, t=16, b=4))
+    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="change", showarrow=False,
+                       xanchor="left", xshift=4, yanchor="bottom",
+                       font=dict(size=10, color=COLORS["muted"]))
+    fig.update_xaxes(title=None, showgrid=True, gridcolor=COLORS["grid"], tickfont=dict(size=10))
+    fig.update_yaxes(title=None, autorange="reversed", showgrid=False, tickfont=dict(size=12),
+                     tickmode="array", tickvals=order, ticktext=_bold(order, focus or []))
     return fig
 
 
