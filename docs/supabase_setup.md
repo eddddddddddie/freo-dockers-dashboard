@@ -99,8 +99,13 @@ usage page first.
 - **Free projects pause after about a week with no activity** (in the
   off-season, say). While paused, Wharf-ai keeps working but nothing is
   logged and the caps read 0; the usage page shows a warning. Restore the
-  project from the Supabase dashboard (one click). If that becomes a nuisance, a
-  weekly GitHub Action that runs `select 1` keeps it awake.
+  project from the Supabase dashboard (one click). To stop it pausing,
+  `.github/workflows/keep_db_awake.yml` reads one row count every Monday and
+  Thursday morning. It needs the same connection string as a GitHub secret:
+  repo **Settings -> Secrets and variables -> Actions -> New repository
+  secret**, name `USAGE_DATABASE_URL`. Run it once by hand from the **Actions**
+  tab to check. If the project has already paused, the run fails and GitHub
+  emails you: restore it in Supabase.
 - **If the database is unreachable**, the app tries again after a minute
   rather than on every click, so a down database never slows the app.
 - **Tests**: `tests/test_usage_pg.py` empties the `wharf_` tables, so it only

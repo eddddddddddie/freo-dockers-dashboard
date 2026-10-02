@@ -94,3 +94,46 @@ def test_unknown_league_filter_is_an_error():
     text, is_error, _ = W.run("league_aggregate", {"metrics": ["margin"],
                                                    "filters": {"venue": "Gabba"}})
     assert is_error and "Unknown filter: venue" in text
+
+
+def test_opp_players_match_plain_pandas():
+    """opp_players: the opposition's players in Freo games, checked against the raw
+    file (no join through the tool): one game (the 2026 GF) and a club over seasons."""
+    import pandas as pd
+    o = D.load_opp_players()
+    if o is None:
+        pytest.skip("opp_player_games_ext.csv not scraped")
+    t = D.load_team()
+    gf = t[(t["season"] == 2026) & (t["round"] == "GF")].iloc[0]
+    raw = pd.read_csv(D.OPP_PLAYER_CSV)
+    gf_rows = raw[(raw["season"] == 2026) & (raw["opponent"] == gf["opponent"])
+                  & (raw["date_local"] == gf["game_dt"].strftime("%Y-%m-%d"))]
+    top = gf_rows.sort_values("disposals", ascending=False).iloc[0]
+    text = run_ok("opp_players", {"stats": ["disposals"], "limit": 1,
+                                  "filters": {"season": 2026, "rounds": ["GF"]}})
+    assert f"{top['player']},{gf['opponent']},1,{float(top['disposals'])}" in text
+    # Geelong's clearances against us, all seasons, players with 3+ games
+    geel = raw[raw["opponent"] == "Geelong"].groupby("player")["total_clearances"].agg(["size", "mean"])
+    best = geel[geel["size"] >= 3]["mean"].idxmax()
+    text = run_ok("opp_players", {"stats": ["clearances"], "min_games": 3, "limit": 1,
+                                  "filters": {"opponent": "Geelong"}})
+    assert text.splitlines()[2].startswith(f"{best},Geelong,{int(geel.loc[best, 'size'])},")
+    # Freo's result filters work on these rows too, and bad stats are errors
+    assert "games matched" in run_ok("opp_players", {"stats": ["tackles"], "filters": {"result": "L"}})
+    assert W.run("opp_players", {"stats": ["tackels"]})[1]
+
+
+def test_behind_and_ahead_at_a_break_match_plain_pandas():
+    t = D.team_season(D.load_team(), 2026)
+    q = lambda s: [6 * int(g) + int(b) for g, b in (x.split(".") for x in s.split())]  # noqa: E731
+    ht = [q(a)[1] - q(b)[1] for a, b in zip(t["freo_qtrs"], t["opp_qtrs"])]
+    behind = t[[m < 0 for m in ht]]
+    text = run_ok("team_aggregate", {"metrics": ["win", "loss", "draw"], "agg": "sum",
+                                     "filters": {"season": 2026, "behind_at": "Q2"}})
+    games, w, l, d = text.splitlines()[2].split(",")
+    assert (int(games), int(w), int(l)) == (len(behind), (behind["result"] == "W").sum(),
+                                            (behind["result"] == "L").sum())
+    ahead = sum(m > 0 for m in ht)
+    assert f"Games matched: {ahead}." in run_ok("team_aggregate", {
+        "metrics": ["margin"], "filters": {"season": 2026, "ahead_at": "Q2"}})
+    assert W.run("team_games", {"metrics": ["margin"], "filters": {"behind_at": "Q9"}})[1]

@@ -1,13 +1,13 @@
 """Wharf-ai accuracy test set.
 
-Asks Wharf-ai 28 questions whose answers are known, and checks each answer
+Asks Wharf-ai 34 questions whose answers are known, and checks each answer
 for the right number, record, name or refusal. Expected values are computed
 here with plain pandas from the CSVs (not through Wharf-ai's own tools), so
 the checks stay correct when the data is refreshed and a tool bug can't hide
 behind itself. Grading is deterministic string/number matching, no model.
 
 Run (needs ANTHROPIC_API_KEY, spends real money, about US$0.30-0.60 a run):
-    python evals/wharf_eval.py            # all cases (26 Freo + 2 league)
+    python evals/wharf_eval.py            # all cases (26 Freo + 2 league + 6 newer)
     python evals/wharf_eval.py 3 7 12     # just these case numbers
 
 Writes evals/results/<timestamp>.json. Exit code 1 if any case fails.
@@ -119,7 +119,47 @@ def build_cases():
          "and by how much?", "nums",
          [round(p26[p26["player"] == n]["contested_poss"].mean(), 1)
           for n in ("Caleb Serong", "Andrew Brayshaw")]),
-    ] + league_cases()
+    ] + league_cases() + newer_cases(t, p)
+
+
+def newer_cases(t, p):
+    """The pickers' whole-list pages (squad, clubs, quarter-time), draws, and the
+    opposition's players (opp_players)."""
+    t24, t26 = t[t["season"] == 2024], t[t["season"] == S]
+    w24, l24 = int((t24["result"] == "W").sum()), int((t24["result"] == "L").sum())
+    ht = pd.Series([_qtr(a)[1] - _qtr(b)[1] for a, b in zip(t26["freo_qtrs"], t26["opp_qtrs"])],
+                   index=t26.index)
+    behind = t26[ht < 0]
+    by = lambda s: p[p["season"] == s].groupby("player")["disposals"].agg(["size", "mean"])  # noqa: E731
+    yy = by(2025)[lambda d: d["size"] >= 8].join(by(2026)[lambda d: d["size"] >= 8],
+                                                 lsuffix="_a", rsuffix="_b", how="inner")
+    riser = (yy["mean_b"] - yy["mean_a"]).idxmax()
+    toughest = t.groupby("opponent")["margin"].mean().idxmin()
+    cases = [
+        ("Which player's disposals per game rose the most from 2025 to 2026, among players "
+         "with at least 8 games in both seasons?", "text", [riser]),
+        ("Against which club have we had the lowest average margin across 2024 to 2026?",
+         "text", [toughest]),
+        ("In 2026, what was our win-loss record in games where we were behind at half time?",
+         "record", f"{int((behind['result'] == 'W').sum())}-{int((behind['result'] == 'L').sum())}"),
+        ("What was our win-loss-draw record in 2024?", "all",
+         [("record", f"{w24}-{l24}"), ("text", ["draw", "drew", f"{w24}-{l24}-"])]),
+    ]
+    if not os.path.exists(D.OPP_PLAYER_CSV):
+        return cases
+    raw = pd.read_csv(D.OPP_PLAYER_CSV)
+    gf = t26[t26["round"] == "GF"].iloc[0]
+    gfp = raw[(raw["season"] == S) & (raw["opponent"] == gf["opponent"])
+              & (raw["date_local"] == gf["game_dt"].strftime("%Y-%m-%d"))]
+    top = gfp.loc[gfp["disposals"].idxmax()]
+    r26 = raw[raw["season"] == S]
+    tacklers = sorted(r26[r26["tackles"] == r26["tackles"].max()]["player"].unique())
+    return cases + [
+        (f"Who had the most disposals for {gf['opponent']} in the 2026 grand final, and how "
+         "many?", "all", [("text", [top["player"]]), ("num", (float(top["disposals"]), 0))]),
+        ("Which opposition player laid the most tackles in a single game against us in 2026?",
+         "text", tacklers),
+    ]
 
 
 def league_cases():
@@ -172,10 +212,15 @@ def grade(kind, expected, answer):
             re.search(rf"\b{w} wins?\b.*\b{losses} loss", a, re.I | re.S))
     if kind == "text":
         return any(e.lower() in a.lower() for e in expected)
+    if kind == "all":       # every one of several checks, e.g. a name and its number
+        return all(grade(k, e, answer) for k, e in expected)
     raise ValueError(kind)
 
 
 def show(expected):
+    if isinstance(expected, list) and expected and isinstance(expected[0], tuple) \
+            and isinstance(expected[0][0], str) and expected[0][0] in ("text", "num", "nums", "record"):
+        return " + ".join(show(e) for _, e in expected)
     if isinstance(expected, tuple):
         return f"{expected[0]:.2f}" if isinstance(expected[0], float) else str(expected[0])
     return str(expected)

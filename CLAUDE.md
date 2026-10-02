@@ -38,10 +38,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   September (and by hand from the Actions tab, optionally for a season) and commits any change,
   which redeploys the app (and so, on Streamlit Cloud, wipes the usage log until it moves to a
   database).
+- Keep the usage database awake: `.github/workflows/keep_db_awake.yml` reads one row count Mon
+  and Thu 06:17 Perth (free Supabase projects pause after a week idle); needs the repo secret
+  `USAGE_DATABASE_URL`. A failed run means the project has paused: restore it in Supabase.
 - Wharf-ai feedback review: `python evals/review_feedback.py [usage.csv]` lists thumbs-down answers
   and answers with unmatched numbers, from the local log or the CSV downloaded from the Wharf-ai
   usage page, as candidate test cases (`evals/results/feedback_<date>.md`).
-- Wharf-ai accuracy eval: `python evals/wharf_eval.py` (28 questions, 2 of them league, expected answers computed
+- Wharf-ai accuracy eval: `python evals/wharf_eval.py` (34 questions: 26 Freo, 2 league, 6 for the
+  squad / clubs / quarter-time pages, draws and the opposition's players; expected answers computed
   with plain pandas, deterministic grading; spends real money, about US$0.20 a run; results in
   `evals/results/`, gitignored). Run it after any change to the prompt, tools or model.
 - Check the merge: `python -c "import data; data.ext_check()"` (coverage, surname mismatches,
@@ -356,7 +360,15 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   manual streaming tool-use loop on `claude-sonnet-5-5` (adaptive thinking, effort `low`,
   server-side refusal fallback `fallbacks: "default"`), and the model gets every number from
   `wharf_tools.py` (team_games, team_aggregate, correlate, quarter_breakdown, player_aggregate,
-  player_games, show_chart, league_aggregate, ladder): fixed pandas queries, no model-written code. show_chart draws a small
+  player_games, show_chart, league_aggregate, ladder, opp_players: the opposition's players in
+  their games against Freo, from `opp_player_games_ext.csv`, with the usual game filters).
+  Game filters include `behind_at` / `ahead_at` (Q1, Q2 = half time, Q3), and team metrics
+  include `loss`, `draw` and `margin_q1`-`margin_q3`; the prompt says every win-loss record
+  comes from team_aggregate sums of win/loss/draw, never from counting listed games (the
+  baseline eval caught a "2-1" from four listed games that were 2-2). The API sometimes
+  stops for "tool_use" with no tool call or no content at all: `_stream_answer` asks again
+  (twice at most) instead of sending an empty tool-result turn (a 400). Wording in a tool
+  description can trigger it: "Use for who hurt us" did, 4 in 10; reworded, 0 in 10.: fixed pandas queries, no model-written code. show_chart draws a small
   team_trend / player_trend / player_bar chart under the answer from the data itself (the model
   never supplies the numbers); charts are stored with the message as figure JSON and only role +
   content go back to the API. Tool inputs stream eagerly, so

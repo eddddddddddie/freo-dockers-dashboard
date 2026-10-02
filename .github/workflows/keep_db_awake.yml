@@ -1,0 +1,33 @@
+name: keep-db-awake
+
+# Free Supabase projects pause after about a week with no activity (the
+# off-season, say); while paused, Wharf-ai still answers but nothing is logged.
+# One tiny read twice a week keeps the usage database awake. Needs the repo
+# secret USAGE_DATABASE_URL (Settings -> Secrets and variables -> Actions),
+# the same Session pooler string as in the Streamlit secrets.
+
+on:
+  schedule:
+    - cron: "17 22 * * 0,3"   # Mon and Thu 06:17 Perth
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read one row count from the usage log
+        env:
+          USAGE_DATABASE_URL: ${{ secrets.USAGE_DATABASE_URL }}
+        run: |
+          if [ -z "$USAGE_DATABASE_URL" ]; then
+            echo "::error::Add the USAGE_DATABASE_URL repo secret (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          pip install --quiet "psycopg[binary]>=3.2,<4"
+          python - <<'EOF'
+          import os, psycopg
+          with psycopg.connect(os.environ["USAGE_DATABASE_URL"], connect_timeout=20,
+                               prepare_threshold=None) as con:
+              n = con.execute("SELECT COUNT(*) FROM wharf_questions").fetchone()[0]
+          print(f"Usage database awake: {n} questions logged.")
+          EOF

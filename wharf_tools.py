@@ -25,6 +25,11 @@ class ToolError(ValueError):
 def _team():
     t = D.load_team().copy()
     t["win"] = (t["result"] == "W").astype(int)
+    t["loss"] = (t["result"] == "L").astype(int)
+    t["draw"] = (t["result"] == "D").astype(int)
+    brk = _break_margins()
+    for q in ("Q1", "Q2", "Q3"):           # running margin at quarter, half and three quarter time
+        t[f"margin_{q.lower()}"] = brk[q].values
     for stem in team_stems(t):
         t[f"diff_{stem}"] = t[f"freo_{stem}"] - t[f"opp_{stem}"]
     return t
@@ -51,7 +56,9 @@ def player_stats():
 
 
 # ---- helpers ----------------------------------------------------------------
-GAME_FILTERS = ("season", "result", "type", "opponent", "rounds", "min_margin", "max_margin")
+GAME_FILTERS = ("season", "result", "type", "opponent", "rounds", "min_margin", "max_margin",
+                "behind_at", "ahead_at")
+BREAK_KEYS = {"Q1": "Q1", "Q2": "Q2", "Q3": "Q3", "QT": "Q1", "HT": "Q2", "3QT": "Q3"}
 LEAGUE_FILTERS = ("season", "result", "finals", "opponent")
 
 
@@ -86,7 +93,26 @@ def _filter(df, f):
         df = df[df["margin"] >= float(f["min_margin"])]
     if f.get("max_margin") is not None:
         df = df[df["margin"] <= float(f["max_margin"])]
+    for key, behind in (("behind_at", True), ("ahead_at", False)):
+        if f.get(key):
+            q = BREAK_KEYS.get(str(f[key]).upper())
+            if q is None:
+                raise ToolError(f"{key} must be Q1 (quarter time), Q2 (half time) or Q3 "
+                                "(three quarter time).")
+            at = _break_margins()[q].rename("_at")
+            m = df.join(at, on=["season", "round"])["_at"]
+            df = df[m < 0] if behind else df[m > 0]
     return df
+
+
+def _break_margins():
+    """Freo's running margin at each break (Q1-Q3), by season and round."""
+    t = D.load_team()
+    f = pd.DataFrame(t["freo_qtrs"].map(D._qtr_points).tolist(), index=t.index)
+    o = pd.DataFrame(t["opp_qtrs"].map(D._qtr_points).tolist(), index=t.index)
+    run = (f - o).cumsum(axis=1).iloc[:, :3]
+    run.columns = ["Q1", "Q2", "Q3"]
+    return run.set_index(pd.MultiIndex.from_frame(t[["season", "round"]]))
 
 
 def _match_one(name, options, what):
@@ -253,6 +279,58 @@ def player_games(players, stats, filters=None, limit=30):
     return _csv(p[cols].head(max(1, min(int(limit), MAX_ROWS))), "Most recent first.")
 
 
+# ---- the opposition's players (in Freo games only) -------------------------------
+OPP_GROUPS = ["season", "result", "type", "round"]
+_OPP_META = {"season", "jumper", "margin"}
+
+
+def _opp_players():
+    """The opposition's players in Freo games (AFL match centre), each row with
+    that game's Freo-side details (round, type, Freo's result and margin), so the
+    usual game filters apply; "opponent" is the player's club."""
+    o = D.load_opp_players()
+    if o is None:
+        raise ToolError("Opposition player stats are not loaded (run afl_api_scraper.py).")
+    t = D.load_team()[["season", "round", "type", "opponent", "result", "margin", "game_dt"]]
+    m = o.drop(columns=["round"], errors="ignore").merge(t, on=["season", "opponent"])
+    return m[(m["game_dt"].dt.normalize() - m["_d"]).abs() <= pd.Timedelta(days=1)]
+
+
+def opp_player_stats():
+    o = D.load_opp_players()
+    if o is None:
+        return []
+    return sorted(c for c in o.columns
+                  if pd.api.types.is_numeric_dtype(o[c]) and c not in _OPP_META)
+
+
+def opp_players(stats, agg="mean", filters=None, players=None, min_games=1, group_by=None,
+                sort_by=None, limit=20):
+    """Opposition players' stats in their games against Fremantle, per player."""
+    p = _filter(_opp_players(), filters)
+    _check_cols(stats, set(opp_player_stats()), "opposition player stat")
+    if agg not in AGGS:
+        raise ToolError(f"agg must be one of {AGGS}.")
+    if players:
+        names = [_match_one(n, p["player"].unique(), "opposition player") for n in players]
+        p = p[p["player"].isin(names)]
+    if not len(p):
+        raise ToolError("No opposition players match those filters.")
+    keys = ["player", "opponent"] + ([group_by] if group_by else [])
+    if group_by:
+        _check_cols([group_by], OPP_GROUPS, "group_by")
+    g = p.groupby(keys)
+    out = g[stats].agg(agg)
+    out.insert(0, "games", g.size())
+    out = out[out["games"] >= int(min_games)].reset_index().rename(columns={"opponent": "club"})
+    sort_by = sort_by or stats[0]
+    _check_cols([sort_by], set(out.columns), "sort column")
+    out = out.sort_values(sort_by, ascending=False)
+    note = (f"{agg} of each stat per opposition player, in their games against Fremantle only "
+            f"({p.groupby(['season', 'round', 'opponent']).ngroups} games matched).")
+    return _csv(out.head(max(1, min(int(limit), MAX_ROWS))), note)
+
+
 LEAGUE_GROUPS = ["team", "result", "is_home", "opponent", "season", "is_final"]
 
 
@@ -363,6 +441,10 @@ _FILTERS = {
                    "description": "AFL Tables round labels, e.g. ['R2', 'QF', 'GF']"},
         "min_margin": {"type": "number"},
         "max_margin": {"type": "number"},
+        "behind_at": {"type": "string", "enum": ["Q1", "Q2", "Q3"],
+                      "description": "Only games where Freo trailed at this break (Q2 = half time)"},
+        "ahead_at": {"type": "string", "enum": ["Q1", "Q2", "Q3"],
+                     "description": "Only games where Freo led at this break"},
     },
     "additionalProperties": False,
 }
@@ -447,12 +529,25 @@ TOOLS.append(_tool(
      "sort_by": {"type": "string"}, "limit": {"type": "integer"}}, ["metrics"]))
 TOOLS.append(_tool("ladder", "The ladder for a season, from home and away results.",
                    {"season": {"type": "integer"}}, ["season"]))
+TOOLS.append(_tool(
+    "opp_players",
+    "The opposition's players, only in their games against Fremantle: aggregate their stats "
+    "per player (mean per game by default; for one game, filter to it), optionally grouped "
+    "by season, result (Freo's), type or round. filters.opponent picks the club; rounds "
+    "picks games, e.g. ['GF']. Use for the opposition's best players against Fremantle and "
+    "matchups.",
+    {"stats": {"type": "array", "items": {"type": "string"}},
+     "agg": {"type": "string", "enum": AGGS}, "filters": _FILTERS,
+     "players": {"type": "array", "items": {"type": "string"}},
+     "min_games": {"type": "integer"},
+     "group_by": {"type": "string", "enum": OPP_GROUPS},
+     "sort_by": {"type": "string"}, "limit": {"type": "integer"}}, ["stats"]))
 
 _IMPL = {
     "team_games": team_games, "team_aggregate": team_aggregate, "correlate": correlate,
     "quarter_breakdown": quarter_breakdown, "player_aggregate": player_aggregate,
     "player_games": player_games, "show_chart": show_chart,
-    "league_aggregate": league_aggregate, "ladder": ladder,
+    "league_aggregate": league_aggregate, "ladder": ladder, "opp_players": opp_players,
 }
 
 
@@ -481,7 +576,9 @@ def describe():
     stems = team_stems()
     t = D.load_team()
     return (
-        "TEAM METRICS (for team_games, team_aggregate, correlate): margin, win (1 if won), "
+        "TEAM METRICS (for team_games, team_aggregate, correlate): margin, win, loss, draw "
+        "(1 or 0; with agg sum they give the record), margin_q1, margin_q2, margin_q3 (Freo's "
+        "running margin at quarter, half and three quarter time), "
         "freo_score, opp_score, freo_accuracy, opp_accuracy (goal accuracy %; team_aggregate "
         "returns it pooled over the games), and for each stat below "
         "freo_<stat>, opp_<stat> and diff_<stat> (Freo minus opposition).\n"
@@ -489,7 +586,7 @@ def describe():
         f"PLAYER STATS (for player_aggregate, player_games): {', '.join(player_stats())}.\n"
         f"Seasons: {', '.join(str(s) for s in D.seasons(t))}. Opponents: "
         f"{', '.join(sorted(t['opponent'].unique()))}."
-        + _league_describe()
+        + _opp_describe() + _league_describe()
     )
 
 
@@ -503,4 +600,13 @@ def _league_describe():
     return ("\nLEAGUE METRICS (league_aggregate; every club's games, one row per team per match; "
             "team names as above plus Fremantle): " + ", ".join(cols) + ", plus opp_<stat> (the "
             "opposition's) and diff_<stat> (team minus opposition) for each count stat. There "
-            "are no player stats for other clubs.")
+            "are no player stats for other clubs except in their games against Fremantle "
+            "(opp_players).")
+
+
+def _opp_describe():
+    stats = opp_player_stats()
+    if not stats:
+        return ""
+    return ("\nOPPOSITION PLAYER STATS (opp_players; other clubs' players in their games "
+            "against Fremantle only, Champion Data names): " + ", ".join(stats) + ".")

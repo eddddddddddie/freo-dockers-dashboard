@@ -66,6 +66,9 @@ How to answer:
   (a difference, a total, a per game rate, a percentage) as long as both numbers are in
   the answer, in plain words, e.g. "down from 27.4 to 24.5 a game (-2.9)". Never mention
   tools, tool output or calculations to the reader; the app shows them under the answer.
+- For any win-loss record, take the counts from team_aggregate with metrics win, loss and
+  draw and agg sum (league_aggregate for other clubs, or ladder): never count listed
+  games yourself. Write it W-L, or W-L-D when there was a draw.
 - If a tool returns an error, fix the call and try again.
 - If a question needs data we do not have, say so plainly. We do NOT have: {UNAVAILABLE}.
   Box-score data shows what happened, not why or where on the ground.
@@ -74,7 +77,7 @@ How to answer:
   behinds do not).
 - Substitute markers are blank for all 2026 games (the source did not record them), so
   do not infer subs from low game time; ruckmen routinely play around 45 percent.
-- Neither season has a Round 1, and round labels are the source's own (finals are
+- No season has a Round 1, and round labels are the source's own (finals are
   EF, QF, SF, PF, GF).
 - When a trend or ranking is easier to see than read, call show_chart (at most 2 per
   answer); the app draws it from the data below your answer text, so refer to it as
@@ -229,6 +232,7 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
     # Only role and content go to the API (history entries may also carry charts).
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
     wrote_text = False
+    empty_retries = 0
     for step in range(MAX_STEPS):
         if on_step:
             on_step(step)
@@ -259,6 +263,14 @@ def _stream_answer(client, current_season, history, opening=None, on_tool=None,
             yield "\n\n(Answer cut short: it hit the length limit.)"
             return
         if response.stop_reason != "tool_use":
+            return
+        if not any(b.type == "tool_use" for b in response.content):
+            # Seen from the API now and then: "tool_use" with no tool call (or no content
+            # at all). Sending an empty tool-result turn is a 400 error, so ask again.
+            if empty_retries < 2:
+                empty_retries += 1
+                continue
+            yield "\n\nSorry, Wharf-ai couldn't work that one out. Please ask again."
             return
 
         messages.append({"role": "assistant", "content": response.content})
