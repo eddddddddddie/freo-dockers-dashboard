@@ -123,8 +123,9 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
 The sign-in screen (`auth._splash`, `theme.login_hero` / `login_features`) follows the club
 site's home page: a purple hero with a thin strip, the headline "The numbers behind *Freo*" in
 the serif (our own line, not the club's slogan; words rise in one after another) and a nav-style
-row of the views with the spinning footy, then the sign-in card beside two match-card-style
-feature cards (Wharf-ai; Scout with every club's mark drifting past). No club or sponsor marks,
+row of the views with the spinning footy, then the sign-in card and a Wharf-ai card side by side,
+the same width and height with the same purple header strip (`theme.login_card_head`), like the
+site's match cards; on a phone they stack. No club or sponsor marks,
 no photos and no data before sign-in. Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
 redirect_uri, cookie_secret, client_id, client_secret, server_metadata_url): anyone with a
 verified Google account signs in through Streamlit's `st.login`; the app never sees a password;

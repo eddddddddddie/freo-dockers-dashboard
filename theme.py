@@ -335,16 +335,35 @@ def inject_css():
             color:rgba(255,255,255,.8); display:flex; align-items:center; gap:8px; }
           .sp-nav .wa-ball { width:1.4em; height:1.4em; animation:wa-spin 1.1s linear infinite; }
           @keyframes sp-rise { to { opacity:1; transform:none; } }
+          /* The sign-in card and the Wharf-ai card: same header strip, corners and
+             height (each fills its column; the row is as tall as the taller). */
           .st-key-login_card { background:#fff; border:1px solid var(--line); border-radius:4px;
-            padding:22px 24px 18px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+            padding:0; gap:0; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); height:100%;
             opacity:0; animation:sp-rise .6s .45s cubic-bezier(.2,.7,.2,1) forwards; transform:translateY(14px); }
-          .login-head b { display:block; font-size:1.7rem; font-weight:800; letter-spacing:-.6px;
-            color:var(--ink); line-height:1.1; }
-          .login-head span { display:block; color:var(--muted); font-size:.9rem; margin:6px 0 14px; }
+          .sp-login-hd { background:linear-gradient(135deg, #3A1F5E 0%, #4A2A78 45%, #7A1846 100%);
+            color:#fff; }
+          div[data-testid="stMarkdownContainer"]:has(> .sp-hd) { margin-bottom:0 !important; }
+          .st-key-login_card [data-testid="stForm"] { padding:18px 20px 20px !important; }
+          [data-testid="stHorizontalBlock"]:has(.st-key-login_card) > [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] { height:100%; }
+          [data-testid="stLayoutWrapper"]:has(> .st-key-login_card) { flex:1; }
+          [data-testid="stElementContainer"]:has(.sp-c1) { flex:1; }
+          [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown,
+          [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown > div,
+          [data-testid="stElementContainer"]:has(.sp-c1) [data-testid="stMarkdownContainer"] { height:100%;
+            margin:0 !important; }
+          [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown > div { display:block; }
+          @media (max-width: 640px) {   /* the columns stack: each card as tall as its content */
+            [data-testid="stHorizontalBlock"]:has(.st-key-login_card) > [data-testid="stColumn"]
+              > [data-testid="stVerticalBlock"], .st-key-login_card, .sp-c1,
+            [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown,
+            [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown > div,
+            [data-testid="stElementContainer"]:has(.sp-c1) [data-testid="stMarkdownContainer"] { height:auto; } }
+          .sp-c1 { height:100%; margin:0 !important; display:flex; flex-direction:column; }
+          .sp-c1 .sp-bd { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
           .sp-card { color:#fff; border-radius:4px; overflow:hidden; margin-bottom:16px;
             opacity:0; transform:translateY(14px); animation:sp-rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
           .sp-c1 { background:linear-gradient(135deg, #3A1F5E 0%, #4A2A78 45%, #7A1846 100%); animation-delay:.6s; }
-          .sp-c2 { background:linear-gradient(135deg, #2A1748 0%, #331C54 50%, #1F2A6B 100%); animation-delay:.75s; }
           .sp-hd { display:flex; align-items:center; gap:10px; padding:12px 16px;
             border-bottom:1px solid rgba(255,255,255,.14); }
           .sp-hd img, .sp-mk { width:34px; height:34px; border-radius:50%; flex:none; }
@@ -359,27 +378,20 @@ def inject_css():
           .sp-ft { display:flex; border-top:1px solid rgba(255,255,255,.14); }
           .sp-ft span { flex:1; text-align:center; padding:10px; font-size:.85rem; font-weight:700; }
           .sp-ft span + span { border-left:1px solid rgba(255,255,255,.14); }
-          .sp-marks { overflow:hidden; -webkit-mask-image:linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-            mask-image:linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
-          .sp-marks > div { display:flex; gap:18px; width:max-content; animation:sp-drift 40s linear infinite; }
-          .sp-marks i { width:46px; height:46px; flex:none; opacity:.85;
-            background:no-repeat center/contain; }
-          @keyframes sp-drift { to { transform:translateX(-50%); } }
           .st-key-login_card [data-testid="stTextInputRootElement"] { background:#F7F7F7;
             border:1px solid #CFCFCF; border-radius:4px; }
           .st-key-login_card [data-testid="stTextInputRootElement"]:focus-within { border-color:var(--brand);
             box-shadow:0 0 0 2px rgba(51,28,84,.15); }
-          .st-key-login_card [data-testid="stForm"] { border:none; padding:0; }
+          .st-key-login_card [data-testid="stForm"] { border:none; }
           @media (max-width: 700px) {
             .sp-hero { margin:0 -10px 18px; }
             .sp-top { padding:8px 14px; } .sp-top span { display:none; }
             .sp-title { padding:16px 14px 14px; }
             .sp-nav { gap:14px; padding:10px 14px; font-size:.85rem; row-gap:8px; }
-            .st-key-login_card { padding:16px; }
-            .login-head b { font-size:1.4rem; } }
+            .st-key-login_card [data-testid="stForm"] { padding:14px 16px 16px !important; } }
           @media (prefers-reduced-motion: reduce) {
             .sp-title span, .st-key-login_card, .sp-card { animation:none; opacity:1; transform:none; }
-            .sp-marks > div, .sp-nav .wa-ball { animation:none; } }
+            .sp-nav .wa-ball { animation:none; } }
 
           @media (max-width: 1760px) { .cv-band .opt { display:none; } }
           @media (max-width: 1500px) {
@@ -636,21 +648,23 @@ def login_hero():
 
 
 def login_features():
-    """Two cards beside the sign-in form, styled like the club site's match
-    cards: Wharf-ai, and the Scout view with every club's mark drifting past."""
-    clubs = [c for c in marks.MARKS if c != "Fremantle"]
-    strip = "".join(f'<i style="background-image:{marks.uri(c)}" title="{html.escape(c)}"></i>'
-                    for c in clubs * 2)   # twice over, so the loop is seamless
+    """The Wharf-ai card beside the sign-in card, styled like the club site's
+    match cards (header strip, body, footer, thin dividers)."""
     st.markdown(
         f'<div class="sp-card sp-c1"><div class="sp-hd"><img src="{_svg_data_uri("anchor.svg")}" alt="">'
         f'<div><b>Wharf-ai</b><span>Your analyst, on call</span></div></div>'
         f'<div class="sp-bd"><q>Where are we losing the clearance battle?</q>'
         f'<em class="sp-pill">Every number calculated</em></div>'
-        f'<div class="sp-ft"><span>Charts</span><span>Follow-ups</span></div></div>'
-        f'<div class="sp-card sp-c2"><div class="sp-hd"><i class="sp-mk" style="background-image:'
-        f'{marks.uri("Fremantle")}"></i><div><b>Scout</b><span>Any club, against the league</span></div></div>'
-        f'<div class="sp-bd"><div class="sp-marks"><div>{strip}</div></div></div>'
-        f'<div class="sp-ft"><span>Ladder</span><span>Head to head</span></div></div>',
+        f'<div class="sp-ft"><span>Charts</span><span>Follow-ups</span></div></div>',
+        unsafe_allow_html=True)
+
+
+def login_card_head():
+    """The sign-in card's header strip, the same as the Wharf-ai card's."""
+    st.markdown(
+        f'<div class="sp-hd sp-login-hd"><i class="sp-mk" style="background-image:'
+        f'{marks.uri("Fremantle")}"></i><div><b>Sign in to the Coach View</b>'
+        f'<span>Every game, every player and every club</span></div></div>',
         unsafe_allow_html=True)
 
 

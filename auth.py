@@ -153,15 +153,13 @@ def _splash():
     sign-in card beside two feature cards. Returns the card to draw the form in."""
     import theme
     theme.login_hero()
-    _, form, side, _ = st.columns([0.22, 1.15, 1, 0.22], gap="medium")
+    _, form, side, _ = st.columns([0.3, 1, 1, 0.3], gap="medium")
     with side:
         theme.login_features()
     with form:
         card = st.container(key="login_card")
     with card:
-        st.markdown('<div class="login-head"><b>Sign in to the Coach View</b>'
-                    '<span>Every game, every player and every club, with Wharf-ai on hand.'
-                    '</span></div>', unsafe_allow_html=True)
+        theme.login_card_head()
     return card
 
 
