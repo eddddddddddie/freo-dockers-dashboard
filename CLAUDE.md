@@ -269,8 +269,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   average share); game flow (running margin at each break vs the season's average win and loss,
   the season's other games faint grey behind, no hover); game leaders for both sides
   (`theme.leaders_pair`, surnames, from `opp_player_games_ext.csv`; Freo only without it) + goals; every Freo
-  player's numbers shaded against their own season average (scrolls inside its card).
-  The players card is "Who played above themselves" (`charts.vs_self_dots`): one narrow
+  player in the game (scrolls inside its card). The players card is "Who played above themselves" (`charts.vs_self_dots`): one narrow
   column per key stat, a dot per player placed by this game as a % of his own season average
   (purple 15%+ above, grey 15%+ below), numbers labelled only for standouts (±30%, on season
   averages of at least `charts.VS_SELF_MIN_AVG`), rows by rating points; "Show all numbers"
