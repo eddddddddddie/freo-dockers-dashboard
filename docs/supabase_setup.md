@@ -21,10 +21,14 @@ free plan is plenty for this.
 
 ## 2. Copy the connection string
 
-1. In the project, click **Connect** at the top of the page.
-2. Under **Connection string**, choose the **Session pooler** method (not
-   "Direct connection": the direct address is IPv6 only on the free plan, and
-   Streamlit Cloud connects over IPv4).
+1. In the project, click **Connect** at the top of the page. (On newer dashboards
+   the project home has a **Get connected** panel instead: click its **Direct**
+   tile, "Connection string".)
+2. Change the connection method from "Direct connection" to **Session pooler**
+   (newer dashboards may say **Shared pooler**: pick session mode). Not the
+   direct connection: that address is IPv6 only on the free plan, and Streamlit
+   Cloud connects over IPv4. The right one has a host ending in
+   `.pooler.supabase.com`, not `db.<ref>.supabase.co`.
 3. Copy the URI. It looks like:
 
    ```
@@ -37,6 +41,18 @@ free plan is plenty for this.
    (`@` is `%40`), or reset the password to letters and digits
    (**Project Settings -> Database -> Reset database password**).
 5. Add `?sslmode=require` to the end.
+
+If you can't find the pooler option, the session pooler string follows a fixed
+pattern, so you can write it yourself:
+
+```
+postgresql://postgres.<PROJECT_REF>:<PASSWORD>@aws-0-<REGION>.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+`<PROJECT_REF>` is the code in the dashboard address
+(`supabase.com/dashboard/project/<PROJECT_REF>`), `<REGION>` is
+`ap-southeast-2` for Sydney, and newer projects may use `aws-1-` instead of
+`aws-0-`. The user is `postgres.` plus the ref, not plain `postgres`.
 
 ## 3. Put it in the secrets
 
