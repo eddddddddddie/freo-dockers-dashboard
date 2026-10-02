@@ -120,7 +120,12 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   Freo table, are collected and printed as warnings at the end instead of stopping the run.
 
 ## Dashboard layout (single Coach View, no other pages)
-Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
+The sign-in screen (`auth._splash`, `theme.login_hero` / `login_features`) follows the club
+site's home page: a purple hero with a thin strip, the headline "The numbers behind *Freo*" in
+the serif (our own line, not the club's slogan; words rise in one after another) and a nav-style
+row of the views with the spinning footy, then the sign-in card beside two match-card-style
+feature cards (Wharf-ai; Scout with every club's mark drifting past). No club or sponsor marks,
+no photos and no data before sign-in. Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
 redirect_uri, cookie_secret, client_id, client_secret, server_metadata_url): anyone with a
 verified Google account signs in through Streamlit's `st.login`; the app never sees a password;
 Streamlit keeps the sign-in in its own HttpOnly identity cookie; each person is `person_id(email)`

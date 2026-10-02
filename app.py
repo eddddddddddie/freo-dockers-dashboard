@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -239,15 +239,6 @@ def player_photo(player_id, season):
     return None
 
 
-# A red AFL ball with white laces (inline, so it can spin; the 🏉 emoji is a
-# brown rugby ball on most systems and can't be recoloured).
-WAIT_BALL = ('<svg class="wa-ball" viewBox="0 0 24 24" aria-hidden="true">'
-             '<ellipse cx="12" cy="12" rx="10.5" ry="6.5" fill="#C8102E"/>'
-             '<path d="M4 12h16" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/>'
-             '<path d="M9 10.3v3.4M11 10.3v3.4M13 10.3v3.4M15 10.3v3.4" stroke="#fff" '
-             'stroke-width="1.1" stroke-linecap="round"/></svg>')
-
-
 def wait_line(phrase, doing=None, started=None):
     """The waiting message: a spinning red footy, an AFL phrase, what Wharf-ai is
     calculating, if anything, and a seconds counter from `started` (time.time())."""
@@ -255,7 +246,7 @@ def wait_line(phrase, doing=None, started=None):
     if started is not None:
         extra += (f' <span class="wa-secs" style="animation-delay:-{time.time() - started:.1f}s">'
                   '</span>')
-    return f'<div class="wa-wait">{WAIT_BALL} {html.escape(phrase)}{extra}</div>'
+    return f'<div class="wa-wait">{BALL_SVG} {html.escape(phrase)}{extra}</div>'
 
 
 def scroll_to_bottom(selector):

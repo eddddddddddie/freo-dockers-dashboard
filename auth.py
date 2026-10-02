@@ -148,11 +148,25 @@ def _require_google():
     _login_page(google=True)
 
 
+def _splash():
+    """The sign-in screen (theme.login_hero): the hero across the top, then the
+    sign-in card beside two feature cards. Returns the card to draw the form in."""
+    import theme
+    theme.login_hero()
+    _, form, side, _ = st.columns([0.22, 1.15, 1, 0.22], gap="medium")
+    with side:
+        theme.login_features()
+    with form:
+        card = st.container(key="login_card")
+    with card:
+        st.markdown('<div class="login-head"><b>Sign in to the Coach View</b>'
+                    '<span>Every game, every player and every club, with Wharf-ai on hand.'
+                    '</span></div>', unsafe_allow_html=True)
+    return card
+
+
 def _login_page(message=None, google=False, error=False):
-    _, mid, _ = st.columns([1, 1.1, 1])
-    with mid:
-        st.markdown('<div class="login-head"><b>Fremantle Coach View</b>'
-                    '<span>Sign in to continue</span></div>', unsafe_allow_html=True)
+    with _splash():
         if message:
             (st.error if error else st.info)(message)
         if google:
@@ -184,10 +198,7 @@ def require_login():
             return
     user, pw = settings.get("APP_USERNAME"), settings.get("APP_PASSWORD")
     cookie_sync()  # a sign-out's "clear the cookie" is rendered here
-    _, mid, _ = st.columns([1, 1.1, 1])
-    with mid:
-        st.markdown('<div class="login-head"><b>Fremantle Coach View</b>'
-                    '<span>Sign in to continue</span></div>', unsafe_allow_html=True)
+    with _splash():
         if not user or not pw:
             st.error("Login is not configured. Set APP_USERNAME and APP_PASSWORD in the "
                      "app secrets (or environment), then reboot the app.")

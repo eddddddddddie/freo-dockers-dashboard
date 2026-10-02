@@ -316,9 +316,70 @@ def inject_css():
           .cv-wait { margin:30vh 0 0; text-align:center; color:var(--muted); font-weight:600; }
 
           /* Login */
-          .login-head { margin:18vh 0 14px; text-align:center; }
-          .login-head b { display:block; font-size:1.5rem; font-weight:800; letter-spacing:-.5px; color:var(--ink); }
-          .login-head span { color:var(--muted); font-size:.9rem; }
+          /* Sign-in screen, after the club site's home page */
+          div[data-testid="stMarkdownContainer"]:has(> .sp-hero) { margin-bottom:0 !important; }
+          .sp-hero { background:var(--brand); color:#fff; margin:0 -14px 28px; }
+          .sp-top { display:flex; align-items:center; gap:14px; padding:9px 24px;
+            border-bottom:1px solid rgba(255,255,255,.14); font-size:.75rem; }
+          .sp-top b { text-transform:uppercase; letter-spacing:.14em; font-weight:800; }
+          .sp-top span { color:rgba(255,255,255,.7); }
+          .sp-title { font-family:"Source Serif 4", Georgia, serif; font-weight:600;
+            font-size:clamp(2.2rem, 5.4vw, 4.4rem); line-height:1.05; letter-spacing:-.03em;
+            padding:22px 24px 18px; border-bottom:1px solid rgba(255,255,255,.14); }
+          .sp-title span { display:inline-block; opacity:0; transform:translateY(18px);
+            animation:sp-rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
+          .sp-title i { font-style:italic; }
+          .sp-nav { display:flex; align-items:center; gap:26px; padding:12px 24px; flex-wrap:wrap;
+            font-weight:700; font-size:.95rem; }
+          .sp-nav em { margin-left:auto; font-style:normal; font-weight:600; font-size:.85rem;
+            color:rgba(255,255,255,.8); display:flex; align-items:center; gap:8px; }
+          .sp-nav .wa-ball { width:1.4em; height:1.4em; animation:wa-spin 1.1s linear infinite; }
+          @keyframes sp-rise { to { opacity:1; transform:none; } }
+          .st-key-login_card { background:#fff; border:1px solid var(--line); border-radius:4px;
+            padding:22px 24px 18px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+            opacity:0; animation:sp-rise .6s .45s cubic-bezier(.2,.7,.2,1) forwards; transform:translateY(14px); }
+          .login-head b { display:block; font-size:1.7rem; font-weight:800; letter-spacing:-.6px;
+            color:var(--ink); line-height:1.1; }
+          .login-head span { display:block; color:var(--muted); font-size:.9rem; margin:6px 0 14px; }
+          .sp-card { color:#fff; border-radius:4px; overflow:hidden; margin-bottom:16px;
+            opacity:0; transform:translateY(14px); animation:sp-rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
+          .sp-c1 { background:linear-gradient(135deg, #3A1F5E 0%, #4A2A78 45%, #7A1846 100%); animation-delay:.6s; }
+          .sp-c2 { background:linear-gradient(135deg, #2A1748 0%, #331C54 50%, #1F2A6B 100%); animation-delay:.75s; }
+          .sp-hd { display:flex; align-items:center; gap:10px; padding:12px 16px;
+            border-bottom:1px solid rgba(255,255,255,.14); }
+          .sp-hd img, .sp-mk { width:34px; height:34px; border-radius:50%; flex:none; }
+          .sp-mk { background:rgba(255,255,255,.12) no-repeat center/62%; }
+          .sp-hd b { display:block; font-size:.95rem; }
+          .sp-hd span { font-size:.8rem; color:rgba(255,255,255,.75); }
+          .sp-bd { padding:16px; text-align:center; }
+          .sp-bd q { display:block; font-size:1.05rem; font-weight:700; line-height:1.35; quotes:"“" "”"; }
+          .sp-pill { display:inline-block; margin-top:12px; background:#D42325; border-radius:999px;
+            padding:3px 12px; font-style:normal; font-size:.75rem; font-weight:800;
+            text-transform:uppercase; letter-spacing:.06em; }
+          .sp-ft { display:flex; border-top:1px solid rgba(255,255,255,.14); }
+          .sp-ft span { flex:1; text-align:center; padding:10px; font-size:.85rem; font-weight:700; }
+          .sp-ft span + span { border-left:1px solid rgba(255,255,255,.14); }
+          .sp-marks { overflow:hidden; -webkit-mask-image:linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+            mask-image:linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+          .sp-marks > div { display:flex; gap:18px; width:max-content; animation:sp-drift 40s linear infinite; }
+          .sp-marks i { width:46px; height:46px; flex:none; opacity:.85;
+            background:no-repeat center/contain; }
+          @keyframes sp-drift { to { transform:translateX(-50%); } }
+          .st-key-login_card [data-testid="stTextInputRootElement"] { background:#F7F7F7;
+            border:1px solid #CFCFCF; border-radius:4px; }
+          .st-key-login_card [data-testid="stTextInputRootElement"]:focus-within { border-color:var(--brand);
+            box-shadow:0 0 0 2px rgba(51,28,84,.15); }
+          .st-key-login_card [data-testid="stForm"] { border:none; padding:0; }
+          @media (max-width: 700px) {
+            .sp-hero { margin:0 -10px 18px; }
+            .sp-top { padding:8px 14px; } .sp-top span { display:none; }
+            .sp-title { padding:16px 14px 14px; }
+            .sp-nav { gap:14px; padding:10px 14px; font-size:.85rem; row-gap:8px; }
+            .st-key-login_card { padding:16px; }
+            .login-head b { font-size:1.4rem; } }
+          @media (prefers-reduced-motion: reduce) {
+            .sp-title span, .st-key-login_card, .sp-card { animation:none; opacity:1; transform:none; }
+            .sp-marks > div, .sp-nav .wa-ball { animation:none; } }
 
           @media (max-width: 1760px) { .cv-band .opt { display:none; } }
           @media (max-width: 1500px) {
@@ -545,6 +606,52 @@ def card_title(text, note="", keys=None, takeaway=""):
         if takeaway else ""
     st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}{key_html}{take_html}</div>',
                 unsafe_allow_html=True)
+
+
+# A red AFL ball with white laces (inline, so it can spin; the 🏉 emoji is a
+# brown rugby ball on most systems and can't be recoloured).
+BALL_SVG = ('<svg class="wa-ball" viewBox="0 0 24 24" aria-hidden="true">'
+             '<ellipse cx="12" cy="12" rx="10.5" ry="6.5" fill="#C8102E"/>'
+             '<path d="M4 12h16" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/>'
+             '<path d="M9 10.3v3.4M11 10.3v3.4M13 10.3v3.4M15 10.3v3.4" stroke="#fff" '
+             'stroke-width="1.1" stroke-linecap="round"/></svg>')
+
+
+def login_hero():
+    """The top of the sign-in screen, after the club site's home page: a thin
+    strip, the headline in the serif with "Freo" in italic (our own line, not
+    the club's slogan), and a nav-style row of what's inside. No club marks,
+    sponsor logos or photos, and no data before sign-in."""
+    words = "The numbers behind".split()
+    title = "".join(f'<span style="animation-delay:{0.08 + 0.09 * i:.2f}s">{w}</span> '
+                    for i, w in enumerate(words))
+    title += f'<span style="animation-delay:{0.08 + 0.09 * len(words):.2f}s"><i>Freo</i></span>'
+    nav = "".join(f"<span>{v}</span>" for v in ("Season", "Match", "Player", "Scout", "Wharf-ai"))
+    st.markdown(
+        f'<div class="sp-hero"><div class="sp-top"><b>Coach View</b>'
+        f'<span>Fremantle Dockers · performance analysis</span></div>'
+        f'<div class="sp-title">{title}</div>'
+        f'<div class="sp-nav">{nav}<em>{BALL_SVG} Kick off below</em></div></div>',
+        unsafe_allow_html=True)
+
+
+def login_features():
+    """Two cards beside the sign-in form, styled like the club site's match
+    cards: Wharf-ai, and the Scout view with every club's mark drifting past."""
+    clubs = [c for c in marks.MARKS if c != "Fremantle"]
+    strip = "".join(f'<i style="background-image:{marks.uri(c)}" title="{html.escape(c)}"></i>'
+                    for c in clubs * 2)   # twice over, so the loop is seamless
+    st.markdown(
+        f'<div class="sp-card sp-c1"><div class="sp-hd"><img src="{_svg_data_uri("anchor.svg")}" alt="">'
+        f'<div><b>Wharf-ai</b><span>Your analyst, on call</span></div></div>'
+        f'<div class="sp-bd"><q>Where are we losing the clearance battle?</q>'
+        f'<em class="sp-pill">Every number calculated</em></div>'
+        f'<div class="sp-ft"><span>Charts</span><span>Follow-ups</span></div></div>'
+        f'<div class="sp-card sp-c2"><div class="sp-hd"><i class="sp-mk" style="background-image:'
+        f'{marks.uri("Fremantle")}"></i><div><b>Scout</b><span>Any club, against the league</span></div></div>'
+        f'<div class="sp-bd"><div class="sp-marks"><div>{strip}</div></div></div>'
+        f'<div class="sp-ft"><span>Ladder</span><span>Head to head</span></div></div>',
+        unsafe_allow_html=True)
 
 
 def brand_title():
