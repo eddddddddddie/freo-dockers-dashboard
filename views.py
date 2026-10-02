@@ -152,24 +152,31 @@ def render(team_df, player_df, season, baseline, sz):
             card_title("Where we win", keys=[("Freo won it", COLORS["freo"]),
                                              ("Opp won it", COLORS["opp"])],
                        takeaway=T.where_we_win(wc))
-            _plot(CH.win_conditions_bars(wc, MID_H, focus=T.swing_stat(wc)))
+            _plot(CH.win_dumbbell(wc, MID_H, focus=T.swing_stat(wc)))
 
     def quarters():
         with card("quarters"):
-            t, s = st.columns([0.8, 1.2], vertical_alignment="center")
+            t, s = st.columns([0.6, 1.4], vertical_alignment="center")
             with s:
-                qview = st.segmented_control("Quarter view", ["Points", "W v L"],
+                qview = st.segmented_control("Quarter view", ["Points", "W v L", "Games"],
                                              default="Points", key="qview",
                                              label_visibility="collapsed") or "Points"
             qp, rm = D.quarter_pattern(tdf), D.running_margin(tdf)
             with t:
                 card_title("Quarters")  # colour key sits inside the chart
-            st.markdown(f'<div class="card-take">{T.quarters(qp) if qview == "Points" else T.running(rm)}'
-                        '</div>', unsafe_allow_html=True)
+            take = {"Points": T.quarters(qp), "W v L": T.running(rm),
+                    "Games": T.quarter_games(qp)}[qview]
+            st.markdown(f'<div class="card-take">{take}</div>', unsafe_allow_html=True)
             if qview == "Points":
                 _plot(CH.quarter_bars(qp, MID_H - 12, focus=T.best_worst_quarter(qp)))
-            else:
+            elif qview == "W v L":
                 _plot(CH.running_margin_lines(rm, MID_H - 12))
+            else:   # every game's quarters: purple Freo won it, cyan the opposition did
+                rows, z, hover, labels = D.quarter_strip(tdf)
+                ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(),
+                                         MID_H - 12, focus=T.best_worst_quarter(qp)[0],
+                                         show_x=False), key=f"qstrip_{season}")
+                _open_game(ev, labels, season)
 
     def role_leaders():
         # Same height as its neighbours; on very small windows the list scrolls
@@ -207,10 +214,37 @@ def render(team_df, player_df, season, baseline, sz):
                 st.caption("Not enough games yet.")
 
     def drivers():
+        # Click a stat for its scatter (every game, that differential v the margin);
+        # "All stats" goes back. The chart key changes on the way back, so the old
+        # click isn't reported again.
         with card("drivers"):
             dr = D.margin_drivers(tdf)
-            card_title("What drives our margin", "r, not cause", takeaway=T.drivers(dr))
-            _plot(CH.drivers_bar(dr, BOT_H, focus=T.top_driver(dr)))
+            pick = st.session_state.get("driver_pick")
+            n = st.session_state.get("driver_n", 0)
+            if pick in set(dr["stat"]):
+                pts, fit = D.driver_points(tdf, pick)
+                t, b = st.columns([5, 1], vertical_alignment="center")
+                with t:
+                    card_title(pick, "every game", takeaway=T.driver_detail(pick, fit))
+                with b:
+                    if st.button("", key="driver_back", icon=":material/arrow_back:",
+                                 help="Back to all stats"):
+                        st.session_state["driver_pick"] = None
+                        st.session_state["driver_n"] = n + 1
+                        st.rerun()
+                ev = _plot(CH.driver_scatter(pts, fit, pick, BOT_H - 10), key=f"drvpts_{season}_{n}")
+                point = nav.clicked(ev)
+                if point is not None and point.get("point_index") is not None \
+                        and point.get("curve_number") == 1:
+                    nav.go(view="Match", season=season, game=pts["round"].iloc[point["point_index"]])
+                return
+            card_title("What drives our margin", "r, not cause · " + ("tap" if PHONE else "click")
+                       + " a stat", takeaway=T.drivers(dr))
+            ev = _plot(CH.drivers_bar(dr, BOT_H, focus=T.top_driver(dr)), key=f"drv_{season}_{n}")
+            point = nav.clicked(ev)
+            if point is not None and point.get("y") in set(dr["stat"]):
+                st.session_state["driver_pick"] = point["y"]
+                st.rerun()
 
     arrange(desktop=[([2.2, 1.35, 1.15], [strip, wherewin, quarters]),
                      ([1.05, 2.45, 1.2], [role_leaders, form, drivers])],
@@ -477,9 +511,8 @@ def render_scout(team_df, lg, season, opp, sz):
             card_title("How they win", keys=[(f"{short} won it", tint),
                                              ("Their opponent did", grey)],
                        takeaway=T.where_we_win(wc))
-            _plot(CH.win_conditions_bars(wc, MID_H,
-                                         names=(f"{short} won it", "Their opponent won it"),
-                                         colors=(tint, grey), focus=T.swing_stat(wc)))
+            _plot(CH.win_dumbbell(wc, MID_H, names=(f"{short} won it", "Their opponent won it"),
+                                  colors=(tint, grey), focus=T.swing_stat(wc)))
 
     def quarters_card():
         with card("theirquarters"):

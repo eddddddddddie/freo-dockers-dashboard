@@ -11,6 +11,7 @@ team behinds include rushed behinds that summed player behinds do not.
 import os
 import re
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -663,6 +664,39 @@ def margin_drivers(tdf):
         rows.append({"stat": label, "r": diff.corr(tdf["margin"]), "games": len(tdf)})
     out = pd.DataFrame(rows).dropna()
     return out.reindex(out["r"].abs().sort_values(ascending=False).index).reset_index(drop=True)
+
+
+def quarter_strip(tdf):
+    """The quarters game by game, for the game-strip style heat strip: rows Q1-Q4,
+    one column per game, each cell Freo's margin in that quarter (that quarter
+    only, not running), scaled to the 90th percentile gap. Returns (rows, z,
+    hover, labels), as game_strip does."""
+    qs = ["Q1", "Q2", "Q3", "Q4"]
+    f = pd.DataFrame(tdf["freo_qtrs"].map(_qtr_points).tolist(), columns=qs, index=tdf.index)
+    o = pd.DataFrame(tdf["opp_qtrs"].map(_qtr_points).tolist(), columns=qs, index=tdf.index)
+    d = f - o
+    top = d.abs().stack().quantile(0.9) or 1
+    labels = game_labels(tdf)
+    hover = [[f"<b>{lbl}</b> v {opp} ({res})<br>{q}: Freo {fp} to {op} ({dd:+d})"
+              for lbl, opp, res, fp, op, dd in zip(labels, tdf["opponent"], tdf["result"],
+                                                   f[q], o[q], d[q])] for q in qs]
+    return qs, [(d[q] / top).clip(-1, 1).round(3).tolist() for q in qs], hover, labels
+
+
+def driver_points(tdf, stat):
+    """One differential (a margin_drivers stat label) against the final margin,
+    game by game, with the correlation and a least-squares line."""
+    stem = dict(DRIVERS_EXT if has_ext(tdf) else DRIVERS)[stat]
+    diff = tdf[f"freo_{stem}"] - tdf[f"opp_{stem}"]
+    pts = pd.DataFrame({"label": game_labels(tdf), "round": tdf["round"].values,
+                        "opponent": tdf["opponent"].values, "result": tdf["result"].values,
+                        "diff": diff.values, "margin": tdf["margin"].values})
+    ok = pts.dropna(subset=["diff", "margin"])
+    slope, icept = (np.polyfit(ok["diff"], ok["margin"], 1) if len(ok) >= 3 else (0.0, 0.0))
+    ahead = ok[ok["diff"] > 0]
+    return pts, {"r": ok["diff"].corr(ok["margin"]), "slope": slope, "intercept": icept,
+                 "games": len(ok), "ahead": len(ahead),
+                 "ahead_won": int((ahead["result"] == "W").sum())}
 
 
 def running_margin(tdf):

@@ -228,6 +228,21 @@ def test_clicks_links_and_back_button(browser, server):
     pg2.close()
 
 
+def test_driver_drill_down_opens_and_goes_back(browser, server):
+    """Clicking a stat in "What drives our margin" swaps the bars for that stat's
+    scatter (one point per game); the back arrow returns to the bars."""
+    pg = open_app(browser, server, 1440, 790)
+    _click_cell(pg, "drivers", 0)                     # the top driver's row
+    assert pg.locator(".st-key-driver_back").count() == 1
+    n = pg.locator(".st-key-card_drivers .js-plotly-plot g.scatterlayer g.trace").nth(1) \
+        .locator("path.point").count()
+    assert n >= 20, n                                 # a point for every game
+    pg.locator(".st-key-driver_back button").first.click()   # Streamlit may briefly keep a stale copy
+    pg.wait_for_timeout(3500)
+    assert pg.locator(".st-key-driver_back").count() == 0
+    pg.close()
+
+
 def test_stay_signed_in_and_sign_out(browser, server):
     ctx = browser.new_context(viewport={"width": 1440, "height": 790})
     ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")

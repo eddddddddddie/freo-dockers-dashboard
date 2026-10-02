@@ -90,6 +90,17 @@ def form(vals, avgs):
     return f"Hottest: {hot}, {pct[hot] - 100:+.0f}% on own average over the last 3"
 
 
+def quarter_games(qp):
+    best = qp.loc[qp["margin"].idxmax()]
+    return f"{best['quarter']}: Freo won it in {int(best['won'])} of {int(best['games'])} games"
+
+
+def driver_detail(stat, fit):
+    if not fit["ahead"]:
+        return f"r {fit['r']:+.2f} over {fit['games']} games"
+    return f"Won {fit['ahead_won']} of {fit['ahead']} when ahead on it (r {fit['r']:+.2f})"
+
+
 def top_driver(dr):
     return dr.iloc[0]["stat"] if len(dr) else None
 

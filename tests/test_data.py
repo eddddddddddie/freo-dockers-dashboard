@@ -132,3 +132,18 @@ def test_opposition_players_if_present(team):
     matched = joined.dropna(subset=["goals_players"])
     assert len(matched) >= len(team) * 0.9           # most dates agree exactly (some are a day apart)
     assert (matched["goals_players"] == matched["opp_goals"]).all()
+
+
+def test_quarter_strip_and_driver_points(team):
+    """The Games view of Quarters and the drivers drill-down, against plain pandas."""
+    t = D.team_season(team, 2026)
+    rows, z, hover, labels = D.quarter_strip(t)
+    assert rows == ["Q1", "Q2", "Q3", "Q4"] and len(labels) == len(t) and len(z[0]) == len(t)
+    q3 = [qtr_points(f)[2] - qtr_points(f)[1] - (qtr_points(o)[2] - qtr_points(o)[1])
+          for f, o in zip(t["freo_qtrs"], t["opp_qtrs"])]
+    assert all((v > 0) == (s > 0) and (v < 0) == (s < 0) for v, s in zip(z[2], q3))
+    pts, fit = D.driver_points(t, "Metres gained")
+    diff = t["freo_metres_gained"] - t["opp_metres_gained"]
+    assert fit["r"] == pytest.approx(diff.corr(t["margin"]), abs=1e-9)
+    assert fit["ahead"] == int((diff > 0).sum())
+    assert fit["ahead_won"] == int(((diff > 0) & (t["result"] == "W")).sum())

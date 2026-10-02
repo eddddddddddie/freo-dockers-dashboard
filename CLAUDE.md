@@ -199,6 +199,15 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   labels bold), the rest drop to `charts.FADE` opacity in the same hue with muted labels. Trend
   and form charts shade the last 5 games with their average (`charts._last_n_band`, label above
   the plot), and the player trend labels the best and lowest games.
+- Where we win (and Scout's How they win) is a dumbbell (`charts.win_dumbbell`): each stat from
+  the win rate when the other side won the count to the rate when Freo (the club) did, sorted by
+  the gap, the swing labelled in a column at the right. Quarters has a third view, Games
+  (`D.quarter_strip`, drawn with `charts.game_strip(show_x=False)`): Q1-Q4 by game, purple Freo
+  won the quarter, cyan the opposition, click a cell to open the game. What drives our margin is
+  a drill-down: click a stat (invisible point markers carry the click, as Streamlit doesn't
+  report clicks on bars) for `charts.driver_scatter` (every game's differential against the
+  margin, win/loss colours, a least-squares line; click a point to open that game); the back
+  arrow returns, and the chart key changes on the way back so the old click isn't reported again.
 - Navigation (`nav.py`): the web address holds season / view / game / player / opp
   (`?season=2026&view=Match&game=GF`), so views can be bookmarked and sent. Clicking a game in the
   game strip opens it in Match; clicking a player in Player form, the match player grid, the player

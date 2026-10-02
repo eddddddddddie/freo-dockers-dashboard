@@ -157,7 +157,9 @@ def form_heatmap(vals, avgs, stat_label, height, focus=None):
 DIVERGING = [[i / (len(DIVERGE) - 1), c] for i, c in enumerate(DIVERGE)]
 
 
-def game_strip(rows, z, hover, labels, results, height, focus=None):
+def game_strip(rows, z, hover, labels, results, height, focus=None, show_x=True):
+    """show_x False (a narrow card): no game labels and no W/L letters, which
+    wouldn't fit; the hover has them."""
     """One column per game: a W/L row on top, then margin and key differentials,
     each row shaded by who won it (scaled to that row's biggest gap)."""
     fig = go.Figure()
@@ -169,7 +171,8 @@ def game_strip(rows, z, hover, labels, results, height, focus=None):
     # Result row: its own trace so it can use win/loss colours and a letter.
     fig.add_trace(go.Heatmap(
         z=[[{"W": 1, "L": 0}.get(r, 0.5) for r in results]], x=labels, y=["Result"],
-        text=[results], texttemplate="%{text}", textfont=dict(size=10, color="#FFFFFF"),
+        text=[results] if show_x else None, texttemplate="%{text}" if show_x else None,
+        textfont=dict(size=10, color="#FFFFFF"),
         colorscale=[[0, COLORS["loss"]], [0.45, COLORS["loss"]], [0.45, COLORS["neutral"]],
                     [0.55, COLORS["neutral"]], [0.55, COLORS["win"]], [1, COLORS["win"]]],
         zmin=0, zmax=1,
@@ -180,7 +183,8 @@ def game_strip(rows, z, hover, labels, results, height, focus=None):
     _click_layer(fig, labels, ["Result"] + rows, [t for row in tips for t in row], size=18)
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=8, b=4))
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10), showgrid=False)
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10), showgrid=False,
+                     showticklabels=show_x)
     fig.update_yaxes(showgrid=False, tickfont=dict(size=11),
                      categoryorder="array", categoryarray=["Result"] + rows,
                      tickmode="array", tickvals=["Result"] + rows,
@@ -199,10 +203,15 @@ def drivers_bar(dr, height, focus=None):
         marker=dict(color=colors, cornerradius=3, opacity=alpha),
         text=[f"{r:+.2f}" if r > 0 else "" for r in dr["r"]], textposition="outside",
         textfont=dict(size=10, color=_ink(alpha)), cliponaxis=False,
-        customdata=dr["games"],
-        hovertemplate="%{y} differential vs margin<br>r = <b>%{x:+.2f}</b> over "
-                      "%{customdata} games<extra></extra>",
+        hoverinfo="skip",
     ))
+    # Clicks on bars aren't reported by Streamlit, so invisible point markers along
+    # each row carry the click (to open that stat's scatter) and the hover.
+    fig.add_trace(go.Scatter(
+        x=[r / 2 for r in dr["r"]], y=dr["stat"], mode="markers", showlegend=False,
+        marker=dict(symbol="square", size=16, opacity=0.001), customdata=dr[["r", "games"]].values,
+        hovertemplate="%{y} differential vs margin<br>r = <b>%{customdata[0]:+.2f}</b> over "
+                      "%{customdata[1]} games<br>Click for every game<extra></extra>"))
     # Negative values labelled just right of zero, clear of the stat names.
     for stat, r, a in zip(dr["stat"], dr["r"], alpha):
         if r <= 0:
@@ -215,6 +224,82 @@ def drivers_bar(dr, height, focus=None):
                      zeroline=True, zerolinecolor=COLORS["grid"], zerolinewidth=1)
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), tickmode="array",
                      tickvals=list(dr["stat"]), ticktext=_bold(list(dr["stat"]), focus or []))
+    return fig
+
+
+def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, focus=None):
+    """Where we win, as a dumbbell: on each stat, the win rate when the other side
+    won the count (left dot) to the win rate when Freo won it (right dot), sorted
+    by the gap, which is labelled at the end of each row. focus: the takeaway's
+    stat (the biggest swing) keeps full strength and its two rates labelled."""
+    colors = colors or (COLORS["freo"], COLORS["opp"])
+    wc = wc.dropna(subset=["ahead_winrate", "behind_winrate"]).copy()
+    wc["swing"] = wc["ahead_winrate"] - wc["behind_winrate"]
+    wc = wc.sort_values("swing", ascending=False)
+    stats = list(wc["stat"])
+    alpha = _alpha(stats, focus)
+    fig = go.Figure()
+    for (_, r), a in zip(wc.iterrows(), alpha):
+        fig.add_trace(go.Scatter(x=[r["behind_winrate"], r["ahead_winrate"]], y=[r["stat"]] * 2,
+                                 mode="lines", hoverinfo="skip", showlegend=False, opacity=a,
+                                 line=dict(color=COLORS["muted"] if a == 1 else COLORS["grid"],
+                                           width=3)))
+    for key, name, color in (("behind", names[1], colors[1]), ("ahead", names[0], colors[0])):
+        fig.add_trace(go.Scatter(
+            x=wc[f"{key}_winrate"], y=stats, mode="markers", name=name,
+            marker=dict(size=11, color=color, opacity=alpha, line=dict(color="#FFFFFF", width=2)),
+            customdata=wc[[f"{key}_games"]].values,
+            hovertemplate="%{y}: " + name + "<br>Won <b>%{x:.0f}%</b> of %{customdata[0]} "
+                          "games<extra></extra>"))
+    for (_, r), a in zip(wc.iterrows(), alpha):
+        strong = a == 1 and focus is not None
+        fig.add_annotation(x=1, xref="paper", y=r["stat"], text=(f"<b>{r['swing']:+.0f}</b>" if strong
+                           else f"{r['swing']:+.0f}"), showarrow=False, xanchor="left", xshift=8,
+                           font=dict(size=11, color=COLORS["ink"] if a == 1 else COLORS["muted"]))
+        if strong:   # the focus row's two rates, just above their dots
+            for v in (r["behind_winrate"], r["ahead_winrate"]):
+                fig.add_annotation(x=v, y=r["stat"], text=f"{v:.0f}%", showarrow=False,
+                                   yanchor="bottom", yshift=5,
+                                   font=dict(size=10, color=COLORS["ink"]))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=36, t=16, b=4))  # r: the swing column
+    fig.update_xaxes(range=[-6, 106], tickvals=[0, 50, 100], ticktext=["0%", "50%", "100%"],
+                     showgrid=True, gridcolor=COLORS["grid"], tickfont=dict(size=10))
+    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11), tickmode="array",
+                     tickvals=stats, ticktext=_bold(stats, focus if focus is not None else []))
+    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="swing", showarrow=False,
+                       xanchor="left", xshift=4, yanchor="bottom",
+                       font=dict(size=10, color=COLORS["muted"]))
+    return fig
+
+
+def driver_scatter(pts, fit, stat, height):
+    """One margin driver up close: every game's differential (across) against the
+    final margin (up), green win / red loss (and above / below the zero line),
+    a least-squares line, r labelled. Clicking a game opens it."""
+    colors = [{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["neutral"]) for r in pts["result"]]
+    fig = go.Figure()
+    lo, hi = float(pts["diff"].min()), float(pts["diff"].max())
+    fig.add_trace(go.Scatter(x=[lo, hi], y=[fit["intercept"] + fit["slope"] * lo,
+                                            fit["intercept"] + fit["slope"] * hi],
+                             mode="lines", hoverinfo="skip", showlegend=False,
+                             line=dict(color=COLORS["muted"], width=1.5, dash="dash")))
+    fig.add_trace(go.Scatter(
+        x=pts["diff"], y=pts["margin"], mode="markers", showlegend=False,
+        marker=dict(size=9, color=colors, line=dict(color="#FFFFFF", width=1.5)),
+        customdata=pts[["label", "opponent", "result"]].values,
+        hovertemplate="<b>%{customdata[0]}</b> v %{customdata[1]} (%{customdata[2]})<br>"
+                      + stat + " diff %{x:+,.0f} · margin %{y:+d}<br>Click to open this game"
+                      "<extra></extra>"))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="left", yanchor="top",
+                       text=f"r {fit['r']:+.2f} · {fit['games']} games", showarrow=False,
+                       font=dict(size=11, color=COLORS["ink"]))
+    fig = style_fig(fig, "Final margin", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=8, t=8, b=4))
+    fig.update_xaxes(title=dict(text=f"{stat} differential", font=dict(color=COLORS["muted"], size=11)),
+                     showgrid=True, gridcolor=COLORS["grid"], zeroline=False)
     return fig
 
 
