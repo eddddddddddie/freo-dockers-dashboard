@@ -166,3 +166,18 @@ def test_game_slices_cut_games_and_their_player_rows(team, players):
                 assert set(g["opponent"]) <= set(D.ladder(lg, s).index[:8])
         keys = set(zip(t["season"], t["round"]))
         assert set(zip(p["season"], p["round"])) == keys        # player rows follow their games
+
+
+def test_vs_self_takeaway_names_the_biggest_game_on_own_average(players):
+    """Match view: the "above themselves" takeaway names the biggest game as a %
+    of the player's own season average (on averages big enough to count)."""
+    import charts as CH
+    import takeaways as T
+    pdf = D.players_season(players, 2026)
+    game = D.team_season(D.load_team(), 2026).iloc[-1]
+    stats = [("Disposals", "disposals"), ("Tackles", "tackles"), ("Metres gained", "metres_gained")]
+    vals, pct, avgs = D.match_players(pdf, game, [c for _, c in stats])
+    best = max(((pct.at[p, c], p, l) for l, c in stats for p in pct.index
+                if avgs.at[p, c] >= CH.VS_SELF_MIN_AVG[c]), key=lambda r: r[0])
+    text = T.vs_self(vals, pct, avgs, stats)
+    assert f"{best[1].split()[-1]} {best[2].lower()}" in text and f"{best[0] - 100:+.0f}%" in text

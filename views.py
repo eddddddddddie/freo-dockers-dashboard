@@ -342,17 +342,56 @@ def render_match(team_df, player_df, season, pos, sz):
             phone=[tape_card, flow_card, leaders_card, players_card])
 
 
+# The match view's "above themselves" columns (with AFL match centre stats, or without).
+VS_SELF_STATS = [("Disposals", "disposals"), ("Contested", "contested_poss"),
+                 ("Metres gained", "metres_gained"), ("Score inv.", "score_involvements"),
+                 ("Tackles", "tackles"), ("Pressure acts", "pressure_acts")]
+VS_SELF_STATS_BASIC = [("Disposals", "disposals"), ("Contested", "contested_poss"),
+                       ("Marks", "marks"), ("Clearances", "clearances"),
+                       ("Inside 50s", "inside_50s"), ("Tackles", "tackles")]
+PHONE_VS_SELF = {"Disposals", "Contested", "Metres gained", "Marks"}
+PHONE_SHORT = {"Disposals": "Disp", "Contested": "CP", "Metres gained": "MG", "Marks": "Marks"}
+
+
 def _match_players(pdf, game, season, pos, BOT_H):
+    """Every Freo player in this game. By default, who played above or below
+    themselves (each game number as a % of the player's own season average, on a
+    few key stats); "Show all numbers" gives the full grid."""
     with card("players", height=_h(BOT_H + 40 + TK)):
-        stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns
-                 and (not PHONE or lbl in PHONE_GRID)]
-        vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
-        card_title("Players this game", "shaded against each player's own season average · "
-                   + ("tap a player" if PHONE else "click a player"),
-                   keys=[("below", RAMP[0]), ("above", RAMP[-1])], takeaway=T.match_players(vals))
-        grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
-        ev = _plot(CH.match_player_grid(vals, pct, [lbl for lbl, _ in stats], grid_h),
-                   key=f"mplayers_{season}_{pos}")
+        full = st.session_state.get("mplayers_all", False)
+        t, s = st.columns([4, 1], vertical_alignment="center")
+        with s:
+            st.toggle("Show all numbers", key="mplayers_all")
+        if full:
+            stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns
+                     and (not PHONE or lbl in PHONE_GRID)]
+            vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
+            with t:
+                card_title("Players this game", "shaded against each player's own season average · "
+                           + ("tap a player" if PHONE else "click a player"),
+                           keys=[("below", RAMP[0]), ("above", RAMP[-1])],
+                           takeaway=T.match_players(vals))
+            grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
+            ev = _plot(CH.match_player_grid(vals, pct, [lbl for lbl, _ in stats], grid_h),
+                       key=f"mplayers_{season}_{pos}")
+            _open_player(ev, season)
+            return
+        spec = VS_SELF_STATS if "pressure_acts" in pdf.columns else VS_SELF_STATS_BASIC
+        spec = [(lbl, col) for lbl, col in spec if col in pdf.columns]
+        # A phone shows three columns; the takeaway is still worked out from all of them.
+        stats = [(PHONE_SHORT.get(lbl, lbl), col) for lbl, col in spec if lbl in PHONE_VS_SELF] \
+            if PHONE else spec
+        cols = [c for _, c in spec] + (["rating_points"] if "rating_points" in pdf.columns else [])
+        vals, pct, avgs = D.match_players(pdf, game, cols)
+        with t:
+            card_title("Who played above themselves",
+                       "each dot: this game against the player's own season average · "
+                       + ("tap" if PHONE else "click") + " a player",
+                       keys=[("15%+ above", COLORS["freo"]), ("15%+ below", COLORS["neutral"])],
+                       takeaway=T.vs_self(vals, pct, avgs, spec))
+        h = max(BOT_H - 10, 18 * len(vals) + 44)  # scrolls inside the card if needed
+        ev = _plot(CH.vs_self_dots(vals, pct, avgs, stats, h, rp=vals.get("rating_points"),
+                                   ticks=not PHONE), key=f"mvself_{season}_{pos}")
         _open_player(ev, season)
 
 

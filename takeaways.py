@@ -141,6 +141,22 @@ def match_leaders(goals, opp_goals=None, opp_label=None):
     return text
 
 
+def vs_self(vals, pct, avgs, stats, n=2):
+    """'Biggest games on their own average: Bolton metres gained 686 (+101%), ...'
+    (only stats whose season average is big enough for a % to mean much)."""
+    from charts import VS_SELF_MIN_AVG
+    rows = []
+    for lbl, col in stats:
+        ok = avgs[col] >= VS_SELF_MIN_AVG.get(col, 0)
+        for pl in pct.index[ok]:
+            rows.append((pct.at[pl, col], pl, lbl, vals.at[pl, col]))
+    rows = sorted((r for r in rows if r[0] == r[0]), reverse=True)[:n]
+    if not rows:
+        return ""
+    return "Biggest on own average: " + ", ".join(
+        f"{_short(pl)} {lbl.lower()} {v:.0f} ({p - 100:+.0f}%)" for p, pl, lbl, v in rows)
+
+
 def match_players(vals):
     if "rating_points" in vals.columns and len(vals):
         top = vals["rating_points"].idxmax()
