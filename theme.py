@@ -338,7 +338,6 @@ def inject_css():
           .sp-sub { display:flex; align-items:center; gap:10px; padding:16px 28px 0;
             font-size:1.05rem; color:rgba(255,255,255,.82); opacity:0;
             animation:sp-rise .6s .5s cubic-bezier(.2,.7,.2,1) forwards; }
-          .sp-sub .wa-ball { width:1.5em; height:1.5em; flex:none; animation:wa-spin 1.1s linear infinite; }
           @keyframes sp-rise { to { opacity:1; transform:none; } }
           /* The sign-in: white fields and a white button on the purple */
           .st-key-login_card { max-width:400px; margin-left:14px; opacity:0; transform:translateY(14px);
@@ -370,8 +369,7 @@ def inject_css():
             .sp-title { padding:8vh 14px 0; } .sp-sub { padding:14px 14px 0; font-size:.95rem; }
             .st-key-login_card { margin:0; max-width:none; } }
           @media (prefers-reduced-motion: reduce) {
-            .sp-title span, .sp-sub, .st-key-login_card { animation:none; opacity:1; transform:none; }
-            .sp-sub .wa-ball { animation:none; } }
+            .sp-title span, .sp-sub, .st-key-login_card { animation:none; opacity:1; transform:none; } }
 
           @media (max-width: 1760px) { .cv-band .opt { display:none; } }
           @media (max-width: 1500px) {
@@ -623,7 +621,7 @@ def login_hero():
         f'<div class="sp-hero"><div class="sp-top"><b>Coach View</b>'
         f'<span>Fremantle Dockers · performance analysis</span></div>'
         f'<div class="sp-title">{title}</div>'
-        f'<div class="sp-sub">{BALL_SVG}Every game, every player and every club, '
+        f'<div class="sp-sub">Every game, every player and every club, '
         f'powered by Wharf-ai</div></div>',
         unsafe_allow_html=True)
 
