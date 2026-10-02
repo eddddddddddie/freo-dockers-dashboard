@@ -120,13 +120,12 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   Freo table, are collected and printed as warnings at the end instead of stopping the run.
 
 ## Dashboard layout (single Coach View, no other pages)
-The sign-in screen (`auth._splash`, `theme.login_hero` / `login_features`) follows the club
-site's home page: a purple hero with a thin strip, the headline "The numbers behind *Freo*" in
-the serif (our own line, not the club's slogan; words rise in one after another) and a nav-style
-row of the views with the spinning footy, then the sign-in card and a Wharf-ai card side by side,
-the same width and height with the same purple header strip (`theme.login_card_head`), like the
-site's match cards; on a phone they stack. No club or sponsor marks,
-no photos and no data before sign-in. Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
+The sign-in screen (`auth._splash`, `theme.login_hero`) follows the club site's home page: the
+whole page in the club purple (a maroon glow top right, a large faint anchor bottom right), a thin
+"Coach View" strip, the headline "The numbers behind *Freo*" in the serif (our own line, not the
+club's slogan; the words rise in), one line on what's inside with the spinning footy, then the
+sign-in straight on the purple: white fields, a white button, white labels. Nothing on it looks
+clickable unless it is. No club or sponsor marks, no photos and no data before sign-in. Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
 redirect_uri, cookie_secret, client_id, client_secret, server_metadata_url): anyone with a
 verified Google account signs in through Streamlit's `st.login`; the app never sees a password;
 Streamlit keeps the sign-in in its own HttpOnly identity cookie; each person is `person_id(email)`

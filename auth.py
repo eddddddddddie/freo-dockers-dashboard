@@ -149,18 +149,11 @@ def _require_google():
 
 
 def _splash():
-    """The sign-in screen (theme.login_hero): the hero across the top, then the
-    sign-in card beside two feature cards. Returns the card to draw the form in."""
+    """The sign-in screen (theme.login_hero): the page in purple, the headline,
+    then the sign-in under it. Returns the container to draw the form in."""
     import theme
     theme.login_hero()
-    _, form, side, _ = st.columns([0.3, 1, 1, 0.3], gap="medium")
-    with side:
-        theme.login_features()
-    with form:
-        card = st.container(key="login_card")
-    with card:
-        theme.login_card_head()
-    return card
+    return st.container(key="login_card")
 
 
 def _login_page(message=None, google=False, error=False):

@@ -316,82 +316,62 @@ def inject_css():
           .cv-wait { margin:30vh 0 0; text-align:center; color:var(--muted); font-weight:600; }
 
           /* Login */
-          /* Sign-in screen, after the club site's home page */
+          /* Sign-in screen, after the club site's home page: the whole page purple,
+             the headline, then the sign-in straight on the purple. */
+          .stApp:has(.sp-hero) { background:
+            radial-gradient(900px 520px at 88% 18%, rgba(139,0,66,.42), transparent 62%), var(--brand); }
+          .stApp:has(.sp-hero)::after { content:""; position:fixed; right:-4vh; bottom:-6vh;
+            width:62vh; height:62vh; background:var(--mark-freo) no-repeat center/contain;
+            opacity:.045; pointer-events:none; }
           div[data-testid="stMarkdownContainer"]:has(> .sp-hero) { margin-bottom:0 !important; }
-          .sp-hero { background:var(--brand); color:#fff; margin:0 -14px 28px; }
-          .sp-top { display:flex; align-items:center; gap:14px; padding:9px 24px;
+          .sp-hero { color:#fff; margin:0 -14px 22px; }
+          .sp-top { display:flex; align-items:center; gap:14px; padding:9px 28px;
             border-bottom:1px solid rgba(255,255,255,.14); font-size:.75rem; }
           .sp-top b { text-transform:uppercase; letter-spacing:.14em; font-weight:800; }
           .sp-top span { color:rgba(255,255,255,.7); }
           .sp-title { font-family:"Source Serif 4", Georgia, serif; font-weight:600;
-            font-size:clamp(2.2rem, 5.4vw, 4.4rem); line-height:1.05; letter-spacing:-.03em;
-            padding:22px 24px 18px; border-bottom:1px solid rgba(255,255,255,.14); }
+            font-size:clamp(2.4rem, 6.4vw, 5.4rem); line-height:1.02; letter-spacing:-.03em;
+            padding:12vh 28px 0; }
           .sp-title span { display:inline-block; opacity:0; transform:translateY(18px);
             animation:sp-rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
           .sp-title i { font-style:italic; }
-          .sp-nav { display:flex; align-items:center; gap:26px; padding:12px 24px; flex-wrap:wrap;
-            font-weight:700; font-size:.95rem; }
-          .sp-nav em { margin-left:auto; font-style:normal; font-weight:600; font-size:.85rem;
-            color:rgba(255,255,255,.8); display:flex; align-items:center; gap:8px; }
-          .sp-nav .wa-ball { width:1.4em; height:1.4em; animation:wa-spin 1.1s linear infinite; }
+          .sp-sub { display:flex; align-items:center; gap:10px; padding:16px 28px 0;
+            font-size:1.05rem; color:rgba(255,255,255,.82); opacity:0;
+            animation:sp-rise .6s .5s cubic-bezier(.2,.7,.2,1) forwards; }
+          .sp-sub .wa-ball { width:1.5em; height:1.5em; flex:none; animation:wa-spin 1.1s linear infinite; }
           @keyframes sp-rise { to { opacity:1; transform:none; } }
-          /* The sign-in card and the Wharf-ai card: same header strip, corners and
-             height (each fills its column; the row is as tall as the taller). */
-          .st-key-login_card { background:#fff; border:1px solid var(--line); border-radius:4px;
-            padding:0; gap:0; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); height:100%;
-            opacity:0; animation:sp-rise .6s .45s cubic-bezier(.2,.7,.2,1) forwards; transform:translateY(14px); }
-          .sp-login-hd { background:linear-gradient(135deg, #3A1F5E 0%, #4A2A78 45%, #7A1846 100%);
-            color:#fff; }
-          div[data-testid="stMarkdownContainer"]:has(> .sp-hd) { margin-bottom:0 !important; }
-          .st-key-login_card [data-testid="stForm"] { padding:18px 20px 20px !important; }
-          [data-testid="stHorizontalBlock"]:has(.st-key-login_card) > [data-testid="stColumn"]
-            > [data-testid="stVerticalBlock"] { height:100%; }
-          [data-testid="stLayoutWrapper"]:has(> .st-key-login_card) { flex:1; }
-          [data-testid="stElementContainer"]:has(.sp-c1) { flex:1; }
-          [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown,
-          [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown > div,
-          [data-testid="stElementContainer"]:has(.sp-c1) [data-testid="stMarkdownContainer"] { height:100%;
-            margin:0 !important; }
-          [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown > div { display:block; }
-          @media (max-width: 640px) {   /* the columns stack: each card as tall as its content */
-            [data-testid="stHorizontalBlock"]:has(.st-key-login_card) > [data-testid="stColumn"]
-              > [data-testid="stVerticalBlock"], .st-key-login_card, .sp-c1,
-            [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown,
-            [data-testid="stElementContainer"]:has(.sp-c1) > .stMarkdown > div,
-            [data-testid="stElementContainer"]:has(.sp-c1) [data-testid="stMarkdownContainer"] { height:auto; } }
-          .sp-c1 { height:100%; margin:0 !important; display:flex; flex-direction:column; }
-          .sp-c1 .sp-bd { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-          .sp-card { color:#fff; border-radius:4px; overflow:hidden; margin-bottom:16px;
-            opacity:0; transform:translateY(14px); animation:sp-rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
-          .sp-c1 { background:linear-gradient(135deg, #3A1F5E 0%, #4A2A78 45%, #7A1846 100%); animation-delay:.6s; }
-          .sp-hd { display:flex; align-items:center; gap:10px; padding:12px 16px;
-            border-bottom:1px solid rgba(255,255,255,.14); }
-          .sp-hd img, .sp-mk { width:34px; height:34px; border-radius:50%; flex:none; }
-          .sp-mk { background:rgba(255,255,255,.12) no-repeat center/62%; }
-          .sp-hd b { display:block; font-size:.95rem; }
-          .sp-hd span { font-size:.8rem; color:rgba(255,255,255,.75); }
-          .sp-bd { padding:16px; text-align:center; }
-          .sp-bd q { display:block; font-size:1.05rem; font-weight:700; line-height:1.35; quotes:"“" "”"; }
-          .sp-pill { display:inline-block; margin-top:12px; background:#D42325; border-radius:999px;
-            padding:3px 12px; font-style:normal; font-size:.75rem; font-weight:800;
-            text-transform:uppercase; letter-spacing:.06em; }
-          .sp-ft { display:flex; border-top:1px solid rgba(255,255,255,.14); }
-          .sp-ft span { flex:1; text-align:center; padding:10px; font-size:.85rem; font-weight:700; }
-          .sp-ft span + span { border-left:1px solid rgba(255,255,255,.14); }
-          .st-key-login_card [data-testid="stTextInputRootElement"] { background:#F7F7F7;
-            border:1px solid #CFCFCF; border-radius:4px; }
-          .st-key-login_card [data-testid="stTextInputRootElement"]:focus-within { border-color:var(--brand);
-            box-shadow:0 0 0 2px rgba(51,28,84,.15); }
-          .st-key-login_card [data-testid="stForm"] { border:none; }
+          /* The sign-in: white fields and a white button on the purple */
+          .st-key-login_card { max-width:400px; margin-left:14px; opacity:0; transform:translateY(14px);
+            animation:sp-rise .6s .65s cubic-bezier(.2,.7,.2,1) forwards; }
+          .st-key-login_card [data-testid="stForm"] { border:none; padding:0; }
+          .st-key-login_card label p, .st-key-login_card [data-testid="stCheckbox"] p { color:#fff; }
+          .st-key-login_card [data-testid="stCheckbox"] label > div:not([data-testid]) {
+            border:1.5px solid rgba(255,255,255,.8) !important; background:transparent !important; }
+          .st-key-login_card [data-testid="stCheckbox"] label[data-selected="true"] > div:not([data-testid]) {
+            background:#fff !important; border-color:#fff !important; }
+          .st-key-login_card [data-testid="stCheckbox"] svg polyline { stroke:var(--brand) !important; }
+          .st-key-login_card [data-testid="stTextInputRootElement"] { background:#fff; border:none;
+            border-radius:4px; }
+          .st-key-login_card [data-testid="stTextInputRootElement"]:focus-within {
+            box-shadow:0 0 0 3px rgba(255,255,255,.35); }
+          .st-key-login_card button[kind^="primary"], .st-key-login_card button[kind^="secondary"] {
+            background:#fff !important; color:var(--brand) !important; border:none !important;
+            min-height:44px; font-weight:800; }
+          .st-key-login_card div[data-testid] button, .st-key-login_card div[data-testid] button > div {
+            justify-content:center; width:100%; }
+          .st-key-login_card div[data-testid] button p { color:var(--brand) !important; font-weight:800 !important;
+            font-size:.95rem !important; }
+          .st-key-login_card button:hover { background:#EDE7F6 !important; }
+          .st-key-login_card [data-testid="stCaptionContainer"], .st-key-login_card [data-testid="stCaptionContainer"] p {
+            color:rgba(255,255,255,.7) !important; }
           @media (max-width: 700px) {
             .sp-hero { margin:0 -10px 18px; }
             .sp-top { padding:8px 14px; } .sp-top span { display:none; }
-            .sp-title { padding:16px 14px 14px; }
-            .sp-nav { gap:14px; padding:10px 14px; font-size:.85rem; row-gap:8px; }
-            .st-key-login_card [data-testid="stForm"] { padding:14px 16px 16px !important; } }
+            .sp-title { padding:8vh 14px 0; } .sp-sub { padding:14px 14px 0; font-size:.95rem; }
+            .st-key-login_card { margin:0; max-width:none; } }
           @media (prefers-reduced-motion: reduce) {
-            .sp-title span, .st-key-login_card, .sp-card { animation:none; opacity:1; transform:none; }
-            .sp-nav .wa-ball { animation:none; } }
+            .sp-title span, .sp-sub, .st-key-login_card { animation:none; opacity:1; transform:none; }
+            .sp-sub .wa-ball { animation:none; } }
 
           @media (max-width: 1760px) { .cv-band .opt { display:none; } }
           @media (max-width: 1500px) {
@@ -630,41 +610,21 @@ BALL_SVG = ('<svg class="wa-ball" viewBox="0 0 24 24" aria-hidden="true">'
 
 
 def login_hero():
-    """The top of the sign-in screen, after the club site's home page: a thin
-    strip, the headline in the serif with "Freo" in italic (our own line, not
-    the club's slogan), and a nav-style row of what's inside. No club marks,
-    sponsor logos or photos, and no data before sign-in."""
+    """The sign-in screen, after the club site's home page: the whole page in
+    the club purple, a thin strip, the headline in the serif with "Freo" in
+    italic (our own line, not the club's slogan; the words rise in), and one
+    line on what's inside. The sign-in sits under it (auth._splash). No club
+    marks, sponsor logos or photos, and no data before sign-in."""
     words = "The numbers behind".split()
     title = "".join(f'<span style="animation-delay:{0.08 + 0.09 * i:.2f}s">{w}</span> '
                     for i, w in enumerate(words))
     title += f'<span style="animation-delay:{0.08 + 0.09 * len(words):.2f}s"><i>Freo</i></span>'
-    nav = "".join(f"<span>{v}</span>" for v in ("Season", "Match", "Player", "Scout", "Wharf-ai"))
     st.markdown(
         f'<div class="sp-hero"><div class="sp-top"><b>Coach View</b>'
         f'<span>Fremantle Dockers · performance analysis</span></div>'
         f'<div class="sp-title">{title}</div>'
-        f'<div class="sp-nav">{nav}<em>{BALL_SVG} Kick off below</em></div></div>',
-        unsafe_allow_html=True)
-
-
-def login_features():
-    """The Wharf-ai card beside the sign-in card, styled like the club site's
-    match cards (header strip, body, footer, thin dividers)."""
-    st.markdown(
-        f'<div class="sp-card sp-c1"><div class="sp-hd"><img src="{_svg_data_uri("anchor.svg")}" alt="">'
-        f'<div><b>Wharf-ai</b><span>Your analyst, on call</span></div></div>'
-        f'<div class="sp-bd"><q>Where are we losing the clearance battle?</q>'
-        f'<em class="sp-pill">Every number calculated</em></div>'
-        f'<div class="sp-ft"><span>Charts</span><span>Follow-ups</span></div></div>',
-        unsafe_allow_html=True)
-
-
-def login_card_head():
-    """The sign-in card's header strip, the same as the Wharf-ai card's."""
-    st.markdown(
-        f'<div class="sp-hd sp-login-hd"><i class="sp-mk" style="background-image:'
-        f'{marks.uri("Fremantle")}"></i><div><b>Sign in to the Coach View</b>'
-        f'<span>Every game, every player and every club</span></div></div>',
+        f'<div class="sp-sub">{BALL_SVG}Every game, every player and every club, with Wharf-ai, '
+        f'an analyst you can question.</div></div>',
         unsafe_allow_html=True)
 
 
