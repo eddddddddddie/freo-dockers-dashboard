@@ -210,7 +210,11 @@ def inject_css():
           .mc-team span { font-size:.75rem; color:rgba(255,255,255,.72); }
           .mc-num { font-size:1.75rem; font-weight:800; letter-spacing:-.8px; line-height:1; }
           .mc-score em, .mc-last em { font-style:normal; font-weight:500; color:rgba(255,255,255,.6); }
-          .mc-res .cv-res { font-size:.8rem; padding:3px 11px; }
+          /* The result pill and the game type under it, stacked with room between. */
+          .mc-res { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+          .mc-res b { line-height:1; }
+          .mc-res .cv-res { display:inline-block; font-size:.8rem; line-height:1.25; padding:2px 10px; }
+          .mc-res span { line-height:1; }
           .mc-last b { font-size:1.08rem; }
           .mc-last .cv-res { padding:1px 7px; margin-left:3px; vertical-align:2px; }
           @media (max-width: 1599px) { .cv-band .opt2 { display:none; } }
@@ -452,6 +456,7 @@ def inject_phone_css():
         <style>
           .block-container { padding:0 10px 32px !important; }
           [data-testid="stLayoutWrapper"]:has(> .st-key-topbar) { margin:0 -10px 4px; }
+          .mc-div { display:none; }   /* the match band wraps onto lines here */
           .st-key-topbar { padding:6px 10px; }
           /* Streamlit stacks columns below 640px; the controls row stays one line. */
           .st-key-topbar div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
