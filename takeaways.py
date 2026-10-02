@@ -235,6 +235,17 @@ def player_ranks(pr):
     return f"Best squad rank: {_ordinal(int(best['rank']))} for {best['stat'].lower()}"
 
 
+def last_game_vs_avg(log, stats):
+    """'Last game (GF v BRL): above his average on 6 of 10 stats'."""
+    if len(log) < 2:
+        return ""
+    last = log.iloc[-1]
+    cols = [c for _, c in stats]
+    above = sum(last[c] > log[c].mean() for c in cols)
+    return (f"Last game ({last['round']} v {D.abbr(last['opponent'])}): above his average on "
+            f"{above} of {len(cols)} stats")
+
+
 def player_best(log, col, label):
     if not len(log):
         return ""

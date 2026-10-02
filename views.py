@@ -455,14 +455,49 @@ def render_player(player_df, season, baseline, player, sz):
             phone=[trend_card, ranks_card, log_card])
 
 
+# The range card's rows (full names), from the log stats.
+RANGE_NAMES = {"D": "Disposals", "CP": "Contested poss", "CLR": "Clearances", "I50": "Inside 50s",
+               "MG": "Metres gained", "SI": "Score involvements", "T": "Tackles",
+               "PA": "Pressure acts", "G": "Goals", "RP": "Rating points"}
+
+
 def _player_log(pdf, player, BOT_H):
+    """The player's season stat by stat: every game as a dot against his own
+    average (the range), the latest game ringed; "Show all numbers" gives the
+    per-game table."""
     with card("plog", height=_h(BOT_H + 40 + TK)):
         log = D.player_log(pdf, player)
+        full = st.session_state.get("plog_all", False)
+        t, s = st.columns([4, 1], vertical_alignment="center")
+        with s:
+            st.toggle("Show all numbers", key="plog_all")
+        if not full:
+            stats = [(RANGE_NAMES[l], c) for l, c in LOG_STATS if l in RANGE_NAMES
+                     and c in log.columns]
+            in_order = log.sort_values("game_dt").reset_index(drop=True) if len(log) else log
+            with t:
+                card_title("Range on each stat", "every game against his own season average · "
+                           + ("tap" if PHONE else "click") + " a game",
+                           keys=[("latest game", COLORS["freo"]), ("other games", RAMP[1])],
+                           takeaway=T.last_game_vs_avg(in_order, stats))
+            if len(log) >= 2:
+                h = max(BOT_H - 10, 22 * len(stats) + 40)
+                ev = _plot(CH.player_ranges(in_order, stats, h), key=f"prange_{player}")
+                point = nav.clicked(ev)
+                # The dots run stat by stat, every game in date order within each stat.
+                if point is not None and point.get("curve_number") == 0 \
+                        and point.get("point_index") is not None:
+                    row = in_order.iloc[point["point_index"] % len(in_order)]
+                    nav.go(view="Match", season=int(row["season"]), game=row["round"])
+            else:
+                st.caption("Needs two games or more.")
+            return
         stats = [(l, c) for l, c in LOG_STATS if c in log.columns
                  and (not PHONE or l in PHONE_GRID)]
-        card_title("Every game", "shaded against the player's own season average",
-                   keys=[("below", RAMP[0]), ("above", RAMP[-1])],
-                   takeaway=T.player_best(log, "disposals", "Disposals"))
+        with t:
+            card_title("Every game", "shaded against the player's own season average",
+                       keys=[("below", RAMP[0]), ("above", RAMP[-1])],
+                       takeaway=T.player_best(log, "disposals", "Disposals"))
         if len(log):
             vals = log.set_index(log["round"] + " v " + log["opponent"].map(D.abbr))[
                 [c for _, c in stats]]

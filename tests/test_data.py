@@ -181,3 +181,11 @@ def test_vs_self_takeaway_names_the_biggest_game_on_own_average(players):
                 if avgs.at[p, c] >= CH.VS_SELF_MIN_AVG[c]), key=lambda r: r[0])
     text = T.vs_self(vals, pct, avgs, stats)
     assert f"{best[1].split()[-1]} {best[2].lower()}" in text and f"{best[0] - 100:+.0f}%" in text
+
+
+def test_last_game_takeaway_counts_stats_above_average(players):
+    import takeaways as T
+    log = D.player_log(D.players_season(players, 2026), "Caleb Serong").sort_values("game_dt")
+    stats = [("Disposals", "disposals"), ("Tackles", "tackles"), ("Goals", "goals")]
+    above = sum(log.iloc[-1][c] > log[c].mean() for _, c in stats)
+    assert f"above his average on {above} of 3 stats" in T.last_game_vs_avg(log, stats)

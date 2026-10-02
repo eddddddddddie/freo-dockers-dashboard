@@ -467,6 +467,55 @@ def match_player_grid(vals, pct, labels, height):
     return fig
 
 
+def player_ranges(log, stats, height):
+    """One player's season, stat by stat: every game a small dot placed by that
+    game as a % of his own season average (the centre line), the latest game a
+    ringed dot with its number, each stat's lowest-highest at the right. Clicking
+    a dot opens that game. stats: [(label, column)]; log in date order."""
+    labels = [lbl for lbl, _ in stats]
+    games = (log["round"] + " v " + log["opponent"].map(D.abbr)).tolist()
+    fig = go.Figure()
+    xs, ys, cd = [], [], []
+    for lbl, col in stats:
+        v = log[col]
+        avg = v.mean()
+        p = (v / max(avg, 0.1) * 100).clip(5, 205)
+        xs += p.tolist()
+        ys += [lbl] * len(v)
+        cd += [[g, val, avg, r, rnd] for g, val, r, rnd in
+               zip(games, v, log["result"], log["round"])]
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="markers", showlegend=False,
+        marker=dict(size=8, color=RAMP[1], opacity=0.75, line=dict(color="#FFFFFF", width=1)),
+        customdata=cd,
+        hovertemplate="<b>%{customdata[0]}</b> (%{customdata[3]})<br>%{y}: %{customdata[1]:.0f}"
+                      " (season avg %{customdata[2]:.1f})<br>Click to open this game<extra></extra>"))
+    last = log.iloc[-1]
+    lx = [min(max(last[col] / max(log[col].mean(), 0.1) * 100, 5), 205) for _, col in stats]
+    fig.add_trace(go.Scatter(
+        x=lx, y=labels, mode="markers+text", showlegend=False, hoverinfo="skip",
+        text=[f"{last[col]:.0f}" for _, col in stats], textposition="top center",
+        textfont=dict(size=10, color=COLORS["ink"]),
+        marker=dict(size=12, color=COLORS["freo"], line=dict(color="#FFFFFF", width=2))))
+    for lbl, col in stats:
+        fig.add_annotation(x=1, xref="paper", y=lbl, xanchor="left", xshift=8, showarrow=False,
+                           text=f"{log[col].min():.0f}–{log[col].max():.0f}",
+                           font=dict(size=10, color=COLORS["muted"]))
+    fig.add_vline(x=100, line=dict(color=COLORS["muted"], width=1))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=56, t=26, b=4))   # t: the top row's latest number
+    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="range", showarrow=False,
+                       xanchor="left", xshift=8, yanchor="bottom",
+                       font=dict(size=10, color=COLORS["muted"]))
+    fig.update_xaxes(range=[0, 210], tickvals=[0, 50, 100, 150, 200],
+                     ticktext=["0", "half", "his avg", "1.5x", "2x"], showgrid=True,
+                     gridcolor=COLORS["grid"], tickfont=dict(size=10, color=COLORS["muted"]),
+                     fixedrange=True)
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), showgrid=True,
+                     gridcolor=COLORS["grid"], fixedrange=True)
+    return fig
+
+
 # Below this season average a stat is too small for a % to mean much (two tackles
 # instead of one is "200%"): those players get no standout label on it.
 VS_SELF_MIN_AVG = {"disposals": 5, "contested_poss": 2, "metres_gained": 60, "tackles": 1.5,

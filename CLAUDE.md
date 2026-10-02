@@ -219,8 +219,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   component sends the new address and `nav._back_forward` applies it.
 - Player view: band (photo or initials, #, position, age, height from `freo_squad.csv`, and the
   player's best squad ranking as the lead number, e.g. "1st · Metres gained in squad"), tiles with squad rank and change
-  on last season, game-by-game trend (pick a stat), squad rank on 12 stats, every game shaded
-  against the player's own average.
+  on last season, game-by-game trend (pick a stat), squad rank on 12 stats, the range on each stat
+  (`charts.player_ranges`: every game a dot as a % of his own season average, the latest ringed
+  with its number, each stat's lowest-highest at the right, click a dot to open that game;
+  "Show all numbers" gives the per-game table).
 - Player vs player: in the Player view, "Compare with..." (next to the player picker; `vs=` in
   the address) swaps the profile for `views.render_compare`: a band with both photos (or
   initials), each ringed in that player's chart colour, both surnames and their
