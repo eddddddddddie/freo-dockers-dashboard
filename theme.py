@@ -10,6 +10,7 @@ always purple), never rank. No club logo or trademarks.
 """
 
 import html
+import re
 
 import streamlit as st
 
@@ -316,6 +317,32 @@ def inject_css():
           .cv-wait { margin:30vh 0 0; text-align:center; color:var(--muted); font-weight:600; }
 
           /* Login */
+          /* Ticker (theme.ticker): one line scrolling right to left, edges faded */
+          div[data-testid="stMarkdownContainer"]:has(> .tk) { margin-bottom:0 !important; }
+          .tk { overflow:hidden; white-space:nowrap; color:#fff; font-size:.8rem;
+            -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+            mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+          .tk-track { display:flex; width:max-content; animation:tk-run linear infinite; }
+          .tk:hover .tk-track { animation-play-state:paused; }
+          .tk-track > div { display:flex; flex:none; }
+          .tk-item { padding:0 22px; position:relative; color:rgba(255,255,255,.72); }
+          .tk-item b { color:#fff; font-weight:700; margin-right:4px; }
+          .tk-item::after { content:""; position:absolute; right:-3px; top:50%; width:5px; height:5px;
+            margin-top:-2.5px; border-radius:50%; background:#D42325; }
+          @keyframes tk-run { to { transform:translateX(-50%); } }
+          .tk-bar { line-height:36px; }
+          .tk-strip { line-height:28px; border-top:1px solid rgba(255,255,255,.14); margin:2px -14px 0;
+            padding:0 4px; }
+          .tk-login { line-height:42px; font-size:.9rem; margin:0 -14px 18px;
+            border-top:1px solid rgba(255,255,255,.16); border-bottom:1px solid rgba(255,255,255,.16);
+            background:rgba(0,0,0,.12); }
+          /* Pinned along the bottom when there's room; on short windows (landscape
+             phones) it stays in the page so it never covers the sign-in. */
+          @media (min-height: 600px) {
+            .tk-login { position:fixed; left:0; right:0; bottom:0; z-index:5; margin:0; border-bottom:none; } }
+          .tk-login .tk-item { color:rgba(255,255,255,.85); font-weight:600; }
+          @media (prefers-reduced-motion: reduce) { .tk-track { animation:none; } }
+
           /* Sign-in screen, after the club site's home page: the whole page purple,
              the headline, then the sign-in straight on the purple. */
           .stApp:has(.sp-hero) { background:
@@ -508,6 +535,7 @@ def inject_phone_css():
           .block-container { padding:0 10px 32px !important; }
           [data-testid="stLayoutWrapper"]:has(> .st-key-topbar) { margin:0 -10px 4px; }
           .mc-div { display:none; }   /* the match band wraps onto lines here */
+          .tk-strip { margin:2px -10px 0; }
           .st-key-topbar { padding:6px 10px; }
           /* Streamlit stacks columns below 640px; the controls row stays one line. */
           .st-key-topbar div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
@@ -784,6 +812,40 @@ def _md_bold(text):
     """Escape text and turn **bold** into <b> tags."""
     import re
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(text))
+
+
+def ticker(parts, cls="", speed=45):
+    """A news-style ticker: the parts (HTML) scroll right to left in a loop, in
+    the browser (CSS only, no reruns), pausing on hover. The parts are drawn
+    twice so the loop is seamless; the second copy is hidden from screen readers.
+    speed: roughly pixels a second, from the text length."""
+    if not parts:
+        return
+    items = "".join(f'<span class="tk-item">{p}</span>' for p in parts)
+    chars = sum(len(re.sub(r"<[^>]+>", "", p)) for p in parts)
+    secs = max(20, int((chars * 7 + 60 * len(parts)) / speed))
+    st.markdown(
+        f'<div class="tk {cls}"><div class="tk-track" style="animation-duration:{secs}s">'
+        f'<div>{items}</div><div aria-hidden="true">{items}</div></div></div>',
+        unsafe_allow_html=True)
+
+
+LOGIN_TICKER = [
+    "Every Freo game, quarter by quarter", "Player form against their own season average",
+    "Scout any club against the league", "Compare two players side by side",
+    "A quarter-time check for game day", "Ask Wharf-ai anything about the numbers",
+    "Every number calculated from the data, never guessed",
+]
+
+
+def login_ticker():
+    """The sign-in screen's ticker along the bottom: what's inside, no numbers."""
+    ticker([html.escape(t) for t in LOGIN_TICKER], cls="tk-login", speed=40)
+
+
+def insight_ticker(texts, cls="tk-bar"):
+    """The season's insights as a ticker in the top bar."""
+    ticker([_md_bold(t) for t in texts], cls=cls)
 
 
 def insight_card(text):

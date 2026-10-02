@@ -153,6 +153,7 @@ def _splash():
     then the sign-in under it. Returns the container to draw the form in."""
     import theme
     theme.login_hero()
+    theme.login_ticker()
     return st.container(key="login_card")
 
 

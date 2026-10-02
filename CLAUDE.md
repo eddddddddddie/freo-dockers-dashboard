@@ -125,7 +125,8 @@ whole page in the club purple (a maroon glow top right, a large faint anchor bot
 "Coach View" strip, the headline "The numbers behind *Freo*" in the serif (our own line, not the
 club's slogan; the words rise in), one line on what's inside, then the
 sign-in straight on the purple: white fields, a white button, white labels. Nothing on it looks
-clickable unless it is. No club or sponsor marks, no photos and no data before sign-in. Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
+clickable unless it is. A ticker along the bottom (`theme.login_ticker`) lists what's inside,
+with no numbers. No club or sponsor marks, no photos and no data before sign-in. Sign-in has two modes (`auth.py`). Google (used when the secrets have a complete `[auth]` section:
 redirect_uri, cookie_secret, client_id, client_secret, server_metadata_url): anyone with a
 verified Google account signs in through Streamlit's `st.login`; the app never sees a password;
 Streamlit keeps the sign-in in its own HttpOnly identity cookie; each person is `person_id(email)`
@@ -217,7 +218,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   the club's own font is not used) with "Freo" in italic like the site's headline, the season
   toggle (one button per season in the data; its column scales with the count) and the view
   switch as white nav links with an underline on the selected one (`aria-checked`), then the
-  outlined icon buttons: Wharf-ai usage (admins only), ?, sign out. Phones drop the title. Under
+  outlined icon buttons: Wharf-ai usage (admins only), ?, sign out. Phones drop the title. The
+  season's insights run as a ticker (`theme.ticker`, CSS only, no reruns, pauses on hover) in the
+  bar's gap between the views and the icons on desktop, and on a thin line under the controls on
+  tablets and phones. Under
   the bar: the picker and the band, with record, win rate, avg for/against/margin, last 5, data
   freshness and (1600px and wider) the last match score.
 - Scout mode (`views.render_scout`, needs league_team_games.csv): pick any club (defaults to the
