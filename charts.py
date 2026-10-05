@@ -520,54 +520,7 @@ def player_ranges(log, stats, height):
 # instead of one is "200%"): those players get no standout label on it.
 VS_SELF_MIN_AVG = {"disposals": 5, "contested_poss": 2, "metres_gained": 60, "tackles": 1.5,
                    "pressure_acts": 6, "score_involvements": 1.5, "marks": 1.5,
-                   "clearances": 1, "inside_50s": 1.5}
-
-
-def vs_self_dots(vals, pct, avgs, stats, height, rp=None, standout=30, ticks=True):
-    """Who played above themselves: one narrow column per stat, a dot per player
-    placed by this game as a % of his own season average (the centre line).
-    Purple 15%+ above, grey 15%+ below, light purple between; the number is
-    labelled only for standouts (standout % or more either way, on a season
-    average big enough for a % to mean something). Rows in the order given
-    (best rated first); rp: rating points, shown with the name."""
-    from plotly.subplots import make_subplots
-    players = list(vals.index)
-    n = len(stats)
-    fig = make_subplots(rows=1, cols=n, shared_yaxes=True, horizontal_spacing=0.014,
-                        subplot_titles=[lbl for lbl, _ in stats])
-    for j, (lbl, col) in enumerate(stats, start=1):
-        p, v, a = pct[col], vals[col], avgs[col]
-        shown = p.clip(28, 172)        # beyond ±72% sits just inside the column edge
-        colors = [COLORS["freo"] if x >= 115 else COLORS["neutral"] if x <= 85 else RAMP[1]
-                  for x in p.fillna(100)]
-        big = (p - 100).abs() >= standout
-        big &= a >= VS_SELF_MIN_AVG.get(col, 0)
-        text = [f"{x:.0f}" if b else "" for x, b in zip(v, big)]
-        # Labels on the inner side (towards the average line), so none run off the column.
-        pos = ["middle left" if x >= 100 else "middle right" for x in p.fillna(100)]
-        fig.add_trace(go.Scatter(
-            x=shown, y=players, mode="markers+text", text=text, textposition=pos,
-            textfont=dict(size=10, color=COLORS["ink"]), showlegend=False,
-            marker=dict(size=9, color=colors, line=dict(color="#FFFFFF", width=1.5)),
-            customdata=list(zip(v, a, p)),
-            hovertemplate="<b>%{y}</b> · " + lbl + ": %{customdata[0]:.0f} (season avg "
-                          "%{customdata[1]:.1f}, %{customdata[2]:.0f}%)<br>Click for the player "
-                          "profile<extra></extra>"), row=1, col=j)
-        fig.add_vline(x=100, line=dict(color=COLORS["muted"], width=1), row=1, col=j)
-        fig.update_xaxes(range=[15, 185], tickvals=[50, 100, 150], ticktext=["-50%", "avg", "+50%"],
-                         tickfont=dict(size=9, color=COLORS["muted"]), showgrid=False,
-                         showticklabels=ticks, tickangle=0,
-                         zeroline=False, fixedrange=True, row=1, col=j)
-    fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(margin=dict(l=4, r=4, t=20, b=4))
-    for ann in fig.layout.annotations:   # the column titles
-        ann.font = dict(size=11, color=COLORS["ink"])
-    names = [f"{pl}  {int(r)}" if rp is not None and r == r else pl
-             for pl, r in zip(players, rp if rp is not None else [None] * len(players))]
-    fig.update_yaxes(autorange="reversed", tickmode="array", tickvals=players, ticktext=names,
-                     tickfont=dict(size=11), showgrid=True, gridcolor=COLORS["grid"],
-                     fixedrange=True)
-    return fig
+                   "clearances": 1, "inside_50s": 1.5, "goals": 1.5, "rating_points": 6}
 
 
 # ---- Quarter-time check ---------------------------------------------------------

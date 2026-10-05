@@ -14,6 +14,7 @@ Clicking a game in the game strip opens it in Match; clicking a player in a
 player grid opens their profile (nav.go).
 """
 
+import pandas as pd
 import streamlit as st
 
 import data as D
@@ -343,57 +344,68 @@ def render_match(team_df, player_df, season, pos, sz):
             phone=[tape_card, flow_card, leaders_card, players_card])
 
 
-# The match view's "above themselves" columns (with AFL match centre stats, or without).
-VS_SELF_STATS = [("Disposals", "disposals"), ("Contested", "contested_poss"),
-                 ("Metres gained", "metres_gained"), ("Score inv.", "score_involvements"),
-                 ("Tackles", "tackles"), ("Pressure acts", "pressure_acts")]
-VS_SELF_STATS_BASIC = [("Disposals", "disposals"), ("Contested", "contested_poss"),
-                       ("Marks", "marks"), ("Clearances", "clearances"),
-                       ("Inside 50s", "inside_50s"), ("Tackles", "tackles")]
-PHONE_VS_SELF = {"Disposals", "Contested", "Metres gained", "Marks"}
-PHONE_SHORT = {"Disposals": "Disp", "Contested": "CP", "Metres gained": "MG", "Marks": "Marks"}
+# The match players table: (header, column, full name). With AFL match centre
+# stats, or without; a phone keeps the four marked True.
+TABLE_STATS = [("Disp", "disposals", "Disposals", True), ("CP", "contested_poss", "Contested possessions", True),
+               ("CLR", "clearances", "Clearances", False), ("I50", "inside_50s", "Inside 50s", False),
+               ("MG", "metres_gained", "Metres gained", True), ("SI", "score_involvements", "Score involvements", False),
+               ("T", "tackles", "Tackles", True), ("PA", "pressure_acts", "Pressure acts", False),
+               ("M", "marks", "Marks", False), ("G", "goals", "Goals", False)]
+STANDOUT = 30   # % above or below a player's own season average that gets a cell tinted
+TINT_UP, TINT_DOWN = "#EDE5F7", "#F0F0F0"   # the standout cell tints (and their keys)
 
 
 def _match_players(pdf, game, season, pos, BOT_H):
-    """Every Freo player in this game. By default, who played above or below
-    themselves (each game number as a % of the player's own season average, on a
-    few key stats); "Show all numbers" gives the full grid."""
+    """Every Freo player in this game as a stats table: the number and a bar
+    (against the best in the team that game) in each cell, cells 30%+ above the
+    player's own season average tinted purple and 30%+ below tinted grey (on
+    averages big enough for a % to mean much). Sort by clicking a header; select
+    a row for the player's profile."""
     with card("players", height=_h(BOT_H + 40 + TK)):
-        full = st.session_state.get("mplayers_all", False)
-        t, s = st.columns([4, 1], vertical_alignment="center")
-        with s:
-            st.toggle("Show all numbers", key="mplayers_all")
-        if full:
-            stats = [(lbl, col) for lbl, col in MATCH_STATS if col in pdf.columns
-                     and (not PHONE or lbl in PHONE_GRID)]
-            vals, pct, _ = D.match_players(pdf, game, [c for _, c in stats])
-            with t:
-                card_title("Players this game", "shaded against each player's own season average · "
-                           + ("tap a player" if PHONE else "click a player"),
-                           keys=[("below", RAMP[0]), ("above", RAMP[-1])],
-                           takeaway=T.match_players(vals))
-            grid_h = max(BOT_H - 10, 18 * len(vals) + 40)  # scrolls inside the card if needed
-            ev = _plot(CH.match_player_grid(vals, pct, [lbl for lbl, _ in stats], grid_h),
-                       key=f"mplayers_{season}_{pos}")
-            _open_player(ev, season)
-            return
-        spec = VS_SELF_STATS if "pressure_acts" in pdf.columns else VS_SELF_STATS_BASIC
-        spec = [(lbl, col) for lbl, col in spec if col in pdf.columns]
-        # A phone shows three columns; the takeaway is still worked out from all of them.
-        stats = [(PHONE_SHORT.get(lbl, lbl), col) for lbl, col in spec if lbl in PHONE_VS_SELF] \
-            if PHONE else spec
-        cols = [c for _, c in spec] + (["rating_points"] if "rating_points" in pdf.columns else [])
-        vals, pct, avgs = D.match_players(pdf, game, cols)
-        with t:
-            card_title("Who played above themselves",
-                       "each dot: this game against the player's own season average · "
-                       + ("tap" if PHONE else "click") + " a player",
-                       keys=[("15%+ above", COLORS["freo"]), ("15%+ below", COLORS["neutral"])],
-                       takeaway=T.vs_self(vals, pct, avgs, spec))
-        h = max(BOT_H - 10, 18 * len(vals) + 44)  # scrolls inside the card if needed
-        ev = _plot(CH.vs_self_dots(vals, pct, avgs, stats, h, rp=vals.get("rating_points"),
-                                   ticks=not PHONE), key=f"mvself_{season}_{pos}")
-        _open_player(ev, season)
+        stats = [(h, c, n) for h, c, n, phone in TABLE_STATS
+                 if c in pdf.columns and (phone or not PHONE)]
+        if "pressure_acts" in pdf.columns:
+            stats = [s for s in stats if s[1] != "marks"]     # room for the match centre stats
+        cols = [c for _, c, _ in stats]
+        rp = "rating_points" if "rating_points" in pdf.columns and not PHONE else None
+        vals, pct, avgs = D.match_players(pdf, game, cols + ([rp] if rp else []))
+        card_title("Players this game", "the number and a bar against the team's best · sort by a "
+                   "header, " + ("tap" if PHONE else "click") + " a row for the player",
+                   keys=[(f"{STANDOUT}%+ above own avg", TINT_UP), (f"{STANDOUT}%+ below", TINT_DOWN)],
+                   takeaway=T.vs_self(vals, pct, avgs, [(n, c) for _, c, n in stats]))
+        df = vals[cols + ([rp] if rp else [])].reset_index().rename(columns={"index": "Player"})
+        df.columns = ["Player"] + cols + (["RP"] if rp else [])
+        df = df[["Player"] + (["RP"] if rp else []) + cols]
+
+        def tint(frame):
+            out = pd.DataFrame("", index=frame.index, columns=frame.columns)
+            for c in cols:
+                ok = (avgs[c] >= CH.VS_SELF_MIN_AVG.get(c, 0)).values
+                up = (pct[c].values >= 100 + STANDOUT) & ok
+                down = (pct[c].values <= 100 - STANDOUT) & ok
+                out.loc[up, c] = f"background-color:{TINT_UP}; color:{COLORS['brand']}; font-weight:700"
+                out.loc[down, c] = f"background-color:{TINT_DOWN}; color:#6B6B6B"
+            return out
+
+        cfg = {"Player": st.column_config.TextColumn("Player", width="small" if PHONE else "medium",
+                                                     pinned=True)}
+        if rp:
+            cfg["RP"] = st.column_config.NumberColumn("RP", help="Rating points", format="%d",
+                                                      width="small")
+        for h, c, n in stats:
+            cfg[c] = st.column_config.ProgressColumn(h, help=n, min_value=0,
+                                                     max_value=float(max(df[c].max(), 1)),
+                                                     format="%d", width="small")
+        n_sel = st.session_state.get("mtable_n", 0)
+        ev = st.dataframe(df.style.apply(tint, axis=None), column_config=cfg, hide_index=True,
+                          row_height=26,   # about 9 players in view on a laptop; the rest scroll
+                          height=(BOT_H - 6) if LAYOUT == "desktop" else min(30 + 26 * len(df), 520),
+                          on_select="rerun", selection_mode="single-row",
+                          key=f"mtable_{season}_{pos}_{n_sel}")
+        rows = (ev.selection.get("rows") if ev and hasattr(ev, "selection") else None) or []
+        if rows:
+            st.session_state["mtable_n"] = n_sel + 1     # a fresh table next time, no stale pick
+            nav.go(view="Player", season=season, player=df["Player"].iloc[rows[0]])
 
 
 # ---- Player profile ---------------------------------------------------------

@@ -271,12 +271,13 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   average share); game flow (running margin at each break vs the season's average win and loss,
   the season's other games faint grey behind, no hover); game leaders for both sides
   (`theme.leaders_pair`, surnames, from `opp_player_games_ext.csv`; Freo only without it) + goals; every Freo
-  player in the game (scrolls inside its card). The players card is "Who played above themselves" (`charts.vs_self_dots`): one narrow
-  column per key stat, a dot per player placed by this game as a % of his own season average
-  (purple 15%+ above, grey 15%+ below), numbers labelled only for standouts (±30%, on season
-  averages of at least `charts.VS_SELF_MIN_AVG`), rows by rating points; "Show all numbers"
-  gives the old full grid. On a phone three columns (Disp, CP, MG); the takeaway always uses
-  all of them. Wharf-ai is
+  player in the game (scrolls inside its card). The players card is a stats table (`views._match_players`, `st.dataframe`): every
+  player, rating points then 9 stats, each cell the number and a bar against the team's best
+  that game (`ProgressColumn`); cells 30%+ above the player's own season average tinted light
+  purple and bold, 30%+ below tinted grey (`views.STANDOUT`, on season averages of at least
+  `charts.VS_SELF_MIN_AVG`). Sort by clicking a header; selecting a row opens the player (the
+  table key changes after, so the old pick isn't reported again). 26px rows, scrolls inside the
+  card; on a phone four stats and no RP. The takeaway names the biggest games on own average. Wharf-ai is
   told which match is on screen.
 - 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
   accuracy change in absolute units (a % change of a value that can cross zero is meaningless);
