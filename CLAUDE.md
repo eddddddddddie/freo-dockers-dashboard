@@ -106,7 +106,20 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
     handful of rows (e.g. one Erasmus handball in 2026 R5, rebound 50s in 4 games).
   - Pressure acts track with not having the ball: Freo win more often when the opposition wins the
     pressure count, so the pressure tile has no good/bad colour.
-- Still not available anywhere we use: shot locations, xG, player positions or zones. Do not invent these.
+- Still not available anywhere we use: shot locations, xG, player positions or zones, GPS
+  running. Do not invent these anywhere in the real app. The one exception is the demo view below,
+  which is fenced off and says "simulated" on everything.
+- Demo view (`?demo=1`, `sim.py`, `views.render_ground`): a Ground tab that exists only with the
+  demo link (it stays on for the session and in the address; `DEMO` in app.py). It shows what the
+  app could do with a club's tracking data: a heat map of where a player or the team spent a game
+  or the season, goals, marks, contested and uncontested possessions on a to-scale ground
+  (`charts.ground`, Freo attacking right), and GPS running (distance, high-speed metres, sprints,
+  top speed, quarter fade). Counts are the real box score; only the places and the running are
+  simulated, from each player's listed position (freo_squad.csv), time on ground and work rate,
+  seeded from season, round and player so it never changes. Every figure carries an amber
+  SIMULATED tag and the band a "Demo · simulated" pill; Wharf-ai's tools never see it and its
+  page note tells it the page isn't real. `tests/test_sim.py` checks counts, repeatability and
+  that the real data and Wharf-ai are untouched.
 
 ## Scraper internals (freo_scraper.py)
 - Two-stage flow: `get_match_list` reads Freo's `teams/fremantle/allgames.html` and takes game

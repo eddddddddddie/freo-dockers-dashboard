@@ -850,3 +850,138 @@ def compare_ranks(cmp, names, height):
         _tag_pair(fig, top["stat"], top["rank_a"], names[0].split()[-1], top["rank_b"],
                   names[1].split()[-1], reversed_x=True)
     return fig
+
+
+# ---- Demo (simulated): the ground, positions and running --------------------------
+# Only for the ?demo=1 view (sim.py). Every figure here carries a SIMULATED watermark.
+GROUND_LINE = "#C4C4C4"
+EVENT_COLORS = {"Goals": COLORS["series3"], "Marks": COLORS["series4"],
+                "Contested": COLORS["freo"], "Uncontested": COLORS["opp"]}
+
+
+def _arc(cx, r, side):
+    """The 50 m arc around a goal, the part inside the oval, as an SVG path."""
+    import math
+    pts = []
+    for k in range(121):
+        a = math.radians(90 + 180 * k / 120) if side > 0 else math.radians(-90 + 180 * k / 120)
+        x, y = cx + r * math.cos(a), r * math.sin(a)
+        if (x / 82) ** 2 + (y / 66) ** 2 <= 1.0005:
+            pts.append((x, y))
+    return "M " + " L ".join(f"{x:.2f},{y:.2f}" for x, y in pts)
+
+
+def ground(fig, height):
+    """Draw an AFL ground to scale (Freo attack to the right) and size the axes."""
+    # The turf below everything; the markings above the data, so they always show.
+    line = dict(color="rgba(120,120,120,0.55)", width=1.1)
+    fig.add_shape(type="circle", x0=-82, x1=82, y0=-66, y1=66, line=dict(width=0),
+                  fillcolor="#FBFBF8", layer="below")
+    fig.add_shape(type="circle", x0=-82, x1=82, y0=-66, y1=66,
+                  line=dict(color="rgba(120,120,120,0.7)", width=1.5), layer="above")
+    fig.add_shape(type="rect", x0=-25, x1=25, y0=-25, y1=25, line=line, layer="above")
+    for r in (3, 10):
+        fig.add_shape(type="circle", x0=-r, x1=r, y0=-r, y1=r, line=line, layer="above")
+    for side in (1, -1):
+        gx = 82 * side
+        fig.add_shape(type="path", path=_arc(gx, 50, side), line=line, layer="above")
+        fig.add_shape(type="rect", x0=gx - 9 * side, x1=gx, y0=-3.2, y1=3.2, line=line, layer="above")
+        for py in (-9.6, -3.2, 3.2, 9.6):
+            fig.add_shape(type="line", x0=gx, x1=gx + 2 * side, y0=py, y1=py, line=line, layer="above")
+    # Plainly simulated, wherever this picture ends up.
+    fig.add_annotation(x=0, xref="paper", y=0, yref="paper", text="<b>SIMULATED</b>", showarrow=False,
+                       xanchor="left", yanchor="bottom", bgcolor="#E8A33D", borderpad=3,
+                       font=dict(size=10, color="#1A1A1A"))
+    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="Freo attack →", showarrow=False,
+                       xanchor="right", yanchor="bottom", font=dict(size=10, color=COLORS["muted"]))
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=4, t=16, b=4), showlegend=False)
+    fig.update_xaxes(range=[-86, 86], showticklabels=False, fixedrange=True)
+    fig.update_yaxes(range=[-70, 70], showticklabels=False, fixedrange=True,
+                     scaleanchor="x", scaleratio=1)
+    return fig
+
+
+def ground_heat(xy, height):
+    """Where the player (or team) spent the game: a smoothed density on a 2 m
+    grid, light to dark purple, clipped to the oval and clear where there's
+    little time."""
+    import numpy as np
+    xs, ys = np.arange(-82, 83, 2.0), np.arange(-66, 67, 2.0)
+    h, _, _ = np.histogram2d(xy[:, 1], xy[:, 0], bins=[np.append(ys - 1, ys[-1] + 1),
+                                                        np.append(xs - 1, xs[-1] + 1)])
+    k = np.exp(-0.5 * (np.arange(-6, 7) / 2.6) ** 2)
+    k /= k.sum()
+    h = np.apply_along_axis(lambda r: np.convolve(r, k, mode="same"), 1, h)
+    h = np.apply_along_axis(lambda c: np.convolve(c, k, mode="same"), 0, h)
+    h = h / (h.max() or 1)
+    gx, gy = np.meshgrid(xs, ys)
+    h[((gx / 82) ** 2 + (gy / 66) ** 2 > 1) | (h < 0.08)] = np.nan   # outside the oval, or barely
+    scale = [[i / (len(RAMP) - 1), c] for i, c in enumerate(RAMP)]
+    fig = go.Figure(go.Heatmap(z=h, x=xs, y=ys, colorscale=scale, zmin=0.08, zmax=1,
+                               showscale=False, opacity=0.9, hoverinfo="skip", zsmooth="best"))
+    return ground(fig, height)
+
+
+def ground_events(layers, height):
+    """Real counts at simulated spots: {layer: (array of (x, y), hover labels)}, a
+    colour per layer from the validated series order, labelled in the key above."""
+    fig = go.Figure()
+    for name, (xy, hover) in layers.items():
+        if not len(xy):
+            continue
+        fig.add_trace(go.Scatter(
+            x=xy[:, 0], y=xy[:, 1], mode="markers", name=name,
+            marker=dict(size=9 if name == "Goals" else 7, color=EVENT_COLORS[name],
+                        symbol="star" if name == "Goals" else "circle", opacity=0.85,
+                        line=dict(color="#FFFFFF", width=1)),
+            text=hover, hovertemplate="%{text}<br>(simulated spot)<extra>" + name + "</extra>"))
+    fig = ground(fig, height)
+    shown = [(n, EVENT_COLORS[n]) for n, (xy, _) in layers.items() if len(xy)]
+    return _inline_key(fig, shown) if shown else fig
+
+
+def running_trend(run, height):
+    """One player's simulated distance in each game, his average dashed; the
+    hover has high-speed metres, sprints and top speed."""
+    x = (run["round"] + " " + run["opponent"].map(D.abbr)).tolist()
+    avg = run["distance_km"].mean()
+    fig = go.Figure(go.Bar(
+        x=x, y=run["distance_km"], marker=dict(color=RAMP[3] if len(RAMP) > 3 else COLORS["freo"],
+                                               cornerradius=2),
+        customdata=run[["hsr_m", "sprints", "top_speed"]].values,
+        hovertemplate="%{x}<br><b>%{y:.1f} km</b> · %{customdata[0]:,} m high speed · "
+                      "%{customdata[1]} sprints · top %{customdata[2]:.1f} km/h"
+                      "<br>(simulated)<extra></extra>"))
+    fig.add_hline(y=avg, line=dict(color=COLORS["muted"], width=1, dash="dash"),
+                  annotation_text=f"avg {avg:.1f} km", annotation_position="top left",
+                  annotation_font=dict(size=10, color=COLORS["muted"]))
+    fig = style_fig(fig, "Distance (km, simulated)", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=8, t=10, b=4), bargap=0.25)
+    _round_ticks(fig, x)
+    lo = run["distance_km"].min()
+    fig.update_yaxes(range=[max(0, lo * 0.8), run["distance_km"].max() * 1.08])
+    return fig
+
+
+def running_quarters(by_q, height):
+    """Simulated distance per player in each quarter, wins against losses: the
+    late-game fade. by_q: rows W / L, columns q1_km..q4_km."""
+    qs = ["Q1", "Q2", "Q3", "Q4"]
+    fig = go.Figure()
+    ends = []
+    for res, name, color in (("W", "wins", COLORS["win"]), ("L", "losses", COLORS["loss"])):
+        if res not in by_q.index:
+            continue
+        y = [by_q.loc[res, f"q{i}_km"] for i in range(1, 5)]
+        fig.add_trace(go.Scatter(x=qs, y=y, mode="lines+markers", name=name,
+                                 line=dict(color=color, width=2), marker=dict(size=7),
+                                 hovertemplate=name + " %{x}: %{y:.2f} km a player<br>(simulated)"
+                                               "<extra></extra>"))
+        ends.append((y[-1], name))
+    fig = style_fig(fig, "km a player (simulated)", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=56, t=10, b=4))
+    vals = by_q.values.ravel()
+    if len(vals):
+        _end_labels(fig, "Q4", ends, height, float(vals.min()), float(vals.max()))
+    return fig

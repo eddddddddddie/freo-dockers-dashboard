@@ -202,6 +202,7 @@ def inject_css():
           .cv-band .cv-stat { flex:none; }
           .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
           /* Match card (after the club site's): big score in the middle, thin dividers */
+          .demo-pill { background:#E8A33D; color:#1A1A1A !important; }
           .mc-div { flex:none; width:1px; align-self:stretch; margin:-3px 0;
             background:rgba(255,255,255,.2); }
           .mc-score { display:flex; align-items:center; gap:10px; flex:none; }
@@ -659,6 +660,17 @@ def login_hero():
 def brand_title():
     """The bar's title, set like the club site's headline: a serif, one word in italic."""
     st.markdown('<div class="cv-brand"><i>Freo</i> Coach View</div>', unsafe_allow_html=True)
+
+
+def demo_band(season, game_label, player):
+    """The demo view's band: says plainly that what's below is simulated."""
+    what = (player if player != "Whole team" else "The team") + " · " + (
+        f"{season} season" if game_label == "Whole season" else game_label)
+    st.markdown(
+        f'<div class="cv-band demo"><div class="ttl">{html.escape(what)}'
+        f'<small>Real counts from the box score; positions and GPS running are simulated</small></div>'
+        f'<div class="cv-stat"><b><i class="cv-res demo-pill">Demo · simulated</i></b>'
+        f'<span>Not real tracking data</span></div></div>', unsafe_allow_html=True)
 
 
 def header_band(season, rec, form, data_note, last=None):

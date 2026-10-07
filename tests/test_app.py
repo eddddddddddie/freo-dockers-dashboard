@@ -124,6 +124,20 @@ def test_games_slice_cuts_season_and_player_views(app):
     assert not at.exception, at.exception
 
 
+def test_demo_view_only_with_the_demo_link(app):
+    """The Ground view (simulated) exists only with ?demo=1, says so, and renders."""
+    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
+    assert "Ground" not in at.button_group(key="view").options
+    at.query_params["demo"] = "1"
+    at = at.run()
+    assert "Ground" in at.button_group(key="view").options
+    at = at.button_group(key="view").set_value("Ground").run()
+    assert not at.exception, at.exception
+    assert any("Demo · simulated" in m.value for m in at.markdown)
+    at = at.selectbox(key="ground_player").set_value("Caleb Serong").run()
+    assert not at.exception, at.exception
+
+
 def test_layout_modes():
     import layout as L
     assert L.mode(390, 844) == L.mode(667, 340) == "phone"

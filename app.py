@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, insight_ticker, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, insight_ticker, demo_band, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -99,6 +99,8 @@ WAIT_PHRASES = [
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
+    if focus and focus.startswith("a SIMULATED demo"):   # real-data questions only
+        focus = None
     if focus and focus.startswith(f"the {season} season"):   # the season, cut to a slice
         focus = None
     if focus and focus.startswith("a comparison of "):
@@ -511,6 +513,12 @@ def _game_label(season, rnd):
     return None
 
 
+# The demo (?demo=1): a Ground view of SIMULATED positions and running (sim.py).
+# Off unless the address asks for it; it stays on for the session.
+if st.query_params.get("demo") == "1":
+    st.session_state["demo"] = True
+DEMO = bool(st.session_state.get("demo"))
+
 # A queued move from a click, or the web address on a visit's first run.
 nav.apply_pending(all_seasons, _game_label,
                   lambda s: [nav.SQUAD] + D.player_list(D.players_season(player_df, s)),
@@ -559,7 +567,8 @@ with h2:
     season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                   key="season", label_visibility="collapsed")
 with h3:
-    views = [v for v in nav.VIEWS if v != "Scout" or league is not None]
+    views = [v for v in nav.VIEWS if (v != "Scout" or league is not None)
+             and (v != "Ground" or DEMO)]
     if st.session_state.get("view") not in views:
         st.session_state["view"] = "Season"
     if PHONE:  # four buttons don't fit next to the season at phone width
@@ -586,6 +595,9 @@ def _pick_and_band():
         if view == "Season":          # the slice is Season's only picker
             pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
             return pick, None, None, band
+        if view == "Ground":            # game and player pickers
+            pick, pick2, band = st.columns([1.15, 1.0, 2.3], vertical_alignment="center")
+            return pick, pick2, None, band
         if view == "Player":
             if st.session_state.get("player_pick") != nav.SQUAD:
                 return st.columns([0.95, 0.95, 0.85, 2.3], vertical_alignment="center")
@@ -717,6 +729,25 @@ elif view == "Match" and len(tdf):
         focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
                  + ("drew" if game["result"] == "D" else
                     f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
+elif view == "Ground":
+    # SIMULATED (sim.py): pick a game or the season, the team or a player.
+    page = "ground"
+    gopts = ["Whole season"] + [c[0] for c in D.game_choices(tdf)]
+    if st.session_state.get("ground_game") not in gopts:
+        st.session_state["ground_game"] = gopts[0]
+    popts = ["Whole team"] + D.player_list(pdf_season)
+    if st.session_state.get("ground_player") not in popts:
+        st.session_state["ground_player"] = popts[0]
+    with pick:
+        ground_game = st.selectbox("Game", gopts, key="ground_game", label_visibility="collapsed")
+    with pick2:
+        ground_player = st.selectbox("Player", popts, key="ground_player",
+                                     label_visibility="collapsed")
+    with band:
+        demo_band(season, ground_game, ground_player)
+    focus = ("a SIMULATED demo page of GPS running and positions on the ground; none of its "
+             "running, positions or locations are real. If asked about them, say Wharf-ai only "
+             "answers from the real match data and that page is a demo")
 else:
     games_slice = slice_picker(pick)
     apply_slice(games_slice)
@@ -755,7 +786,9 @@ if CHAT_TOP:
 with main:
     if CHAT_TOP:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
-    if page == "squad":
+    if page == "ground":
+        V.render_ground(team_df, player_df, season, ground_game, ground_player, SZ)
+    elif page == "squad":
         V.render_squad(player_view, season, baseline, SZ)
     elif page == "clubs":
         V.render_clubs(team_df, all_seasons, SZ)
