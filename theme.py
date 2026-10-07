@@ -90,8 +90,9 @@ FONT = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, san
 
 
 def style_fig(fig, y_title="", unified=True, height=240):
-    """Shared chart look: transparent surface, recessive grid and axes, a compact
-    legend across the top, a single y axis (never dual-axis)."""
+    """Shared chart look, after Tufte: no gridlines and no axis lines (only lines
+    that mean something are drawn, per chart: a zero margin, an average, a
+    median), muted tick labels, a single y axis (never dual-axis)."""
     fig.update_layout(
         template="plotly_white",
         font=dict(family=FONT, color=COLORS["ink"], size=12),
@@ -103,10 +104,10 @@ def style_fig(fig, y_title="", unified=True, height=240):
         hovermode="x unified" if unified else "closest",
         height=height,
     )
-    fig.update_xaxes(showgrid=False, tickfont=dict(color=COLORS["muted"]),
-                     linecolor=COLORS["grid"])
+    fig.update_xaxes(showgrid=False, showline=False, zeroline=False,
+                     tickfont=dict(color=COLORS["muted"]))
     fig.update_yaxes(title=dict(text=y_title, font=dict(color=COLORS["muted"], size=11)),
-                     gridcolor=COLORS["grid"], zeroline=False,
+                     showgrid=False, showline=False, zeroline=False,
                      tickfont=dict(color=COLORS["muted"]))
     return fig
 
@@ -171,9 +172,8 @@ def inject_css():
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
           div[class*="st-key-card_"],
           div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:#FFFFFF; border:1px solid var(--line) !important; border-radius:4px;
-            box-shadow:0 1px 2px rgba(0,0,0,.04);
-          }
+            background:#FFFFFF; border:none !important; border-radius:4px; box-shadow:none;
+          }   /* white on the light page is boundary enough: no border, no shadow */
           div[class*="st-key-card_"] { gap:2px; }
           div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
           .card-title {
@@ -239,8 +239,8 @@ def inject_css():
 
           /* Headline tiles */
           .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:8px; }
-          .cv-tile { background:#fff; border:1px solid var(--line); border-radius:4px;
-            padding:6px 8px 4px; min-width:0; box-shadow:0 1px 3px rgba(0,0,0,.07); }
+          .cv-tile { background:#fff; border:none; border-radius:4px;
+            padding:6px 8px 4px; min-width:0; box-shadow:none; }
           .cv-tile .lbl { font-size:.75rem; font-weight:700; color:var(--muted); white-space:nowrap; overflow:hidden;
             text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.04em; }
           .cv-tile .val { font-size:1.4rem; font-weight:800; letter-spacing:-.4px; color:var(--ink); line-height:1.15; }
@@ -413,6 +413,8 @@ def inject_css():
           .tp-row { display:grid; grid-template-columns:118px 46px 1fr 46px; align-items:center; gap:8px;
             line-height:1.25; min-height:21px; }
           .tp-f, .tp-o { font-weight:800; font-size:.85rem; color:var(--ink); }
+          .tp-head .tp-f, .tp-head .tp-o { font-size:.75rem; font-weight:700; color:var(--muted); }
+          .tp-head { min-height:16px; }
           .tp-f { text-align:right; }
           .tp-lbl { font-size:.75rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .tp-bar { position:relative; height:9px; border-radius:5px; background:var(--opp); overflow:visible; }
@@ -880,12 +882,15 @@ def match_band(game, venue_date):
         unsafe_allow_html=True)
 
 
-def tape(rows, opp_color=None):
+def tape(rows, opp_color=None, names=None):
     """Tale of the tape: one split bar per stat, Freo share (purple) against the
     opposition (in their club's chart colour), numbers either side, and a tick
     at Freo's season average share."""
     bar = f' style="background:{opp_color}"' if opp_color else ""
     out = ""
+    if names:   # the two sides named over their number columns, in place of a colour key
+        out += (f'<div class="tp-row tp-head"><span></span><span class="tp-f">{html.escape(names[0])}</span>'
+                f'<span></span><span class="tp-o">{html.escape(names[1])}</span></div>')
     for r in rows:
         f = f'{r["freo"]:,.0f}'
         o = f'{r["opp"]:,.0f}'

@@ -2,6 +2,7 @@
 fixed heights, minimal chrome, detail on hover. One y axis only; a legend for
 two or more series."""
 
+import pandas as pd
 import plotly.graph_objects as go
 from theme import COLORS, DIVERGE, RAMP, SERIES, style_fig
 
@@ -11,6 +12,45 @@ import data as D
 # the rest drop to this opacity (same hue, so identity never changes), and their
 # labels go from ink to muted. focus=None draws every mark at full strength.
 FADE = 0.4
+
+
+def _round_ticks(fig, labels, max_n=11, size=10):
+    """Horizontal x labels, the round only ("R2", "GF"; the opponent is on hover),
+    thinned to about max_n so they never collide or need rotating. The last game
+    is always shown (its neighbour is dropped if they'd touch)."""
+    labels = list(labels)
+    n = len(labels)
+    step = max(1, -(-n // max_n))
+    keep = [i for i in range(0, n, step)]
+    if n and keep[-1] != n - 1:
+        if n - 1 - keep[-1] < max(2, step // 2 + 1):
+            keep.pop()
+        keep.append(n - 1)
+    fig.update_xaxes(tickangle=0, tickmode="array", tickvals=[labels[i] for i in keep],
+                     ticktext=[str(labels[i]).split()[0] for i in keep], tickfont=dict(size=size))
+
+
+def _end_labels(fig, x, items, height, lo, hi):
+    """Direct labels at the right-hand end of lines, in place of a legend: items
+    [(y, text)], nudged apart so they never overlap. Text in ink, never the
+    series colour. The chart needs about 64px of right margin."""
+    if not items:
+        return
+    gap = (hi - lo) / max(height - 40, 1) * 13      # one label line in data units
+    ys = _spread(pd.Series([y for y, _ in items], index=range(len(items))), gap)
+    for i, (_, text) in enumerate(items):
+        fig.add_annotation(x=x, y=ys[i], text=text, showarrow=False, xanchor="left", xshift=8,
+                           font=dict(size=10, color=COLORS["ink"]))
+
+
+def _tag_pair(fig, y, a, text_a, b, text_b, reversed_x=False):
+    """Name a dumbbell row's two dots just above them (the top row, in place of a
+    colour key): the left dot's label runs left, the right dot's runs right."""
+    a_left = (a > b) if reversed_x else (a <= b)
+    for v, text, left in ((a, text_a, a_left), (b, text_b, not a_left)):
+        fig.add_annotation(x=v, y=y, text=text, showarrow=False, yanchor="bottom", yshift=5,
+                           xanchor="right" if left else "left", xshift=5 if left else -5,
+                           font=dict(size=10, color=COLORS["ink"]))
 
 
 def _alpha(keys, focus):
@@ -88,6 +128,9 @@ def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None, foc
     colors = colors or (COLORS["freo"], COLORS["opp"])
     best, worst = focus if focus else (None, None)
     alpha = _alpha(qp["quarter"], best)
+    tags = ["Freo" if names[0] == "Fremantle" else D.abbr(names[0]),
+            "Opp" if names[1] in ("Opposition", "Opponents") else D.abbr(names[1])]
+    named = best if best is not None else qp["quarter"].iloc[0]   # the bars that carry the names
     fig = go.Figure()
     for col, name, color in [("freo", names[0], colors[0]), ("opp", names[1], colors[1])]:
         fig.add_trace(go.Bar(
@@ -111,11 +154,17 @@ def quarter_bars(qp, height, names=("Fremantle", "Opposition"), colors=None, foc
                       margin=dict(l=4, r=6, t=8, b=4))
     top = max(qp["freo"].max(), qp["opp"].max())
     fig.update_yaxes(range=[0, top * 1.22])
+    # The named quarter's two bars carry the team names, in place of a colour key
+    # (grouped bars sit 0.17 either side of the quarter's centre).
+    k = list(qp["quarter"]).index(named)
+    row = qp.iloc[k]
+    for off, col, tag in ((-0.17, "freo", tags[0]), (0.17, "opp", tags[1])):
+        fig.add_annotation(x=k + off, y=row[col] / 2, text=tag, showarrow=False, textangle=0,
+                           font=dict(size=9, color="#FFFFFF"))
     if best is not None:
         fig.update_xaxes(tickmode="array", tickvals=list(qp["quarter"]),
                          ticktext=_bold(list(qp["quarter"]), best))
-    short = [n if len(n) <= 10 else D.abbr(n) for n in names]
-    return _inline_key(fig, [(short[0], colors[0]), (short[1], colors[1])])
+    return fig
 
 
 # One-hue sequential purple, light to dark.
@@ -158,9 +207,12 @@ def form_dumbbell(last3, avgs, pct, stat_label, height, focus=None):
     fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="change", showarrow=False,
                        xanchor="left", xshift=4, yanchor="bottom",
                        font=dict(size=10, color=COLORS["muted"]))
-    fig.update_xaxes(title=None, showgrid=True, gridcolor=COLORS["grid"], tickfont=dict(size=10))
+    fig.update_xaxes(title=None, tickfont=dict(size=10))
     fig.update_yaxes(title=None, autorange="reversed", showgrid=False, tickfont=dict(size=12),
                      tickmode="array", tickvals=order, ticktext=_bold(order, focus or []))
+    if order:
+        top = order[0]
+        _tag_pair(fig, top, avgs[top], "season", last3[top], "last 3")
     return fig
 
 
@@ -195,8 +247,9 @@ def game_strip(rows, z, hover, labels, results, height, focus=None, show_x=True)
     _click_layer(fig, labels, ["Result"] + rows, [t for row in tips for t in row], size=18)
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=8, b=4))
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10), showgrid=False,
-                     showticklabels=show_x)
+    fig.update_xaxes(showgrid=False, showticklabels=show_x)
+    if show_x:
+        _round_ticks(fig, labels)
     fig.update_yaxes(showgrid=False, tickfont=dict(size=11),
                      categoryorder="array", categoryarray=["Result"] + rows,
                      tickmode="array", tickvals=["Result"] + rows,
@@ -268,7 +321,7 @@ def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, f
         fig.add_annotation(x=1, xref="paper", y=r["stat"], text=(f"<b>{r['swing']:+.0f}</b>" if strong
                            else f"{r['swing']:+.0f}"), showarrow=False, xanchor="left", xshift=8,
                            font=dict(size=11, color=COLORS["ink"] if a == 1 else COLORS["muted"]))
-        if strong:   # the focus row's two rates, just above their dots
+        if strong and r["stat"] != stats[0]:   # the focus rates (on the top row the takeaway has them)
             for v in (r["behind_winrate"], r["ahead_winrate"]):
                 fig.add_annotation(x=v, y=r["stat"], text=f"{v:.0f}%", showarrow=False,
                                    yanchor="bottom", yshift=5,
@@ -276,12 +329,21 @@ def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, f
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, margin=dict(l=4, r=36, t=16, b=4))  # r: the swing column
     fig.update_xaxes(range=[-6, 106], tickvals=[0, 50, 100], ticktext=["0%", "50%", "100%"],
-                     showgrid=True, gridcolor=COLORS["grid"], tickfont=dict(size=10))
+                     tickfont=dict(size=10))
     fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11), tickmode="array",
                      tickvals=stats, ticktext=_bold(stats, focus if focus is not None else []))
     fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="swing", showarrow=False,
                        xanchor="left", xshift=4, yanchor="bottom",
                        font=dict(size=10, color=COLORS["muted"]))
+    # The top row's two dots say what they are, in place of a colour key (with the
+    # focus rates when the top row is the focus).
+    if len(wc):
+        r = wc.iloc[0]
+        short = lambda n: n.replace(" won it", "").replace("Their opponent", "opp")  # noqa: E731
+        tags = {"behind": short(names[1]), "ahead": short(names[0])}
+        for key in ("behind", "ahead"):   # a short name centred over each dot (rates: the takeaway)
+            fig.add_annotation(x=r[f"{key}_winrate"], y=r["stat"], showarrow=False, yanchor="bottom",
+                               yshift=5, text=tags[key], font=dict(size=10, color=COLORS["ink"]))
     return fig
 
 
@@ -311,7 +373,7 @@ def driver_scatter(pts, fit, stat, height):
     fig = style_fig(fig, "Final margin", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=8, t=8, b=4))
     fig.update_xaxes(title=dict(text=f"{stat} differential", font=dict(color=COLORS["muted"], size=11)),
-                     showgrid=True, gridcolor=COLORS["grid"], zeroline=False)
+                     zeroline=False)
     return fig
 
 
@@ -334,11 +396,13 @@ def running_margin_lines(rm, height):
         ))
     fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
     fig = style_fig(fig, "Avg margin", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=10, t=14, b=4))
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=56, t=14, b=4))
     lo, hi = float(rm[qs].min().min()), float(rm[qs].max().max())
     pad = (hi - lo) * 0.18 or 5
     fig.update_yaxes(range=[min(lo, 0) - pad, max(hi, 0) + pad])
-    return _inline_key(fig, [("Wins", COLORS["win"]), ("Losses", COLORS["loss"])])
+    _end_labels(fig, "Q4", [(float(rm.loc[r, "Q4"]), lbl) for r, lbl in (("W", "wins"), ("L", "losses"))
+                            if r in rm.index], height, min(lo, 0) - pad, max(hi, 0) + pad)
+    return fig
 
 
 def player_map(pa, xcol, ycol, xlab, ylab, size_col, height, n_labels=10):
@@ -362,8 +426,7 @@ def player_map(pa, xcol, ycol, xlab, ylab, size_col, height, n_labels=10):
     fig.add_hline(y=pa[ycol].median(), line=dict(color=COLORS["muted"], width=1, dash="dot"))
     fig = style_fig(fig, ylab + " per game", unified=False, height=height)
     fig.update_layout(showlegend=False, margin=dict(l=8, r=16, t=16, b=8))
-    fig.update_xaxes(title=dict(text=xlab + " per game", font=dict(color=COLORS["muted"], size=11)),
-                     showgrid=True, gridcolor=COLORS["grid"])
+    fig.update_xaxes(title=dict(text=xlab + " per game", font=dict(color=COLORS["muted"], size=11)))
     return fig
 
 
@@ -435,13 +498,17 @@ def game_flow_lines(game, avg, height, others=None):
         hovertemplate="This game at %{x}: <b>%{y:+.0f}</b><extra></extra>"))
     fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
     fig = style_fig(fig, "Margin", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=10, t=14, b=4))
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=64, t=14, b=4))
     lo = min(min(y), float(avg.min().min()) if len(avg) else 0,
              float(others.min().min()) if len(others) else 0)
     hi = max(max(y), float(avg.max().max()) if len(avg) else 0,
              float(others.max().max()) if len(others) else 0)
     pad = (hi - lo) * 0.15 or 5
     fig.update_yaxes(range=[lo - pad, hi + pad])
+    # Each line named at its end, in place of a colour key.
+    ends = [(y[-1], "this game")] + [(float(avg.loc[r, "Q4"]), lbl) for r, lbl in
+                                     (("W", "avg win"), ("L", "avg loss")) if r in avg.index]
+    _end_labels(fig, "Q4", ends, height, lo - pad, hi + pad)
     return fig
 
 
@@ -508,11 +575,10 @@ def player_ranges(log, stats, height):
                        xanchor="left", xshift=8, yanchor="bottom",
                        font=dict(size=10, color=COLORS["muted"]))
     fig.update_xaxes(range=[0, 210], tickvals=[0, 50, 100, 150, 200],
-                     ticktext=["0", "half", "his avg", "1.5x", "2x"], showgrid=True,
-                     gridcolor=COLORS["grid"], tickfont=dict(size=10, color=COLORS["muted"]),
+                     ticktext=["0", "half", "his avg", "1.5x", "2x"],
+                     tickfont=dict(size=10, color=COLORS["muted"]),
                      fixedrange=True)
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), showgrid=True,
-                     gridcolor=COLORS["grid"], fixedrange=True)
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), fixedrange=True)
     return fig
 
 
@@ -546,8 +612,7 @@ def break_scatter(bm, col, margin, window, brk_label, height):
     fig = style_fig(fig, "Final margin", unified=False, height=height)
     fig.update_layout(margin=dict(l=8, r=12, t=24, b=8))
     fig.update_xaxes(title=dict(text=f"Margin at {brk_label.lower()}",
-                                font=dict(color=COLORS["muted"], size=11)), showgrid=True,
-                     gridcolor=COLORS["grid"], zeroline=False)
+                                font=dict(color=COLORS["muted"], size=11)), zeroline=False)
     return fig
 
 
@@ -578,7 +643,7 @@ def answer_chart(series, title, y_title, kind="line", height=210):
         fig.update_yaxes(autorange="reversed", tickfont=dict(size=10))
         fig.update_xaxes(showticklabels=False, showgrid=False)
     else:
-        fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
+        _round_ticks(fig, series[0][1] if series else [], max_n=8, size=9)
     return fig
 
 
@@ -604,12 +669,16 @@ def rank_dumbbell(avg, ranks, team, stats, height, freo="Fremantle", team_color=
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, margin=dict(l=4, r=8, t=22, b=4))
     fig.update_xaxes(range=[18.6, 0.4], tickvals=[18, 12, 6, 1],
-                     ticktext=["18th", "12th", "6th", "1st"], showgrid=True, gridcolor=COLORS["grid"])
+                     ticktext=["18th", "12th", "6th", "1st"])
     top, low = focus if focus else ([], [])
     ticks = [f"<b>▲ {l}</b>" if l in top else f"<b>▼ {l}</b>" if l in low else l for l in labels]
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), tickmode="array",
                      tickvals=labels, ticktext=ticks)
-    return _inline_key(fig, [(team, team_color), ("Fremantle", COLORS["freo"])])
+    fig.update_layout(margin=dict(t=16))
+    col0 = stats[0][1]
+    _tag_pair(fig, labels[0], ranks.loc[team, col0], D.abbr(team), ranks.loc[freo, col0], "Freo",
+              reversed_x=True)
+    return fig
 
 
 def _last_n_band(fig, n_points, n, label):
@@ -640,7 +709,7 @@ def form_bars(games, height):
                       "(%{y:+})<extra></extra>"))
     fig = style_fig(fig, "Margin", unified=False, height=height)
     fig.update_layout(showlegend=False, bargap=0.2, margin=dict(l=4, r=6, t=6, b=4))
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=9))
+    _round_ticks(fig, x, size=9)
     fig.update_yaxes(zeroline=True, zerolinecolor=COLORS["grid"])
     last = games.tail(5)
     w = int((last["result"] == "W").sum())
@@ -683,7 +752,7 @@ def player_trend(me, col, label, height):
     fig.update_layout(margin=dict(l=4, r=8, t=14, b=4))
     if n >= 7:   # after style_fig, which resets the margins
         _last_n_band(fig, n, 5, f"last 5: {last5:.1f} a game")
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10))
+    _round_ticks(fig, x)
     lo, hi = me[col].min(), me[col].max()
     pad = (hi - lo) * 0.18 or 2
     fig.update_yaxes(range=[lo - pad, hi + pad])
@@ -734,8 +803,15 @@ def compare_trend(season_games, logs, names, col, label, height):
         if avg == avg:
             fig.add_hline(y=avg, line=dict(color=color, width=1, dash="dash"))
     fig = style_fig(fig, label, unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=8, t=10, b=4))
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=10))
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=70, t=10, b=4))
+    _round_ticks(fig, x)
+    ends = []
+    for log, name in zip(logs, names):
+        if len(log):
+            ends.append((float(log.sort_values("game_dt")[col].iloc[-1]), name.split()[-1]))
+    vals = [v for log in logs for v in log[col].dropna()]
+    if vals:
+        _end_labels(fig, x[-1], ends, height, min(vals), max(vals))
     return fig
 
 
@@ -758,9 +834,13 @@ def compare_ranks(cmp, names, height):
             hovertemplate="%{y}: " + name + " %{customdata[0]:.1f} a game, rank %{x} of "
                           "%{customdata[1]}<extra></extra>"))
     fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=12, t=4, b=4))
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=12, t=16, b=4))
     fig.update_xaxes(autorange=False, range=[squad + 0.5, 0.5], tickvals=[1, 5, 10, 15, 20, 25][: 1 + squad // 5],
                      ticktext=["1st", "5th", "10th", "15th", "20th", "25th"][: 1 + squad // 5],
                      tickfont=dict(size=10))
     fig.update_yaxes(tickfont=dict(size=11), showgrid=False, dtick=1)   # label every stat
+    if len(c):   # the top row (the last one drawn) names the two players
+        top = c.iloc[-1]
+        _tag_pair(fig, top["stat"], top["rank_a"], names[0].split()[-1], top["rank_b"],
+                  names[1].split()[-1], reversed_x=True)
     return fig

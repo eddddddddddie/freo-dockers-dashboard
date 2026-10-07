@@ -434,7 +434,8 @@ Python + Streamlit + pandas + Plotly (simple to run locally), unless a better op
 
 ## Style and constraints
 - Styled after fremantlefc.com.au's look: flat deep purple #331C54 top bar / Wharf-ai head,
-  #F7F7F7 page, white cards (4px radius, a faint shadow), Inter (Google Fonts) with bold
+  #F7F7F7 page, white cards (4px radius, no border or shadow: white on the light page is boundary
+  enough), Inter (Google Fonts) with bold
   sentence-case titles, small uppercase labels on tiles and bands, thin white dividers on purple,
   and a faint mark at the right of each band (`marks.py`, our own line drawings, never a club's
 logo or crest): the anchor for Freo, and in a club's Scout band and at their end of the Match band
@@ -452,6 +453,13 @@ claw marks for Richmond, Captain Carlton's mask, and so on), passed to the band 
   it is too close to the loss red for anyone (dE 9.8). Green vs red fails red-green colour
   vision (dE 2.9), so every win/loss mark also carries a W/L letter or a bar direction. Do NOT use the Fremantle club logo, crest,
   photos, fonts files or other trademarks.
+- Chart ink, after Tufte (`theme.style_fig`, `charts.py`): no gridlines and no axis lines; only
+  lines that mean something are drawn (a zero margin, an average, a median). x labels are
+  horizontal and thinned (`charts._round_ticks`: the round only, opponent on hover, the last game
+  always shown), never rotated. Lines are named at their ends (`charts._end_labels`), dumbbells
+  name the top row's two dots (`charts._tag_pair`), the highlighted quarter's bars carry the team
+  names, and the tale of the tape names its columns, all in place of colour keys. Only the game
+  strip and the two player tables (colour fills the cells) keep a key in the card title.
 - Sanity-check every displayed number (e.g. kicks + handballs = disposals; % change maths).
 - In written text and UI copy, don't use em dashes.
 

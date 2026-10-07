@@ -150,8 +150,7 @@ def render(team_df, player_df, season, baseline, sz):
     def wherewin():
         with card("wherewin"):
             wc = D.win_conditions(tdf)
-            card_title("Where we win", keys=[("Freo won it", COLORS["freo"]),
-                                             ("Opp won it", COLORS["opp"])],
+            card_title("Where we win", "win rate when each side won the count",
                        takeaway=T.where_we_win(wc))
             _plot(CH.win_dumbbell(wc, MID_H, focus=T.swing_stat(wc)))
 
@@ -201,7 +200,6 @@ def render(team_df, player_df, season, baseline, sz):
             with t:
                 card_title("Who's up, who's down", "last 3 games against own season avg · "
                            + ("tap a player" if PHONE else "click a player"),
-                           keys=[("up", COLORS["freo"]), ("down", COLORS["neutral"])],
                            takeaway=T.form(vals, avgs) if len(vals) else "")
             with s:
                 st.selectbox("Form stat", list(form_stats), key="form_stat",
@@ -309,19 +307,16 @@ def render_match(team_df, player_df, season, pos, sz):
     def tape_card():
         with card("tape", height=_h(MID_H + 40 + TK)):
             rows = D.tale_of_the_tape(tdf, pos)
-            card_title("Tale of the tape", keys=[("Freo", COLORS["freo"]),
-                                                 (D.abbr(game["opponent"]), opp_c),
-                                                 ("season avg share", COLORS["ink"])],
+            card_title("Tale of the tape", "tick: Freo's season average share",
                        takeaway=T.tape(rows))
-            tape(rows, opp_color=opp_c)
+            tape(rows, opp_color=opp_c, names=("Freo", D.abbr(game["opponent"])))
 
     def flow_card():
         with card("flow"):
             flow, avg = D.game_flow(tdf, pos)
             take = T.flow(flow.rename(index=BREAK_NAMES), game["result"], int(game["margin"]))
-            card_title("Game flow", keys=[("This game", COLORS["freo"]), ("Avg W", COLORS["win"]),
-                                          ("Avg L", COLORS["loss"]),
-                                          ("Others", COLORS["neutral"])], takeaway=take)
+            card_title("Game flow", "margin at each break; the season's other games in grey",
+                       takeaway=take)
             others = D.season_flows(tdf).drop(index=pos)
             _plot(CH.game_flow_lines(flow, avg, MID_H, others=others))
 
@@ -488,9 +483,8 @@ def _player_log(pdf, player, BOT_H):
                      and c in log.columns]
             in_order = log.sort_values("game_dt").reset_index(drop=True) if len(log) else log
             with t:
-                card_title("Range on each stat", "every game against his own season average · "
-                           + ("tap" if PHONE else "click") + " a game",
-                           keys=[("latest game", COLORS["freo"]), ("other games", RAMP[1])],
+                card_title("Range on each stat", "every game against his own season average, the "
+                           "latest ringed · " + ("tap" if PHONE else "click") + " a game",
                            takeaway=T.last_game_vs_avg(in_order, stats))
             if len(log) >= 2:
                 h = max(BOT_H - 10, 22 * len(stats) + 40)
@@ -534,7 +528,6 @@ def render_compare(player_df, season, a, b, sz):
     cmp = D.compare_players(pdf, a, b)
     trend_stats = {k: v for k, v in PLAYER_TREND_STATS.items() if v in pdf.columns}
     compare_tiles_row(cmp, names, [lbl for lbl, _ in D.PLAYER_TILES])
-    keys = [(n, c) for n, c in zip(names, CH.PAIR)]
 
     def trend_card():
         with card("ctrend"):
@@ -542,7 +535,7 @@ def render_compare(player_df, season, a, b, sz):
             col = trend_stats.get(label, "disposals")
             t, s = st.columns([2.4, 1], vertical_alignment="center")
             with t:
-                card_title("Game by game", "dashed: season average", keys=keys,
+                card_title("Game by game", "dashed: season average",
                            takeaway=T.compare_last(logs, names, col, label))
             with s:
                 st.selectbox("Compare stat", list(trend_stats), key="ctrend_stat",
@@ -553,7 +546,7 @@ def render_compare(player_df, season, a, b, sz):
     def ranks_card():
         with card("cranks"):
             card_title("Squad rank", f"per game, of players with {D.MIN_GAMES}+ games",
-                       keys=keys, takeaway=T.compare_ahead(cmp, names))
+                       takeaway=T.compare_ahead(cmp, names))
             if cmp[["rank_a", "rank_b"]].notna().all(axis=1).any():
                 _plot(CH.compare_ranks(cmp, names, MID_H))
             else:
@@ -595,8 +588,7 @@ def render_scout(team_df, lg, season, opp, sz):
         with card("howtheywin"):
             short = D.abbr(opp)
             wc = D.scout_win_conditions(lg, opp, season)
-            card_title("How they win", keys=[(f"{short} won it", tint),
-                                             ("Their opponent did", grey)],
+            card_title("How they win", "win rate when each side won the count",
                        takeaway=T.where_we_win(wc))
             _plot(CH.win_dumbbell(wc, MID_H, names=(f"{short} won it", "Their opponent won it"),
                                   colors=(tint, grey), focus=T.swing_stat(wc)))
@@ -693,7 +685,6 @@ def render_squad(player_df, season, baseline, sz):
             yoy = D.year_on_year(player_df, baseline, season, stats[stat])
             with t:
                 card_title("Year on year", "top 15, 8+ games in both",
-                           keys=[("up", COLORS["freo"]), ("down", COLORS["neutral"])],
                            takeaway=T.year_on_year(yoy))
             if not len(yoy):
                 st.caption("No players with enough games in both seasons.")
