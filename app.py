@@ -513,12 +513,6 @@ def _game_label(season, rnd):
     return None
 
 
-# The demo (?demo=1): a Ground view of SIMULATED positions and running (sim.py).
-# Off unless the address asks for it; it stays on for the session.
-if st.query_params.get("demo") == "1":
-    st.session_state["demo"] = True
-DEMO = bool(st.session_state.get("demo"))
-
 # A queued move from a click, or the web address on a visit's first run.
 nav.apply_pending(all_seasons, _game_label,
                   lambda s: [nav.SQUAD] + D.player_list(D.players_season(player_df, s)),
@@ -529,7 +523,7 @@ nav.apply_pending(all_seasons, _game_label,
 if PHONE:
     with st.container(key="topbar"):
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
-        hg = st.container()                   # the demo's Ground switch
+        hg = st.container()                   # the Ground switch (simulated)
         htk = st.container()                  # the insights ticker, under the controls
     band_slot = st.container()
     pick_slot = pick2_slot = pick3_slot = st.container()
@@ -540,7 +534,7 @@ elif SCROLL:
     with st.container(key="topbar"):
         hb, h2, h3, h4, h5, h6 = st.columns([1.6, 0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
                                             vertical_alignment="center")
-        hg = st.container()                   # the demo's Ground switch
+        hg = st.container()                   # the Ground switch (simulated)
         htk = st.container()                  # the insights ticker, under the controls
     top = st.container()
     if LAYOUT == "split":
@@ -557,8 +551,7 @@ else:
     with st.container(key="topbar"):
         # The insights ticker runs in the gap between the views and the icons.
         hb, h2, h3, htk, hg, h4, h5, h6 = st.columns(
-            [1.9, seasons_w, 2.7, 5.9 - seasons_w - (1.15 if DEMO else 0), 1.15 if DEMO else 0.001,
-             0.3, 0.3, 0.3],
+            [1.9, seasons_w, 2.7, 4.75 - seasons_w, 1.15, 0.3, 0.3, 0.3],
                                                 vertical_alignment="center")
     main, side = st.columns([3.55, 1])
     with main:
@@ -583,13 +576,13 @@ season = season or all_seasons[-1]
 baseline = D.baseline_season(season, all_seasons)
 tdf = D.team_season(team_df, season)
 pdf_season = D.players_season(player_df, season)
-# Demo only: Match, Player and Scout can show their subject on the ground (SIMULATED).
+# Match, Player and Scout can show their subject on the ground (SIMULATED, sim.py).
 GROUND = False
-if DEMO and view in ("Match", "Player", "Scout"):
+if view in ("Match", "Player", "Scout"):
     with hg:
         GROUND = st.toggle("Ground", key="ground_mode",
-                           help="Demo: simulated positions, goal, mark and possession spots, "
-                                "and GPS running for this game, player or club")
+                           help="Simulated: positions on the ground, where goals, marks and "
+                                "possessions happened, and GPS running for this game, player or club")
 with htk:
     insight_ticker(season_insights(season, baseline), cls="tk-bar" if not SCROLL else "tk-bar tk-strip")
 pos = scout = player = game_round = None

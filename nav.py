@@ -100,8 +100,6 @@ def write_url(season, view, game=None, player=None, opp=None, vs=None, games=Non
             state["vs"] = vs
     if view == "Scout" and opp:
         state["opp"] = opp
-    if st.session_state.get("demo"):
-        state["demo"] = "1"          # the demo stays on while the address is shared
     if dict(st.query_params) != state:
         st.query_params.from_dict(state)
 

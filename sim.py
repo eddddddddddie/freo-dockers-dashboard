@@ -1,5 +1,5 @@
-"""SIMULATED data for the demo view (?demo=1): GPS running and positions on the
-ground. None of it is real. It exists to show what the Coach View could do with
+"""SIMULATED data for the Ground switch (Match, Player, Scout): GPS running and
+positions on the ground. None of it is real. It exists to show what the Coach View could do with
 a club's tracking data, and is kept apart from the real data: it never writes
 to the CSVs, Wharf-ai's tools never see it, and every card that shows it says
 "simulated".

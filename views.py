@@ -865,8 +865,8 @@ def render_scout_ground(team_df, player_df, opp, sz):
 
 
 def render_ground(team_df, player_df, season, game_label, player, sz):
-    """The ?demo=1 view: SIMULATED positions and running (sim.py), never the real
-    data. Real counts (goals, marks, contested and uncontested possessions) at
+    """The Ground switch on Match and Player: SIMULATED positions and running
+    (sim.py), never the real data. Real counts (goals, marks, contested and uncontested possessions) at
     simulated spots, a simulated heat map, and simulated GPS running.
     game_label: "Whole season" or a game picker label; player: "Whole team" or a name."""
     import sim

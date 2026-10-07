@@ -170,7 +170,7 @@ def inject_css():
           .st-key-topbar div[data-testid="stSelectbox"] svg { fill:#fff; }
           .st-key-ground_mode label p { color:#fff; font-weight:700; font-size:.85rem; }
           /* The switch on the purple bar: a white outline track, filled amber when on
-             (the demo's colour), so on and off read at a glance. */
+             (the simulated view's colour), so on and off read at a glance. */
           .st-key-ground_mode label > div:not([data-testid]) { background:transparent !important;
             box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75); }
           .st-key-ground_mode label[data-selected="true"] > div:not([data-testid]) {

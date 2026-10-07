@@ -124,21 +124,16 @@ def test_games_slice_cuts_season_and_player_views(app):
     assert not at.exception, at.exception
 
 
-def test_ground_switch_only_with_the_demo_link(app):
-    """With ?demo=1, Match, Player and Scout get a Ground switch that shows their
-    subject on the ground (simulated); without it there's no switch."""
+def test_ground_switch_on_match_player_and_scout(app):
+    """Match, Player and Scout have a Ground switch that shows their subject on the
+    ground (simulated, and labelled so); Season doesn't."""
     at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    at = at.button_group(key="view").set_value("Match").run()
-    assert not [t for t in at.toggle if t.key == "ground_mode"]
-    at.query_params["demo"] = "1"
-    at = at.run()
+    assert not [t for t in at.toggle if t.key == "ground_mode"]          # Season
     for view in ("Match", "Player", "Scout"):
         at = at.button_group(key="view").set_value(view).run()
         at = at.toggle(key="ground_mode").set_value(True).run()
         assert not at.exception, (view, at.exception)
         assert any("SIMULATED" in m.value for m in at.markdown), view
-    at = at.button_group(key="view").set_value("Season").run()
-    assert not [t for t in at.toggle if t.key == "ground_mode"] and not at.exception
 
 
 def test_layout_modes():

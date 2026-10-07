@@ -107,11 +107,10 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   - Pressure acts track with not having the ball: Freo win more often when the opposition wins the
     pressure count, so the pressure tile has no good/bad colour.
 - Still not available anywhere we use: shot locations, xG, player positions or zones, GPS
-  running. Do not invent these anywhere in the real app. The one exception is the demo view below,
-  which is fenced off and says "simulated" on everything.
-- Demo (`?demo=1`, `sim.py`): with the demo link (it stays on for the session and in the address;
-  `DEMO` in app.py) a "Ground" switch appears in the top bar on Match, Player and Scout (white
-  outline off, amber on; `GROUND`). On, that view's body shows its subject on the ground instead,
+  running. Do not invent these. The one exception is the Ground switch below: simulated, and
+  says so on everything it shows.
+- Ground switch (`sim.py`): a "Ground" switch in the top bar on Match, Player and Scout (white
+  outline off, amber on; `GROUND` in app.py), for everyone: the app is a showcase. On, that view's body shows its subject on the ground instead,
   with the same pickers and band: Match, the team in that game (`views.render_ground`: heat map or
   goals, marks, contested and uncontested possessions, the running load table, the quarter fade);
   Player, his season (map, game-by-game running, quarter fade); Scout, the club's players in their

@@ -853,7 +853,7 @@ def compare_ranks(cmp, names, height):
 
 
 # ---- Demo (simulated): the ground, positions and running --------------------------
-# Only for the ?demo=1 view (sim.py). Every figure here carries a SIMULATED watermark.
+# Only for the Ground switch (sim.py). Every figure here carries a SIMULATED tag.
 GROUND_LINE = "#C4C4C4"
 EVENT_COLORS = {"Goals": COLORS["series3"], "Marks": COLORS["series4"],
                 "Contested": COLORS["freo"], "Uncontested": COLORS["opp"]}
