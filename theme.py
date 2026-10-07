@@ -39,6 +39,9 @@ COLORS = {
 # One-hue sequential ramp, light to dark, ending at the site purple (validated:
 # monotone lightness, visible steps, light end >= 2:1 on white).
 RAMP = ["#BEACE4", "#9F86CF", "#8061B5", "#5E3E8F", "#331C54"]
+# Heat (the simulated ground maps only): pale yellow -> orange -> deep red, the
+# usual heat map colours, lightness falling steadily (OKLCH L 0.96 -> 0.42).
+HEAT = ["#FFF3B0", "#FED976", "#FD9D43", "#F2602F", "#D42325", "#8E0F24"]
 # Diverging: opposition cyan <- neutral grey -> Freo purple.
 DIVERGE = [COLORS["opp"], "#81C4D1", "#EDEDEF", "#B8A6DD", COLORS["freo"]]
 SERIES = [COLORS["freo"], COLORS["opp"], COLORS["series3"], COLORS["series4"]]
@@ -330,9 +333,6 @@ def inject_css():
           .tk-item::after { content:""; position:absolute; right:-3px; top:50%; width:5px; height:5px;
             margin-top:-2.5px; border-radius:50%; background:#D42325; }
           @keyframes tk-run { to { transform:translateX(-50%); } }
-          .tk-bar { line-height:36px; }
-          .tk-strip { line-height:28px; border-top:1px solid rgba(255,255,255,.14); margin:2px -14px 0;
-            padding:0 4px; }
           .tk-login { line-height:42px; font-size:.9rem; margin:0 -14px 18px;
             border-top:1px solid rgba(255,255,255,.16); border-bottom:1px solid rgba(255,255,255,.16);
             background:rgba(0,0,0,.12); }
@@ -537,7 +537,6 @@ def inject_phone_css():
           .block-container { padding:0 10px 32px !important; }
           [data-testid="stLayoutWrapper"]:has(> .st-key-topbar) { margin:0 -10px 4px; }
           .mc-div { display:none; }   /* the match band wraps onto lines here */
-          .tk-strip { margin:2px -10px 0; }
           .st-key-topbar { padding:6px 10px; }
           /* Streamlit stacks columns below 640px; the controls row stays one line. */
           .st-key-topbar div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap !important; gap:6px; }
@@ -843,11 +842,6 @@ LOGIN_TICKER = [
 def login_ticker():
     """The sign-in screen's ticker along the bottom: what's inside, no numbers."""
     ticker([html.escape(t) for t in LOGIN_TICKER], cls="tk-login", speed=40)
-
-
-def insight_ticker(texts, cls="tk-bar"):
-    """The season's insights as a ticker in the top bar."""
-    ticker([_md_bold(t) for t in texts], cls=cls)
 
 
 def insight_card(text):

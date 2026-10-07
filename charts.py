@@ -4,7 +4,7 @@ two or more series."""
 
 import pandas as pd
 import plotly.graph_objects as go
-from theme import COLORS, DIVERGE, RAMP, SERIES, style_fig
+from theme import COLORS, DIVERGE, HEAT, RAMP, SERIES, style_fig
 
 import data as D
 
@@ -905,23 +905,25 @@ def ground(fig, height, attack="Freo"):
 
 
 def ground_heat(xy, height, attack="Freo"):
-    """Where the player (or team) spent the game: a smoothed density on a 2 m
-    grid, light to dark purple, clipped to the oval and clear where there's
-    little time."""
+    """Where the player (or team) spent the game: a smoothed density on a 1.5 m
+    grid, pale yellow to deep red, clipped to the oval and clear where there's
+    little time. Scaled to the 99th percentile so a few hot cells don't wash the
+    rest out, with light smoothing so the hot spots stay distinct."""
     import numpy as np
     xs, ys = np.arange(-82, 82.5, 1.5), np.arange(-66, 66.5, 1.5)
     h, _, _ = np.histogram2d(xy[:, 1], xy[:, 0], bins=[np.append(ys - 1, ys[-1] + 1),
                                                         np.append(xs - 1, xs[-1] + 1)])
-    k = np.exp(-0.5 * (np.arange(-8, 9) / 3.4) ** 2)
+    k = np.exp(-0.5 * (np.arange(-6, 7) / 2.4) ** 2)
     k /= k.sum()
     h = np.apply_along_axis(lambda r: np.convolve(r, k, mode="same"), 1, h)
     h = np.apply_along_axis(lambda c: np.convolve(c, k, mode="same"), 0, h)
-    h = h / (h.max() or 1)
+    top = np.percentile(h[h > 0], 99) if (h > 0).any() else 1
+    h = np.clip(h / (top or 1), 0, 1)
     gx, gy = np.meshgrid(xs, ys)
-    h[((gx / 82) ** 2 + (gy / 66) ** 2 > 1) | (h < 0.08)] = np.nan   # outside the oval, or barely
-    scale = [[i / (len(RAMP) - 1), c] for i, c in enumerate(RAMP)]
-    fig = go.Figure(go.Heatmap(z=h, x=xs, y=ys, colorscale=scale, zmin=0.08, zmax=1,
-                               showscale=False, opacity=0.9, hoverinfo="skip", zsmooth="best"))
+    h[((gx / 82) ** 2 + (gy / 66) ** 2 > 1) | (h < 0.04)] = np.nan   # outside the oval, or barely
+    scale = [[i / (len(HEAT) - 1), c] for i, c in enumerate(HEAT)]
+    fig = go.Figure(go.Heatmap(z=h, x=xs, y=ys, colorscale=scale, zmin=0.04, zmax=1,
+                               showscale=False, opacity=0.92, hoverinfo="skip", zsmooth="best"))
     return ground(fig, height, attack)
 
 

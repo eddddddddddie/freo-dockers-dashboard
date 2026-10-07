@@ -111,12 +111,13 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   say so on everything they show.
 - Ground cards (`sim.py`, `views._ground_card`): Match, Player and Scout each carry one card
   that shows its subject on the ground, with no switch to find it (the app is a showcase). Each
-  card has its own Heat / Events / Running control: Heat, where they spent the time; Events,
+  card has its own Heat / Events / Running control: Heat, where they spent the time (pale yellow
+  to deep red, `theme.HEAT`, scaled to the 99th percentile); Events,
   their real goals, marks, contested and uncontested possessions at simulated spots; Running,
   simulated GPS. Match (`match_ground_card`, beside the players table): the team in that game,
   running load table. Player (`player_ground_card`, beside the range card): his season, running
-  game by game. Scout (`scout_ground_card`, third in the bottom row; Heat and Events only): the
-  club's players in their games against Freo, attacking right (their roles come from their
+  game by game. Scout (`scout_ground_card`, third in the bottom row; Events only, no heat
+  map and so no control): the club's players in their games against Freo, attacking right (their roles come from their
   stats, as their positions aren't listed). Counts are the real box score; only the places and
   the GPS running are simulated (listed position, time on ground, work rate), seeded from
   season, round and player so they never change. Every figure carries an amber SIMULATED tag;
@@ -262,11 +263,8 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   the club's own font is not used) with "Freo" in italic like the site's headline, the season
   toggle (one button per season in the data; its column scales with the count) and the view
   switch as white nav links with an underline on the selected one (`aria-checked`), then the
-  outlined icon buttons: Wharf-ai usage (admins only), ?, sign out. Phones drop the title. The
-  season's insights run as a ticker (`theme.ticker`, CSS only, no reruns, pauses on hover) in the
-  bar's gap between the views and the icons on desktop, and on a thin line under the controls on
-  tablets and phones. Under
-  the bar: the picker and the band, with record, win rate, avg for/against/margin, last 5, data
+  outlined icon buttons: Wharf-ai usage (admins only), ?, sign out. Phones drop the title. No
+  ticker in the bar (removed 2026-10-07; insights live in the Wharf-ai panel). Under the bar: the picker and the band, with record, win rate, avg for/against/margin, last 5, data
   freshness and (1600px and wider) the last match score.
 - Scout mode (`views.render_scout`, needs league_team_games.csv): pick any club (defaults to the
   last opponent); band with home and away record, ladder spot (computed: 4 points a win, 2 a draw,

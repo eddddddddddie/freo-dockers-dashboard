@@ -818,19 +818,20 @@ def render_quarter_time(team_df, all_seasons, sz):
 
 
 # ---- On the ground (SIMULATED): positions and GPS running --------------------------
-def _ground_card(name, rows, role, H, who, attack="Freo", running=None):
+def _ground_card(name, rows, role, H, who, attack="Freo", running=None, heat=True):
     """A SIMULATED ground card for some player-game rows, with its own switch:
     Heat (where they spent the time), Events (their real goals, marks and
     possessions at simulated spots) and, given running = (takeaway, draw(height)),
-    Running (GPS)."""
+    Running (GPS). heat=False leaves out the heat map; with one mode, no switch."""
     import sim
     with card(name, height=_h(H)):
-        modes = ["Heat", "Events"] + (["Running"] if running else [])
-        mode = st.session_state.get(f"{name}_mode") or "Heat"
+        modes = (["Heat"] if heat else []) + ["Events"] + (["Running"] if running else [])
+        mode = st.session_state.get(f"{name}_mode") or modes[0]
         t = st.container()           # the title, drawn once the mode's figures are known
-        st.segmented_control("Ground", modes, default="Heat", key=f"{name}_mode",
-                             label_visibility="collapsed")
-        chart_h = (H - 108) if LAYOUT == "desktop" else 300
+        if len(modes) > 1:
+            st.segmented_control("Ground", modes, default=modes[0], key=f"{name}_mode",
+                                 label_visibility="collapsed")
+        chart_h = (H - (108 if len(modes) > 1 else 70)) if LAYOUT == "desktop" else 300
         if mode == "Running":
             with t:
                 card_title("Running", "SIMULATED GPS", takeaway=running[0])
@@ -904,8 +905,10 @@ def player_ground_card(player_df, season, player, H):
 
 
 def scout_ground_card(player_df, opp, H):
-    """The club's players in their games against Freo, every season, on the ground
-    (SIMULATED spots, their real counts), attacking to the right."""
+    """The club's goals, marks and possessions in their games against Freo, every
+    season, on the ground (their real counts at SIMULATED spots), attacking to the
+    right. No heat map here."""
     import sim
     theirs = sim.opp_rows(opp)
-    _ground_card("gscout", theirs, sim.roles(theirs), H, f"{D.abbr(opp)} v Freo", attack=D.abbr(opp))
+    _ground_card("gscout", theirs, sim.roles(theirs), H, f"{D.abbr(opp)} v Freo", attack=D.abbr(opp),
+                 heat=False)

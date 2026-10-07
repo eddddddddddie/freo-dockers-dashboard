@@ -133,8 +133,10 @@ def test_ground_cards_on_match_player_and_scout(app):
         at = at.button_group(key="view").set_value(view).run()
         assert not at.exception, (view, at.exception)
         assert any("SIMULATED" in m.value for m in at.markdown), view
-        modes = ["Events", "Running"] if key != "gscout_mode" else ["Events"]
-        for mode in modes:
+        if key == "gscout_mode":            # Scout: events only, so no switch
+            assert not [b for b in at.button_group if b.key == key], view
+            continue
+        for mode in ("Events", "Running"):
             at = at.button_group(key=key).set_value(mode).run()
             assert not at.exception, (view, mode, at.exception)
 

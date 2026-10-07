@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, insight_ticker, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -521,7 +521,6 @@ nav.apply_pending(all_seasons, _game_label,
 if PHONE:
     with st.container(key="topbar"):
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
-        htk = st.container()                  # the insights ticker, under the controls
     band_slot = st.container()
     pick_slot = pick2_slot = pick3_slot = st.container()
     chat_slot = st.container(border=True, key="card_wharfai")
@@ -531,7 +530,6 @@ elif SCROLL:
     with st.container(key="topbar"):
         hb, h2, h3, h4, h5, h6 = st.columns([1.6, 0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
                                             vertical_alignment="center")
-        htk = st.container()                  # the insights ticker, under the controls
     top = st.container()
     if LAYOUT == "split":
         main, side = st.columns([2.6, 1])
@@ -545,8 +543,8 @@ elif SCROLL:
 else:
     seasons_w = 0.55 * len(all_seasons)       # the season buttons, about 0.55 each
     with st.container(key="topbar"):
-        # The insights ticker runs in the gap between the views and the icons.
-        hb, h2, h3, htk, h4, h5, h6 = st.columns(
+        # An empty gap between the views and the icons.
+        hb, h2, h3, _gap, h4, h5, h6 = st.columns(
             [1.9, seasons_w, 2.7, 5.9 - seasons_w, 0.3, 0.3, 0.3],
                                                 vertical_alignment="center")
     main, side = st.columns([3.55, 1])
@@ -572,8 +570,6 @@ season = season or all_seasons[-1]
 baseline = D.baseline_season(season, all_seasons)
 tdf = D.team_season(team_df, season)
 pdf_season = D.players_season(player_df, season)
-with htk:
-    insight_ticker(season_insights(season, baseline), cls="tk-bar" if not SCROLL else "tk-bar tk-strip")
 pos = scout = player = game_round = None
 page = None   # "squad", "clubs" or "qt": a picker's page across all its options
 
