@@ -238,12 +238,21 @@ def render(team_df, player_df, season, baseline, sz):
                         and point.get("curve_number") == 1:
                     nav.go(view="Match", season=season, game=pts["round"].iloc[point["point_index"]])
                 return
-            card_title("What drives our margin", "r, not cause · " + ("tap" if PHONE else "click")
-                       + " a stat", takeaway=T.drivers(dr))
-            ev = _plot(CH.drivers_bar(dr, BOT_H, focus=T.top_driver(dr)), key=f"drv_{season}_{n}")
+            card_title("What drives our margin", "strongest first; each dot a game, the count's "
+                       "difference across, the margin up · r, not cause · " + ("tap" if PHONE else "click")
+                       + " one",
+                       takeaway=T.drivers(dr))
+            # Small multiples: a tiny scatter per stat, strongest first, two to a row, as
+            # many rows as fit at about 60px (the weaker ones are nearly flat).
+            h = BOT_H if LAYOUT == "desktop" else 360
+            n_rows = max(2, min(6, int((h - 10) / 62)))
+            panels = [(stat, *D.driver_points(tdf, stat)) for stat in dr["stat"][: 2 * n_rows]]
+            ev = _plot(CH.driver_multiples(panels, h, focus=T.top_driver(dr)),
+                       key=f"drv_{season}_{n}")
             point = nav.clicked(ev)
-            if point is not None and point.get("y") in set(dr["stat"]):
-                st.session_state["driver_pick"] = point["y"]
+            if point is not None and point.get("curve_number") is not None \
+                    and point["curve_number"] < len(panels):
+                st.session_state["driver_pick"] = panels[point["curve_number"]][0]
                 st.rerun()
 
     arrange(desktop=[([2.2, 1.35, 1.15], [strip, wherewin, quarters]),

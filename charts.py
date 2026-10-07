@@ -257,41 +257,6 @@ def game_strip(rows, z, hover, labels, results, height, focus=None, show_x=True)
     return fig
 
 
-def drivers_bar(dr, height, focus=None):
-    """Correlation of each differential with margin, strongest first. Positive
-    (goes with winning) in Freo purple, negative in muted grey. focus: the stat
-    the takeaway names (the strongest)."""
-    colors = [COLORS["freo"] if r > 0 else COLORS["neutral"] for r in dr["r"]]
-    alpha = _alpha(dr["stat"], focus)
-    fig = go.Figure(go.Bar(
-        y=dr["stat"], x=dr["r"], orientation="h",
-        marker=dict(color=colors, cornerradius=3, opacity=alpha),
-        text=[f"{r:+.2f}" if r > 0 else "" for r in dr["r"]], textposition="outside",
-        textfont=dict(size=10, color=_ink(alpha)), cliponaxis=False,
-        hoverinfo="skip",
-    ))
-    # Clicks on bars aren't reported by Streamlit, so invisible point markers along
-    # each row carry the click (to open that stat's scatter) and the hover.
-    fig.add_trace(go.Scatter(
-        x=[r / 2 for r in dr["r"]], y=dr["stat"], mode="markers", showlegend=False,
-        marker=dict(symbol="square", size=16, opacity=0.001), customdata=dr[["r", "games"]].values,
-        hovertemplate="%{y} differential vs margin<br>r = <b>%{customdata[0]:+.2f}</b> over "
-                      "%{customdata[1]} games<br>Click for every game<extra></extra>"))
-    # Negative values labelled just right of zero, clear of the stat names.
-    for stat, r, a in zip(dr["stat"], dr["r"], alpha):
-        if r <= 0:
-            fig.add_annotation(x=0, y=stat, text=f"{r:+.2f}", showarrow=False,
-                               xanchor="left", xshift=4,
-                               font=dict(size=10, color=COLORS["ink"] if a == 1 else COLORS["muted"]))
-    fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=30, t=4, b=4), bargap=0.3)
-    fig.update_xaxes(range=[-0.8, 1.15], showticklabels=False, showgrid=False,
-                     zeroline=True, zerolinecolor=COLORS["grid"], zerolinewidth=1)
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11), tickmode="array",
-                     tickvals=list(dr["stat"]), ticktext=_bold(list(dr["stat"]), focus or []))
-    return fig
-
-
 def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, focus=None):
     """Where we win, as a dumbbell: on each stat, the win rate when the other side
     won the count (left dot) to the win rate when Freo won it (right dot), sorted
@@ -344,6 +309,47 @@ def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, f
         for key in ("behind", "ahead"):   # a short name centred over each dot (rates: the takeaway)
             fig.add_annotation(x=r[f"{key}_winrate"], y=r["stat"], showarrow=False, yanchor="bottom",
                                yshift=5, text=tags[key], font=dict(size=10, color=COLORS["ink"]))
+    return fig
+
+
+def driver_multiples(panels, height, cols=2, focus=None):
+    """What drives our margin as small multiples (after Tufte): one tiny scatter
+    per stat, every game's differential (across, its own scale) against the final
+    margin (up, the same scale in every panel), strongest relationship first, each
+    titled with its stat and r. No ticks, just a faint zero line, so the shape is
+    what reads. focus: the takeaway's stat, in purple; the rest in grey. Clicking a
+    panel's dot opens that stat (curve_number is the panel's position in panels).
+    panels: [(stat, pts, fit)] from data.driver_points."""
+    from plotly.subplots import make_subplots
+    n = len(panels)
+    rows = -(-n // cols)
+    titles = [f"<b>{st}</b> {fit['r']:+.2f}" if st == focus else f"{st} {fit['r']:+.2f}"
+              for st, _, fit in panels]
+    fig = make_subplots(rows=rows, cols=cols, shared_yaxes=True, horizontal_spacing=0.08,
+                        vertical_spacing=min(0.22, 24 / max(height, 1) * rows / max(rows - 1, 1) * 0.9),
+                        subplot_titles=titles)
+    margins = [m for _, pts, _ in panels for m in pts["margin"]]
+    lo, hi = min(margins), max(margins)
+    pad = (hi - lo) * 0.08
+    for i, (stat, pts, fit) in enumerate(panels):
+        r, c = i // cols + 1, i % cols + 1
+        strong = focus is None or stat == focus
+        fig.add_trace(go.Scatter(
+            x=pts["diff"], y=pts["margin"], mode="markers", showlegend=False,
+            marker=dict(size=4, color=COLORS["freo"] if strong else COLORS["muted"],
+                        opacity=0.85 if strong else 0.55),
+            customdata=pts[["label", "opponent"]].values,
+            hovertemplate="<b>%{customdata[0]}</b> v %{customdata[1]}<br>" + stat
+                          + " diff %{x:+,.0f} · margin %{y:+d}<br>Click for every game<extra></extra>"),
+            row=r, col=c)
+        fig.add_hline(y=0, line=dict(color=COLORS["grid"], width=1), row=r, col=c)
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=4, t=18, b=2))
+    fig.update_xaxes(showticklabels=False, fixedrange=True)
+    fig.update_yaxes(showticklabels=False, fixedrange=True, range=[lo - pad, hi + pad])
+    for ann in fig.layout.annotations:   # the panel titles
+        ann.font = dict(size=10, color=COLORS["ink"])
+        ann.yshift = -2
     return fig
 
 

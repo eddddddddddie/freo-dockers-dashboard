@@ -204,7 +204,9 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   the gap, the swing labelled in a column at the right. Quarters has a third view, Games
   (`D.quarter_strip`, drawn with `charts.game_strip(show_x=False)`): Q1-Q4 by game, purple Freo
   won the quarter, cyan the opposition, click a cell to open the game. What drives our margin is
-  a drill-down: click a stat (invisible point markers carry the click, as Streamlit doesn't
+  small multiples (`charts.driver_multiples`: a tiny scatter per stat, each game's differential
+  across and the margin up on a shared scale, titled with r, strongest first, two to a row and as
+  many rows as fit, the takeaway's stat in purple) and a drill-down: click a panel (invisible point markers carry the click, as Streamlit doesn't
   report clicks on bars) for `charts.driver_scatter` (every game's differential against the
   margin, win/loss colours, a least-squares line; click a point to open that game); the back
   arrow returns, and the chart key changes on the way back so the old click isn't reported again.
