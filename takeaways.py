@@ -141,6 +141,24 @@ def flow(game, result, margin):
     return f"{word.capitalize()} by {abs(margin)}; {'never behind' if game.min() >= 0 else 'never ahead'} at a break"
 
 
+def momentum(events, run, result, margin, opp_label):
+    """'Up 17 in Q4, lost by 7: BRL 4.0 unanswered' (short: the card is narrow).
+    run: the game's biggest scoring run (data.scoring_runs), or None."""
+    lead, trail = int(events["margin"].max()), int(events["margin"].min())
+    q_lead = int(events.loc[events["margin"].idxmax(), "quarter"])
+    q_trail = int(events.loc[events["margin"].idxmin(), "quarter"])
+    word = {"W": f"won by {abs(margin)}", "L": f"lost by {abs(margin)}", "D": "drew"}[result]
+    who = "Freo" if run is not None and run["team"] == "Freo" else opp_label
+    run_txt = "" if run is None else f"{who} {run['goals']}.{run['behinds']} unanswered"
+    if result == "L" and lead > 0:
+        head = f"Up {lead} in Q{q_lead}, {word}"
+    elif result == "W" and trail < 0:
+        head = f"Down {-trail} in Q{q_trail}, {word}"
+    else:
+        head = word.capitalize()
+    return f"{head}: {run_txt}" if run_txt else head
+
+
 def match_leaders(goals, opp_goals=None, opp_label=None):
     """'Goals: Voss 3, Dudley 2 · BRL: Neale 3' (the opposition's when known)."""
     text = f"Goals: {goals}" if goals != "none" else "No Freo goals recorded"

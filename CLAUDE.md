@@ -13,7 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `PLAYER_PHOTOS = "afl"` in secrets loads the AFL's headshots from afl.com.au (they are the AFL's
   photos, never stored in the repo; a cached HEAD check falls back to initials if one is missing).
 - Scrape: `python freo_scraper.py 2025 2026` (no args defaults to 2025 and 2026). Takes about
-  1.5 s per match, so plan for a minute or so per season. Writes both CSVs into the current directory.
+  1.5 s per match, so plan for a minute or so per season. Writes its three CSVs into the current
+  directory (the third, `freo_score_events.csv`, from the same pages: no extra requests).
 - Advanced stats: `python afl_api_scraper.py 2025 2026` (same defaults, about 3 minutes for both
   seasons). Writes `freo_player_games_ext.csv`, `freo_team_games_ext.csv` and
   `opp_player_games_ext.csv` (the opposition's players in each Freo game, for the Match view's
@@ -76,6 +77,12 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
     bounces, goal_assists, pct_played.
   - `freo_team_games.csv`: one row per game, Freo totals (`freo_*`) vs opposition totals (`opp_*`),
     plus scores, quarter-by-quarter scoring strings, crowd.
+  - `freo_score_events.csv`: every score in every game, in order, from each page's scoring
+    progression (`freo_scraper.parse_scoring`, parsed from the raw HTML because its quarter rows
+    are left unclosed): quarter, quarter length and seconds into it, team (Freo / Opp), goal or
+    behind, player (blank and `rushed` = 1 for rushed behinds), running score. Scraped 2026-10-08:
+    3390 scores in 74 games; every score adds 6 or 1 to its side and every break matches the
+    quarter strings (`tests/test_data.py`). Game clock = earlier quarters' full lengths + seconds.
 - Scraped 2026-09-29 with no warnings: 51 games (2025: 24, 2026: 27); 2024 added 2026-10-01 with
   `refresh.py 2024`: 74 games (2024: 23, no finals), 23 players per game, 1702 player rows. The
   same refresh brought in Champion Data's later revisions to 2026 metres gained (a few metres in
@@ -288,8 +295,13 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   line, Freo purple fading into the opposition's dark club colour with their accent stripe; tiles
   show this game against the season average (sparkline accents that game); tale of the tape (Freo
   vs opposition share per stat, the opposition in their club chart colour, tick at Freo's season
-  average share); game flow (running margin at each break vs the season's average win and loss,
-  the season's other games faint grey behind, no hover); game leaders for both sides
+  average share); Momentum (`charts.momentum_chart`, two panels on one game clock: the margin
+  after every score as a step line with goals as dots and behinds as ticks in each side's colour,
+  the game's biggest run of 3+ goals unanswered shaded and labelled; under it, momentum bars,
+  `data.momentum`: the quarter's scores so far, each weighted down by half every 4 minutes
+  (`MOMENTUM_HALF_LIFE`), Freo up, the opposition down, back to 0 at each quarter; takeaway like
+  "Up 17 in Q4, lost by 7: BRL 4.0 unanswered"; without score events the old game flow card,
+  margin at each break, is drawn instead); game leaders for both sides
   (`theme.leaders_pair`, surnames, from `opp_player_games_ext.csv`; Freo only without it) + goals; every Freo
   player in the game (scrolls inside its card). The players card is a stats table (`views._match_players`, `st.dataframe`): every
   player, rating points then 9 stats, each cell the number and a bar against the team's best

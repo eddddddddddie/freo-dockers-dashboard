@@ -189,3 +189,55 @@ def test_last_game_takeaway_counts_stats_above_average(players):
     stats = [("Disposals", "disposals"), ("Tackles", "tackles"), ("Goals", "goals")]
     above = sum(log.iloc[-1][c] > log[c].mean() for _, c in stats)
     assert f"above his average on {above} of 3 stats" in T.last_game_vs_avg(log, stats)
+
+
+def test_score_events_add_up_to_every_quarter(team):
+    """freo_score_events.csv: every game has its scores, each adds 6 (goal) or 1
+    (behind) to the side that kicked it, times run forward within a quarter, and
+    the running score at each break is the quarter score string."""
+    ev = D.load_score_events()
+    assert ev is not None
+    for _, g in team.iterrows():
+        e = ev[(ev["season"] == g["season"]) & (ev["round"] == g["round"])
+               & (ev["opponent"] == g["opponent"])].sort_values("event")
+        assert len(e), (g["season"], g["round"])
+        step_f = e["freo_score"].diff().fillna(e["freo_score"].iloc[0])
+        step_o = e["opp_score"].diff().fillna(e["opp_score"].iloc[0])
+        want = e["kind"].map({"goal": 6, "behind": 1})
+        assert ((e["team"] == "Freo") & (step_f == want) & (step_o == 0)
+                | (e["team"] == "Opp") & (step_o == want) & (step_f == 0)).all(), g["round"]
+        assert (e.groupby("quarter")["secs"].diff().fillna(0) >= 0).all()
+        assert (e["secs"] <= e["quarter_secs"]).all()
+        for q, (f, o) in enumerate(zip(qtr_points(g["freo_qtrs"]), qtr_points(g["opp_qtrs"])), 1):
+            upto = e[e["quarter"] <= q]
+            assert (int(upto["freo_score"].iloc[-1]) if len(upto) else 0,
+                    int(upto["opp_score"].iloc[-1]) if len(upto) else 0) == (f, o), (g["round"], q)
+
+
+def test_momentum_and_runs_on_the_2026_grand_final(team):
+    """Brisbane's last four goals: the biggest run (4.0, 24 points, all in Q4),
+    momentum at its lowest after them, and 0 at every quarter's first bounce."""
+    import takeaways as T
+    g = team[(team["season"] == 2026) & (team["round"] == "GF")].iloc[0]
+    events, quarters = D.game_events(g)
+    assert int(events["margin"].iloc[-1]) == int(g["margin"])
+    run = D.scoring_runs(events).iloc[0]
+    assert (run["team"], run["goals"], run["behinds"], run["points"]) == ("Opp", 4, 0, 24)
+    assert run["q_start"] == run["q_end"] == 4
+    mom = D.momentum(events, quarters)
+    starts = mom.groupby("quarter")["momentum"].first()
+    assert (starts == 0).all()
+    assert mom["momentum"].idxmin() == len(mom) - 1 or mom.loc[mom["momentum"].idxmin(), "quarter"] == 4
+    assert T.momentum(events, run, "L", -7, "BRL") == "Up 17 in Q4, lost by 7: BRL 4.0 unanswered"
+
+
+def test_momentum_halves_every_half_life():
+    """One Freo goal 2 minutes into a 30 minute quarter: momentum is 6 when it's
+    kicked, 3 one half-life later, and back to 0 at the next quarter."""
+    q = pd.DataFrame({"start": [0.0, 30.0], "length": [30.0, 30.0]}, index=[1, 2])
+    ev = pd.DataFrame({"quarter": [1], "t": [2.0], "pts": [6]})
+    mom = D.momentum(ev, q)
+    q1 = mom[mom["quarter"] == 1].set_index("t")["momentum"]
+    assert q1[1.5] == 0 and q1[2.0] == 6
+    assert abs(q1[2.0 + D.MOMENTUM_HALF_LIFE] - 3) < 1e-9
+    assert (mom[mom["quarter"] == 2]["momentum"] == 0).all()

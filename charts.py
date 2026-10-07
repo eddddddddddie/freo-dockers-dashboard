@@ -518,6 +518,84 @@ def game_flow_lines(game, avg, height, others=None):
     return fig
 
 
+def _clock(t, quarters):
+    """Minutes from the first bounce -> 'Q3 12:05'."""
+    q = int(quarters.index[(quarters["start"] <= t + 1e-9)].max())
+    m = (t - quarters.loc[q, "start"]) * 60
+    return f"Q{q} {int(m // 60)}:{int(m % 60):02d}"
+
+
+def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None):
+    """The game minute by minute, in two panels on the same clock.
+    Top: the margin after every score (a step line), goals as dots in each side's
+    colour, behinds as small ticks; the game's biggest scoring run shaded.
+    Bottom: momentum, who has been scoring lately (see data.momentum), Freo up,
+    the opposition down. Quarter breaks are thin lines; each quarter is labelled."""
+    from plotly.subplots import make_subplots
+    opp_color = opp_color or COLORS["opp"]
+    side = {"Freo": COLORS["freo"], "Opp": opp_color}
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.62, 0.38],
+                        vertical_spacing=0.07)
+    end = float(quarters["start"].iloc[-1] + quarters["length"].iloc[-1])
+    x = [0.0] + events["t"].tolist() + [end]
+    y = [0] + events["margin"].tolist() + [int(events["margin"].iloc[-1])]
+    fig.add_trace(go.Scatter(x=x, y=y, mode="lines", line=dict(color=COLORS["ink"], width=1.5,
+                                                               shape="hv"),
+                             hoverinfo="skip", showlegend=False), row=1, col=1)
+    for team, name in (("Freo", "Freo"), ("Opp", opp)):
+        for kind, size in (("goal", 7), ("behind", 4)):
+            e = events[(events["team"] == team) & (events["kind"] == kind)]
+            if not len(e):
+                continue
+            who = e["player"].where(e["player"] != "", "Rushed")
+            fig.add_trace(go.Scatter(
+                x=e["t"], y=e["margin"], mode="markers", showlegend=False,
+                marker=dict(size=size, color=side[team], line=dict(color="#FFFFFF", width=1)),
+                text=[f"{_clock(t, quarters)} · {name}: {p} {kind}<br>{f}-{o} ({m:+d})"
+                      for t, p, f, o, m in zip(e["t"], who, e["freo_score"], e["opp_score"], e["margin"])],
+                hovertemplate="%{text}<extra></extra>"), row=1, col=1)
+    lo, hi = min(min(y), 0), max(max(y), 0)
+    pad = max((hi - lo) * 0.18, 4)
+    if run is not None:
+        fig.add_vrect(x0=run["start"] - 0.4, x1=run["end"] + 0.4, row=1, col=1, line_width=0,
+                      fillcolor=side[run["team"]], opacity=0.12, layer="below")
+        who = "Freo" if run["team"] == "Freo" else opp
+        mid = (run["start"] + run["end"]) / 2      # kept inside the plot near either end
+        anchor = "right" if mid > end * 0.85 else "left" if mid < end * 0.15 else "center"
+        fig.add_annotation(x={"right": run["end"] + 0.4, "left": run["start"] - 0.4}.get(anchor, mid),
+                           y=hi + pad * 0.55, row=1, col=1, xanchor=anchor,
+                           text=f"<b>{who} {run['goals']}.{run['behinds']}</b>", showarrow=False,
+                           font=dict(size=10, color=COLORS["ink"]))
+    up = mom["momentum"].clip(lower=0)
+    down = mom["momentum"].clip(upper=0)
+    step = float(mom["t"].diff().median() or 0.5)
+    for vals, color, name in ((up, COLORS["freo"], "Freo"), (down, opp_color, opp)):
+        fig.add_trace(go.Bar(
+            x=mom["t"], y=vals, width=step, marker=dict(color=color, line=dict(width=0)),
+            text=[_clock(t, quarters) for t in mom["t"]], showlegend=False,
+            hovertemplate="%{text} · momentum %{y:+.1f} (" + name + ")<extra></extra>"), row=2, col=1)
+    for start in quarters["start"].iloc[1:]:
+        for r in (1, 2):
+            fig.add_vline(x=float(start), line=dict(color=COLORS["neutral"], width=1), row=r, col=1)
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"), row=1, col=1)
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, bargap=0, margin=dict(l=4, r=6, t=8, b=4))
+    mids = (quarters["start"] + quarters["length"] / 2).tolist()
+    fig.update_xaxes(range=[0, end], tickmode="array", tickvals=mids,
+                     ticktext=[f"Q{q}" for q in quarters.index], row=2, col=1)
+    fig.update_xaxes(showticklabels=False, row=1, col=1)
+    fig.update_yaxes(range=[lo - pad, hi + pad], title=dict(text="Margin", font=dict(size=10)),
+                     row=1, col=1)
+    top = max(float(mom["momentum"].abs().max()), 6)
+    fig.update_yaxes(range=[-top * 1.1, top * 1.1], showticklabels=False, row=2, col=1,
+                     title=dict(text="Momentum", font=dict(size=10)))
+    # Which way is whose, named on the momentum panel instead of a key.
+    for yv, name, color in ((top, "Freo", COLORS["freo"]), (-top, opp, opp_color)):
+        fig.add_annotation(x=0.3, y=yv, row=2, col=1, text=name, showarrow=False, xanchor="left",
+                           yanchor="top" if yv > 0 else "bottom", font=dict(size=10, color=color))
+    return fig
+
+
 def match_player_grid(vals, pct, labels, height):
     """Every Freo player in one game: the number, shaded light to dark purple by
     that number as a % of the player's own season average."""

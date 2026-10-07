@@ -40,7 +40,7 @@ META = "data_refresh.json"
 # Scraper, then the files it writes (each has a season column). In this order:
 # league_scraper checks its Fremantle rows against the fresh AFL Tables file.
 STEPS = [
-    ("freo_scraper.py", ["freo_player_games.csv", "freo_team_games.csv"]),
+    ("freo_scraper.py", ["freo_player_games.csv", "freo_team_games.csv", "freo_score_events.csv"]),
     ("afl_api_scraper.py", ["freo_player_games_ext.csv", "freo_team_games_ext.csv",
                             "opp_player_games_ext.csv", "freo_squad.csv"]),
     ("league_scraper.py", ["league_team_games.csv"]),

@@ -20,6 +20,7 @@ TEAM_CSV = "freo_team_games.csv"
 PLAYER_EXT_CSV = "freo_player_games_ext.csv"
 TEAM_EXT_CSV = "freo_team_games_ext.csv"
 OPP_PLAYER_CSV = "opp_player_games_ext.csv"   # the opposition's players in Freo games
+EVENTS_CSV = "freo_score_events.csv"          # every score in every Freo game, in order
 DATE_FMT = "%a %d-%b-%Y %I:%M %p"
 EXT_META = ["api_round", "date_local", "freo_side", "match_id", "player_id"]
 # API names for stats AFL Tables already has (AFL Tables name on the right).
@@ -497,6 +498,71 @@ def opp_match_leaders(game_row):
     g = o[(o["season"] == game_row["season"]) & (o["opponent"] == game_row["opponent"])
           & ((o["_d"] - game_row["game_dt"].normalize()).abs() <= pd.Timedelta(days=1))]
     return _leaders(g) if len(g) else None
+
+
+# ---- Momentum: every score in a game, in order (AFL Tables' scoring progression) ----
+MOMENTUM_HALF_LIFE = 4.0   # minutes: a score counts half as much 4 minutes later
+RUN_GOALS = 3              # a scoring run worth naming: 3+ goals unanswered
+
+
+@st.cache_data
+def load_score_events():
+    """freo_score_events.csv, or None if it hasn't been scraped."""
+    if not os.path.exists(EVENTS_CSV):
+        return None
+    ev = pd.read_csv(EVENTS_CSV)
+    ev["player"] = ev["player"].fillna("")
+    return ev
+
+
+def game_events(game_row):
+    """One game's scores in order, with the game clock: (events, quarters) or None.
+    events adds t (minutes from the first bounce, counting each earlier quarter's
+    full length), pts (+ Freo, - opposition) and margin; quarters gives each
+    quarter's start and length in minutes."""
+    ev = load_score_events()
+    if ev is None:
+        return None
+    e = ev[(ev["season"] == game_row["season"]) & (ev["round"] == game_row["round"])
+           & (ev["opponent"] == game_row["opponent"])].sort_values("event").copy()
+    if not len(e):
+        return None
+    lens = e.groupby("quarter")["quarter_secs"].first().reindex(range(1, 5)).fillna(30 * 60) / 60
+    quarters = pd.DataFrame({"start": lens.cumsum().shift(fill_value=0), "length": lens})
+    e["t"] = e["quarter"].map(quarters["start"]) + e["secs"] / 60
+    e["pts"] = e["kind"].map({"goal": 6, "behind": 1}) * e["team"].map({"Freo": 1, "Opp": -1})
+    e["margin"] = e["freo_score"] - e["opp_score"]
+    return e.reset_index(drop=True), quarters
+
+
+def momentum(events, quarters, step=0.5):
+    """Who has been scoring lately, every `step` minutes: the sum of the scores so
+    far in the quarter, each weighted down by half every MOMENTUM_HALF_LIFE
+    minutes. Positive is Freo. It starts at 0 each quarter: the break stops play."""
+    rows = []
+    for q, (start, length) in quarters.iterrows():
+        in_q = events[events["quarter"] == q]
+        for t in np.arange(start, start + length + 1e-9, step):
+            past = in_q[in_q["t"] <= t]
+            m = float((past["pts"] * 0.5 ** ((t - past["t"]) / MOMENTUM_HALF_LIFE)).sum())
+            rows.append({"t": round(float(t), 3), "quarter": q, "momentum": m})
+    return pd.DataFrame(rows)
+
+
+def scoring_runs(events):
+    """Unanswered scoring: each stretch of scores by one side with none by the
+    other, biggest first (points, then goals). Columns: team, goals, behinds,
+    points, start/end (minutes), q_start/q_end, first (event number it starts at)."""
+    if not len(events):
+        return pd.DataFrame()
+    block = (events["team"] != events["team"].shift()).cumsum()
+    runs = events.groupby(block).agg(
+        team=("team", "first"), goals=("kind", lambda k: int((k == "goal").sum())),
+        behinds=("kind", lambda k: int((k == "behind").sum())),
+        start=("t", "first"), end=("t", "last"), q_start=("quarter", "first"),
+        q_end=("quarter", "last"), first=("event", "first"))
+    runs["points"] = 6 * runs["goals"] + runs["behinds"]
+    return runs.sort_values(["points", "goals"], ascending=False).reset_index(drop=True)
 
 
 # ---- Quarter-time check ---------------------------------------------------------

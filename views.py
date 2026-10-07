@@ -322,6 +322,18 @@ def render_match(team_df, player_df, season, pos, sz):
             tape(rows, opp_color=opp_c, names=("Freo", D.abbr(game["opponent"])))
 
     def flow_card():
+        ev = D.game_events(game)
+        if ev is not None:              # every score in order: the momentum card
+            with card("flow"):
+                events, quarters = ev
+                runs = D.scoring_runs(events)
+                run = runs.iloc[0] if len(runs) and runs.iloc[0]["goals"] >= D.RUN_GOALS else None
+                card_title("Momentum", "margin · bars: recent scoring",
+                           takeaway=T.momentum(events, run, game["result"], int(game["margin"]),
+                                               D.abbr(game["opponent"])))
+                _plot(CH.momentum_chart(events, quarters, D.momentum(events, quarters), run,
+                                        MID_H, opp=D.abbr(game["opponent"]), opp_color=opp_c))
+            return
         with card("flow"):
             flow, avg = D.game_flow(tdf, pos)
             take = T.flow(flow.rename(index=BREAK_NAMES), game["result"], int(game["margin"]))
