@@ -232,8 +232,10 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   stat by stat table (season and last 5; phones show season and gap). Colours: player A Freo
   purple, player B cyan (`charts.PAIR`, validated, CVD dE 17). `data.compare_players` builds the
   rows. Wharf-ai gets comparison questions on that page.
-- Coach research: `docs/coach_sessions.md` is a 30-minute task script (five timed tasks with the
-  correct answers, what to watch for, note sheet, debrief). Re-run it after each design round.
+- Coach research: `docs/coach_sessions.md` is a 30-minute task script (six timed tasks plus one
+  if time, with the expected answers, what to watch for, note sheet, debrief).
+  `python evals/coach_answers.py [season]` works out every expected answer from the current data
+  (print it before each round). Re-run the sessions after each design round.
 - Top bar (`st-key-topbar`, every layout, after the club site's nav bar): flat purple, edge to
   edge (its wrapper takes negative margins; the CSS-only markdown blocks above it are taken out
   of the flow so there's no gap), the title "*Freo* Coach View" in Source Serif 4 (Google Fonts;
