@@ -22,7 +22,7 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, insight_ticker, demo_band, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, insight_ticker, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
                    insight_card, insight_rotator)
 import auth
 import settings
@@ -529,6 +529,7 @@ nav.apply_pending(all_seasons, _game_label,
 if PHONE:
     with st.container(key="topbar"):
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
+        hg = st.container()                   # the demo's Ground switch
         htk = st.container()                  # the insights ticker, under the controls
     band_slot = st.container()
     pick_slot = pick2_slot = pick3_slot = st.container()
@@ -539,6 +540,7 @@ elif SCROLL:
     with st.container(key="topbar"):
         hb, h2, h3, h4, h5, h6 = st.columns([1.6, 0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
                                             vertical_alignment="center")
+        hg = st.container()                   # the demo's Ground switch
         htk = st.container()                  # the insights ticker, under the controls
     top = st.container()
     if LAYOUT == "split":
@@ -554,7 +556,9 @@ else:
     seasons_w = 0.55 * len(all_seasons)       # the season buttons, about 0.55 each
     with st.container(key="topbar"):
         # The insights ticker runs in the gap between the views and the icons.
-        hb, h2, h3, htk, h4, h5, h6 = st.columns([1.9, seasons_w, 2.7, 5.9 - seasons_w, 0.3, 0.3, 0.3],
+        hb, h2, h3, htk, hg, h4, h5, h6 = st.columns(
+            [1.9, seasons_w, 2.7, 5.9 - seasons_w - (1.15 if DEMO else 0), 1.15 if DEMO else 0.001,
+             0.3, 0.3, 0.3],
                                                 vertical_alignment="center")
     main, side = st.columns([3.55, 1])
     with main:
@@ -567,8 +571,7 @@ with h2:
     season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
                                   key="season", label_visibility="collapsed")
 with h3:
-    views = [v for v in nav.VIEWS if (v != "Scout" or league is not None)
-             and (v != "Ground" or DEMO)]
+    views = [v for v in nav.VIEWS if v != "Scout" or league is not None]
     if st.session_state.get("view") not in views:
         st.session_state["view"] = "Season"
     if PHONE:  # four buttons don't fit next to the season at phone width
@@ -580,6 +583,13 @@ season = season or all_seasons[-1]
 baseline = D.baseline_season(season, all_seasons)
 tdf = D.team_season(team_df, season)
 pdf_season = D.players_season(player_df, season)
+# Demo only: Match, Player and Scout can show their subject on the ground (SIMULATED).
+GROUND = False
+if DEMO and view in ("Match", "Player", "Scout"):
+    with hg:
+        GROUND = st.toggle("Ground", key="ground_mode",
+                           help="Demo: simulated positions, goal, mark and possession spots, "
+                                "and GPS running for this game, player or club")
 with htk:
     insight_ticker(season_insights(season, baseline), cls="tk-bar" if not SCROLL else "tk-bar tk-strip")
 pos = scout = player = game_round = None
@@ -595,9 +605,6 @@ def _pick_and_band():
         if view == "Season":          # the slice is Season's only picker
             pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
             return pick, None, None, band
-        if view == "Ground":            # game and player pickers
-            pick, pick2, band = st.columns([1.15, 1.0, 2.3], vertical_alignment="center")
-            return pick, pick2, None, band
         if view == "Player":
             if st.session_state.get("player_pick") != nav.SQUAD:
                 return st.columns([0.95, 0.95, 0.85, 2.3], vertical_alignment="center")
@@ -729,31 +736,17 @@ elif view == "Match" and len(tdf):
         focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
                  + ("drew" if game["result"] == "D" else
                     f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
-elif view == "Ground":
-    # SIMULATED (sim.py): pick a game or the season, the team or a player.
-    page = "ground"
-    gopts = ["Whole season"] + [c[0] for c in D.game_choices(tdf)]
-    if st.session_state.get("ground_game") not in gopts:
-        st.session_state["ground_game"] = gopts[0]
-    popts = ["Whole team"] + D.player_list(pdf_season)
-    if st.session_state.get("ground_player") not in popts:
-        st.session_state["ground_player"] = popts[0]
-    with pick:
-        ground_game = st.selectbox("Game", gopts, key="ground_game", label_visibility="collapsed")
-    with pick2:
-        ground_player = st.selectbox("Player", popts, key="ground_player",
-                                     label_visibility="collapsed")
-    with band:
-        demo_band(season, ground_game, ground_player)
-    focus = ("a SIMULATED demo page of GPS running and positions on the ground; none of its "
-             "running, positions or locations are real. If asked about them, say Wharf-ai only "
-             "answers from the real match data and that page is a demo")
 else:
     games_slice = slice_picker(pick)
     apply_slice(games_slice)
     season_band()
     if games_slice != D.GAME_SLICES[0]:
         focus = f"the {season} season, {games_slice.lower()} only"
+
+
+if GROUND and focus:
+    focus += ("; the page is showing SIMULATED positions and GPS running for it (a demo, not "
+              "real data): answer only from the real match data and say the ground view is a demo")
 
 
 def usage_button():
@@ -786,8 +779,12 @@ if CHAT_TOP:
 with main:
     if CHAT_TOP:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
-    if page == "ground":
-        V.render_ground(team_df, player_df, season, ground_game, ground_player, SZ)
+    if GROUND and view == "Match" and pos is not None:      # demo: the game on the ground
+        V.render_ground(team_df, player_df, season, label, "Whole team", SZ)
+    elif GROUND and view == "Player" and player is not None and page is None:
+        V.render_ground(team_view, player_view, season, "Whole season", player, SZ)
+    elif GROUND and view == "Scout" and scout is not None and page is None:
+        V.render_scout_ground(team_df, player_df, scout, SZ)
     elif page == "squad":
         V.render_squad(player_view, season, baseline, SZ)
     elif page == "clubs":

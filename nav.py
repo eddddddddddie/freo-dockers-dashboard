@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl
 
 import streamlit as st
 
-VIEWS = ["Season", "Match", "Player", "Scout", "Ground"]   # Ground: the ?demo=1 view only
+VIEWS = ["Season", "Match", "Player", "Scout"]
 # Picker options for the page across all of a view's options (kept in the
 # address like any other pick: player=Whole squad, opp=All clubs, game=QT).
 SQUAD, ALL_CLUBS, QT = "Whole squad", "All clubs", "Quarter-time check"

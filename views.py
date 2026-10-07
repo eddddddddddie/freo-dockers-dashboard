@@ -807,6 +807,63 @@ def render_quarter_time(team_df, all_seasons, sz):
 
 
 # ---- Demo (simulated): ground maps and GPS running -----------------------------------
+def _ground_card(name, rows, role, H, who, mode_key="ground_map_mode", show_mode=True,
+                 attack="Freo"):
+    """A SIMULATED ground map card for some player-game rows: a heat map of where
+    they spent the time, or their real goals, marks and possessions at simulated
+    spots. The Heat / Events switch (mode_key) is shared, so two maps side by
+    side change together; show_mode draws it in this card."""
+    import sim
+    with card(name, height=_h(H)):
+        t, m = st.columns([2.2, 1], vertical_alignment="center")
+        if show_mode:
+            with m:
+                st.segmented_control("Map", ["Heat", "Events"], default="Heat", key=mode_key,
+                                     label_visibility="collapsed")
+        mode = st.session_state.get(mode_key) or "Heat"
+        if mode == "Heat":
+            per = 140 if len(rows) <= 30 else max(20, int(4000 / max(len(rows), 1)))
+            xy = np.vstack([sim.positions(r.player, r.season, r.round, role.get(r.player, "mid"), per)
+                            for r in rows.itertuples()]) if len(rows) else np.zeros((0, 2))
+            with t:
+                card_title(f"Where {who} spent the time", "SIMULATED positions · darker: more time",
+                           takeaway="Simulated from positions and roles: a demo of tracking data")
+            if len(xy):
+                _plot(CH.ground_heat(xy, H - 70, attack))
+            return
+        found = {k: ([], []) for k in sim.LAYERS}
+        for _, r in rows.iterrows():
+            ev = sim.events(r, role.get(r["player"], "mid"))
+            for k, xy in ev.items():
+                found[k][0].extend(xy.tolist())
+                found[k][1].extend([f"{r['player']} · {r['round']}"] * len(xy))
+        shown = {k: (np.array(found[k][0]).reshape(-1, 2), found[k][1]) for k in sim.LAYERS}
+        with t:
+            card_title(f"{who[0].upper() + who[1:]}: goals, marks, possessions",
+                       "real counts · SIMULATED spots",
+                       takeaway=" · ".join(f"{k} {len(found[k][0])}" for k in sim.LAYERS))
+        _plot(CH.ground_events(shown, H - 70, attack))
+
+
+def render_scout_ground(team_df, player_df, opp, sz):
+    """Scout, on the ground (SIMULATED): the club's players in their games against
+    Freo beside Freo's players in the same games, every season. Real counts at
+    simulated spots, each side attacking to the right."""
+    import sim
+    H = _full_h(sz)
+    theirs = sim.opp_rows(opp)
+    ours = player_df[player_df["opponent"] == opp]
+    arrange(desktop=[([1, 1], [lambda: _ground_card("sg_opp", theirs, sim.roles(theirs), H, opp, attack=D.abbr(opp)),
+                               lambda: _ground_card("sg_freo", ours, sim.roles(player_df), H, "Freo",
+                                                    show_mode=False)])],
+            grid=[[lambda: _ground_card("sg_opp", theirs, sim.roles(theirs), H, opp, attack=D.abbr(opp))],
+                  [lambda: _ground_card("sg_freo", ours, sim.roles(player_df), H, "Freo",
+                                        show_mode=False)]],
+            phone=[lambda: _ground_card("sg_opp", theirs, sim.roles(theirs), H, opp, attack=D.abbr(opp)),
+                   lambda: _ground_card("sg_freo", ours, sim.roles(player_df), H, "Freo",
+                                        show_mode=False)])
+
+
 def render_ground(team_df, player_df, season, game_label, player, sz):
     """The ?demo=1 view: SIMULATED positions and running (sim.py), never the real
     data. Real counts (goals, marks, contested and uncontested possessions) at
@@ -826,35 +883,7 @@ def render_ground(team_df, player_df, season, game_label, player, sz):
     run = run_all.merge(rows[["season", "round", "player"]], on=["season", "round", "player"])
 
     def map_card():
-        with card("gmap", height=_h(H)):
-            t, m = st.columns([2.2, 1], vertical_alignment="center")
-            with m:
-                mode = st.segmented_control("Map", ["Heat", "Events"], default="Heat",
-                                            key="gmap_mode", label_visibility="collapsed") or "Heat"
-            per = 140 if len(rows) <= 30 else max(20, int(4000 / max(len(rows), 1)))
-            if mode == "Heat":
-                xy = np.vstack([sim.positions(r.player, r.season, r.round, role.get(r.player, "mid"), per)
-                                for r in rows.itertuples()]) if len(rows) else np.zeros((0, 2))
-                with t:
-                    card_title("Where on the ground", "SIMULATED positions · darker: more time",
-                               takeaway="Simulated from listed positions: a demo of tracking data")
-                if len(xy):
-                    _plot(CH.ground_heat(xy, H - 70))
-                return
-            layers = st.pills("Layers", sim.LAYERS, default=sim.LAYERS, selection_mode="multi",
-                              key="gmap_layers", label_visibility="collapsed") or []
-            found = {k: ([], []) for k in sim.LAYERS}
-            for _, r in rows.iterrows():
-                ev = sim.events(r, role.get(r["player"], "mid"))
-                for k, xy in ev.items():
-                    found[k][0].extend(xy.tolist())
-                    found[k][1].extend([f"{r['player']} · {r['round']} v {D.abbr(r['opponent'])}"] * len(xy))
-            shown = {k: (np.array(found[k][0]).reshape(-1, 2), found[k][1]) for k in layers}
-            counts = " · ".join(f"{k} {len(found[k][0])}" for k in sim.LAYERS)
-            with t:
-                card_title("Goals, marks and possessions", "real counts · SIMULATED spots",
-                           takeaway=counts)
-            _plot(CH.ground_events(shown, H - 104))
+        _ground_card("gmap", rows, role, H, "the team" if player == "Whole team" else player)
 
     def running_card(height):
         with card("grun", height=_h(height)):

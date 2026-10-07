@@ -109,17 +109,19 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
 - Still not available anywhere we use: shot locations, xG, player positions or zones, GPS
   running. Do not invent these anywhere in the real app. The one exception is the demo view below,
   which is fenced off and says "simulated" on everything.
-- Demo view (`?demo=1`, `sim.py`, `views.render_ground`): a Ground tab that exists only with the
-  demo link (it stays on for the session and in the address; `DEMO` in app.py). It shows what the
-  app could do with a club's tracking data: a heat map of where a player or the team spent a game
-  or the season, goals, marks, contested and uncontested possessions on a to-scale ground
-  (`charts.ground`, Freo attacking right), and GPS running (distance, high-speed metres, sprints,
-  top speed, quarter fade). Counts are the real box score; only the places and the running are
-  simulated, from each player's listed position (freo_squad.csv), time on ground and work rate,
-  seeded from season, round and player so it never changes. Every figure carries an amber
-  SIMULATED tag and the band a "Demo · simulated" pill; Wharf-ai's tools never see it and its
-  page note tells it the page isn't real. `tests/test_sim.py` checks counts, repeatability and
-  that the real data and Wharf-ai are untouched.
+- Demo (`?demo=1`, `sim.py`): with the demo link (it stays on for the session and in the address;
+  `DEMO` in app.py) a "Ground" switch appears in the top bar on Match, Player and Scout (white
+  outline off, amber on; `GROUND`). On, that view's body shows its subject on the ground instead,
+  with the same pickers and band: Match, the team in that game (`views.render_ground`: heat map or
+  goals, marks, contested and uncontested possessions, the running load table, the quarter fade);
+  Player, his season (map, game-by-game running, quarter fade); Scout, the club's players in their
+  games against Freo beside Freo's (`views.render_scout_ground`, each side attacking right; their
+  roles come from their stats, as their positions aren't listed). Counts are the real box score;
+  only the places and the GPS running are simulated (listed position, time on ground, work rate),
+  seeded from season, round and player so they never change. Every figure carries an amber
+  SIMULATED tag; Wharf-ai's tools never see it and its page note says the ground view is a demo.
+  `tests/test_sim.py` checks counts, repeatability and that the real data and Wharf-ai are
+  untouched.
 
 ## Scraper internals (freo_scraper.py)
 - Two-stage flow: `get_match_list` reads Freo's `teams/fremantle/allgames.html` and takes game

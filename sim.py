@@ -60,10 +60,13 @@ def roles(player_df):
     """{player: role}, from the latest listed position, or from his stats."""
     squad = D.load_squad()
     out = {}
-    if squad is not None:
+    if squad is not None and "hitouts" in player_df.columns:   # Freo's listed positions
         latest = squad.sort_values("season").drop_duplicates("player", keep="last")
-        out = {r.player: ROLE_OF.get(str(r.position), "mid") for r in latest.itertuples()}
-    avgs = player_df.groupby("player")[["goals", "hitouts", "rebound_50s"]].mean()
+        out = {r.player: ROLE_OF.get(str(r.position), "mid") for r in latest.itertuples()
+               if r.player in set(player_df["player"])}
+    cols = [c for c in ("goals", "hitouts", "rebound_50s") if c in player_df.columns]
+    avgs = player_df.groupby("player")[cols].mean().reindex(columns=["goals", "hitouts", "rebound_50s"],
+                                                              fill_value=0)
     for p, a in avgs.iterrows():
         if p not in out:
             out[p] = ("ruck" if a["hitouts"] >= 8 else "fwd" if a["goals"] >= 1
@@ -157,3 +160,17 @@ def running(pdf):
                                         + float(rng.normal(0, .5)), 1),
                      **{f"q{k + 1}_km": round(v, 2) for k, v in enumerate(q)}})
     return pd.DataFrame(rows)
+
+
+def opp_rows(opp):
+    """The opposition's players in their games against Freo (opp_player_games_ext.csv),
+    with the columns events() and roles() read (their counts are real, Champion
+    Data's). Their positions aren't listed anywhere, so roles() works them out
+    from their stats."""
+    o = D.load_opp_players()
+    if o is None:
+        return pd.DataFrame()
+    o = o[o["opponent"] == opp].rename(columns={
+        "uncontested_possessions": "uncontested_poss", "marks_inside50": "marks_inside_50",
+        "api_round": "round"})
+    return o.assign(round=o["round"].astype(str) + " " + o["date_local"].astype(str))

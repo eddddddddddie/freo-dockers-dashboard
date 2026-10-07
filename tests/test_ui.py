@@ -102,7 +102,7 @@ def test_every_view_fits_one_screen(browser, server, w, h):
     for name, query in [("compare", "view=Player&player=Caleb%20Serong&vs=Andrew%20Brayshaw"),
                         ("squad", "view=Player&player=Whole%20squad"),
                         ("clubs", "view=Scout&opp=All%20clubs"), ("qt", "view=Match&game=QT"),
-                        ("demo", "view=Ground&demo=1")]:
+                        ("demo", "view=Match&game=GF&demo=1")]:
         pg.goto(f"{server}/?season=2026&{query}")
         pg.wait_for_selector(".cv-band", timeout=60000)
         pg.wait_for_timeout(3000)

@@ -871,8 +871,9 @@ def _arc(cx, r, side):
     return "M " + " L ".join(f"{x:.2f},{y:.2f}" for x, y in pts)
 
 
-def ground(fig, height):
-    """Draw an AFL ground to scale (Freo attack to the right) and size the axes."""
+def ground(fig, height, attack="Freo"):
+    """Draw an AFL ground to scale (the side named attack kicks to the right) and
+    size the axes."""
     # The turf below everything; the markings above the data, so they always show.
     line = dict(color="rgba(120,120,120,0.55)", width=1.1)
     fig.add_shape(type="circle", x0=-82, x1=82, y0=-66, y1=66, line=dict(width=0),
@@ -892,7 +893,7 @@ def ground(fig, height):
     fig.add_annotation(x=0, xref="paper", y=0, yref="paper", text="<b>SIMULATED</b>", showarrow=False,
                        xanchor="left", yanchor="bottom", bgcolor="#E8A33D", borderpad=3,
                        font=dict(size=10, color="#1A1A1A"))
-    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="Freo attack →", showarrow=False,
+    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text=f"{attack} attack →", showarrow=False,
                        xanchor="right", yanchor="bottom", font=dict(size=10, color=COLORS["muted"]))
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=16, b=4), showlegend=False)
@@ -902,15 +903,15 @@ def ground(fig, height):
     return fig
 
 
-def ground_heat(xy, height):
+def ground_heat(xy, height, attack="Freo"):
     """Where the player (or team) spent the game: a smoothed density on a 2 m
     grid, light to dark purple, clipped to the oval and clear where there's
     little time."""
     import numpy as np
-    xs, ys = np.arange(-82, 83, 2.0), np.arange(-66, 67, 2.0)
+    xs, ys = np.arange(-82, 82.5, 1.5), np.arange(-66, 66.5, 1.5)
     h, _, _ = np.histogram2d(xy[:, 1], xy[:, 0], bins=[np.append(ys - 1, ys[-1] + 1),
                                                         np.append(xs - 1, xs[-1] + 1)])
-    k = np.exp(-0.5 * (np.arange(-6, 7) / 2.6) ** 2)
+    k = np.exp(-0.5 * (np.arange(-8, 9) / 3.4) ** 2)
     k /= k.sum()
     h = np.apply_along_axis(lambda r: np.convolve(r, k, mode="same"), 1, h)
     h = np.apply_along_axis(lambda c: np.convolve(c, k, mode="same"), 0, h)
@@ -920,10 +921,10 @@ def ground_heat(xy, height):
     scale = [[i / (len(RAMP) - 1), c] for i, c in enumerate(RAMP)]
     fig = go.Figure(go.Heatmap(z=h, x=xs, y=ys, colorscale=scale, zmin=0.08, zmax=1,
                                showscale=False, opacity=0.9, hoverinfo="skip", zsmooth="best"))
-    return ground(fig, height)
+    return ground(fig, height, attack)
 
 
-def ground_events(layers, height):
+def ground_events(layers, height, attack="Freo"):
     """Real counts at simulated spots: {layer: (array of (x, y), hover labels)}, a
     colour per layer from the validated series order, labelled in the key above."""
     fig = go.Figure()
@@ -936,7 +937,7 @@ def ground_events(layers, height):
                         symbol="star" if name == "Goals" else "circle", opacity=0.85,
                         line=dict(color="#FFFFFF", width=1)),
             text=hover, hovertemplate="%{text}<br>(simulated spot)<extra>" + name + "</extra>"))
-    fig = ground(fig, height)
+    fig = ground(fig, height, attack)
     shown = [(n, EVENT_COLORS[n]) for n, (xy, _) in layers.items() if len(xy)]
     return _inline_key(fig, shown) if shown else fig
 

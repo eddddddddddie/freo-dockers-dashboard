@@ -168,6 +168,15 @@ def inject_css():
           .st-key-topbar div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
             background:transparent; border-color:rgba(255,255,255,.38); color:#fff; }
           .st-key-topbar div[data-testid="stSelectbox"] svg { fill:#fff; }
+          .st-key-ground_mode label p { color:#fff; font-weight:700; font-size:.85rem; }
+          /* The switch on the purple bar: a white outline track, filled amber when on
+             (the demo's colour), so on and off read at a glance. */
+          .st-key-ground_mode label > div:not([data-testid]) { background:transparent !important;
+            box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75); }
+          .st-key-ground_mode label[data-selected="true"] > div:not([data-testid]) {
+            background:#E8A33D !important; box-shadow:none; }
+          .st-key-ground_mode label > div:not([data-testid]) > div { background:#fff !important; }
+          .st-key-ground_mode [data-testid="stTooltipIcon"] svg { stroke:rgba(255,255,255,.7); }
 
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
           div[class*="st-key-card_"],
@@ -202,7 +211,6 @@ def inject_css():
           .cv-band .cv-stat { flex:none; }
           .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
           /* Match card (after the club site's): big score in the middle, thin dividers */
-          .demo-pill { background:#E8A33D; color:#1A1A1A !important; }
           .mc-div { flex:none; width:1px; align-self:stretch; margin:-3px 0;
             background:rgba(255,255,255,.2); }
           .mc-score { display:flex; align-items:center; gap:10px; flex:none; }
@@ -660,17 +668,6 @@ def login_hero():
 def brand_title():
     """The bar's title, set like the club site's headline: a serif, one word in italic."""
     st.markdown('<div class="cv-brand"><i>Freo</i> Coach View</div>', unsafe_allow_html=True)
-
-
-def demo_band(season, game_label, player):
-    """The demo view's band: says plainly that what's below is simulated."""
-    what = (player if player != "Whole team" else "The team") + " · " + (
-        f"{season} season" if game_label == "Whole season" else game_label)
-    st.markdown(
-        f'<div class="cv-band demo"><div class="ttl">{html.escape(what)}'
-        f'<small>Real counts from the box score; positions and GPS running are simulated</small></div>'
-        f'<div class="cv-stat"><b><i class="cv-res demo-pill">Demo · simulated</i></b>'
-        f'<span>Not real tracking data</span></div></div>', unsafe_allow_html=True)
 
 
 def header_band(season, rec, form, data_note, last=None):
