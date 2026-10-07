@@ -168,15 +168,6 @@ def inject_css():
           .st-key-topbar div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
             background:transparent; border-color:rgba(255,255,255,.38); color:#fff; }
           .st-key-topbar div[data-testid="stSelectbox"] svg { fill:#fff; }
-          .st-key-ground_mode label p { color:#fff; font-weight:700; font-size:.85rem; }
-          /* The switch on the purple bar: a white outline track, filled amber when on
-             (the simulated view's colour), so on and off read at a glance. */
-          .st-key-ground_mode label > div:not([data-testid]) { background:transparent !important;
-            box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75); }
-          .st-key-ground_mode label[data-selected="true"] > div:not([data-testid]) {
-            background:#E8A33D !important; box-shadow:none; }
-          .st-key-ground_mode label > div:not([data-testid]) > div { background:#fff !important; }
-          .st-key-ground_mode [data-testid="stTooltipIcon"] svg { stroke:rgba(255,255,255,.7); }
 
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
           div[class*="st-key-card_"],

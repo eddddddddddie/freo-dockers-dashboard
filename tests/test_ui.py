@@ -108,14 +108,6 @@ def test_every_view_fits_one_screen(browser, server, w, h):
         f = fit(pg)
         assert f["exceptions"] == 0 and f["scroll"] <= f["client"] + 1, (name, w, h, f)
         assert f["cards"] and f["white"] == f["cards"], (name, f)
-    # The Ground switch (simulated) on Match still fits one screen.
-    pg.goto(f"{server}/?season=2026&view=Match&game=GF")
-    pg.wait_for_selector(".cv-band", timeout=60000)
-    pg.locator(".st-key-ground_mode label").first.click()
-    pg.wait_for_selector("text=SIMULATED", timeout=60000)
-    pg.wait_for_timeout(3000)
-    f = fit(pg)
-    assert f["exceptions"] == 0 and f["scroll"] <= f["client"] + 1, ("ground", w, h, f)
     pg.close()
 
 

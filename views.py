@@ -344,9 +344,13 @@ def render_match(team_df, player_df, season, pos, sz):
     def players_card():
         _match_players(pdf, game, season, pos, BOT_H)
 
-    arrange(desktop=[([1.5, 1.25, 1], [tape_card, flow_card, leaders_card]), ([1], [players_card])],
-            grid=[[tape_card, leaders_card], [flow_card], [players_card]],
-            phone=[tape_card, flow_card, leaders_card, players_card])
+    def ground_card():
+        match_ground_card(player_df, season, game, BOT_H + 40 + TK)
+
+    arrange(desktop=[([1.5, 1.25, 1], [tape_card, flow_card, leaders_card]),
+                     ([2.6, 1], [players_card, ground_card])],
+            grid=[[tape_card, leaders_card], [flow_card, ground_card], [players_card]],
+            phone=[tape_card, flow_card, leaders_card, players_card, ground_card])
 
 
 # The match players table: (header, column, full name). With AFL match centre
@@ -392,15 +396,16 @@ def _match_players(pdf, game, season, pos, BOT_H):
                 out.loc[down, c] = f"background-color:{TINT_DOWN}; color:#6B6B6B"
             return out
 
-        cfg = {"Player": st.column_config.TextColumn("Player", width="small" if PHONE else "medium",
+        # Narrow columns: on a desktop the table shares its row with the ground card.
+        cfg = {"Player": st.column_config.TextColumn("Player", width="small" if PHONE else 112,
                                                      pinned=True)}
         if rp:
             cfg["RP"] = st.column_config.NumberColumn("RP", help="Rating points", format="%d",
-                                                      width="small")
+                                                      width=42)
         for h, c, n in stats:
             cfg[c] = st.column_config.ProgressColumn(h, help=n, min_value=0,
                                                      max_value=float(max(df[c].max(), 1)),
-                                                     format="%d", width="small")
+                                                     format="%d", width="small" if PHONE else 64)
         n_sel = st.session_state.get("mtable_n", 0)
         ev = st.dataframe(df.style.apply(tint, axis=None), column_config=cfg, hide_index=True,
                           row_height=26,   # about 9 players in view on a laptop; the rest scroll
@@ -467,9 +472,12 @@ def render_player(player_df, season, baseline, player, sz):
     def log_card():
         _player_log(pdf, player, BOT_H)
 
-    arrange(desktop=[([1.9, 1.1], [trend_card, ranks_card]), ([1], [log_card])],
-            grid=[[trend_card, ranks_card], [log_card]],
-            phone=[trend_card, ranks_card, log_card])
+    def ground_card():
+        player_ground_card(player_df, season, player, BOT_H + 40 + TK)
+
+    arrange(desktop=[([1.9, 1.1], [trend_card, ranks_card]), ([2.4, 1], [log_card, ground_card])],
+            grid=[[trend_card, ranks_card], [log_card], [ground_card]],
+            phone=[trend_card, ranks_card, log_card, ground_card])
 
 
 # The range card's rows (full names), from the log stats.
@@ -573,7 +581,7 @@ def render_compare(player_df, season, a, b, sz):
 
 
 # ---- Opponent scout report ----------------------------------------------------
-def render_scout(team_df, lg, season, opp, sz):
+def render_scout(team_df, player_df, lg, season, opp, sz):
     """One club's season on one screen, set against the league and Freo.
 
     Row 1: their key numbers with league rank and Freo's figure.
@@ -625,10 +633,13 @@ def render_scout(team_df, lg, season, opp, sz):
             else:
                 st.caption("No games against Fremantle in the data.")
 
+    def ground_card():
+        scout_ground_card(player_df, opp, BOT_H + 40 + TK)
+
     arrange(desktop=[([1.45, 1.35, 1.2], [style_card, win_card, quarters_card]),
-                     ([1.55, 1.45], [form_card, h2h_card])],
-            grid=[[style_card, win_card], [quarters_card, form_card], [h2h_card]],
-            phone=[style_card, win_card, quarters_card, form_card, h2h_card])
+                     ([0.85, 1.55, 1], [form_card, h2h_card, ground_card])],
+            grid=[[style_card, win_card], [quarters_card, form_card], [h2h_card, ground_card]],
+            phone=[style_card, win_card, quarters_card, form_card, h2h_card, ground_card])
 
 
 # ---- Whole squad, all clubs, quarter-time check ---------------------------------
@@ -806,30 +817,34 @@ def render_quarter_time(team_df, all_seasons, sz):
             phone=[result_card, scatter_card, games_card])
 
 
-# ---- Demo (simulated): ground maps and GPS running -----------------------------------
-def _ground_card(name, rows, role, H, who, mode_key="ground_map_mode", show_mode=True,
-                 attack="Freo"):
-    """A SIMULATED ground map card for some player-game rows: a heat map of where
-    they spent the time, or their real goals, marks and possessions at simulated
-    spots. The Heat / Events switch (mode_key) is shared, so two maps side by
-    side change together; show_mode draws it in this card."""
+# ---- On the ground (SIMULATED): positions and GPS running --------------------------
+def _ground_card(name, rows, role, H, who, attack="Freo", running=None):
+    """A SIMULATED ground card for some player-game rows, with its own switch:
+    Heat (where they spent the time), Events (their real goals, marks and
+    possessions at simulated spots) and, given running = (takeaway, draw(height)),
+    Running (GPS)."""
     import sim
     with card(name, height=_h(H)):
-        t, m = st.columns([2.2, 1], vertical_alignment="center")
-        if show_mode:
-            with m:
-                st.segmented_control("Map", ["Heat", "Events"], default="Heat", key=mode_key,
-                                     label_visibility="collapsed")
-        mode = st.session_state.get(mode_key) or "Heat"
+        modes = ["Heat", "Events"] + (["Running"] if running else [])
+        mode = st.session_state.get(f"{name}_mode") or "Heat"
+        t = st.container()           # the title, drawn once the mode's figures are known
+        st.segmented_control("Ground", modes, default="Heat", key=f"{name}_mode",
+                             label_visibility="collapsed")
+        chart_h = (H - 108) if LAYOUT == "desktop" else 300
+        if mode == "Running":
+            with t:
+                card_title("Running", "SIMULATED GPS", takeaway=running[0])
+            running[1](chart_h)
+            return
         if mode == "Heat":
             per = 140 if len(rows) <= 30 else max(20, int(4000 / max(len(rows), 1)))
             xy = np.vstack([sim.positions(r.player, r.season, r.round, role.get(r.player, "mid"), per)
                             for r in rows.itertuples()]) if len(rows) else np.zeros((0, 2))
             with t:
-                card_title(f"Where {who} spent the time", "SIMULATED positions · darker: more time",
-                           takeaway="Simulated from positions and roles: a demo of tracking data")
+                card_title("On the ground", "SIMULATED positions",
+                           takeaway=f"Where {who} spent the time")
             if len(xy):
-                _plot(CH.ground_heat(xy, H - 70, attack))
+                _plot(CH.ground_heat(xy, chart_h, attack))
             return
         found = {k: ([], []) for k in sim.LAYERS}
         for _, r in rows.iterrows():
@@ -839,107 +854,58 @@ def _ground_card(name, rows, role, H, who, mode_key="ground_map_mode", show_mode
                 found[k][1].extend([f"{r['player']} · {r['round']}"] * len(xy))
         shown = {k: (np.array(found[k][0]).reshape(-1, 2), found[k][1]) for k in sim.LAYERS}
         with t:
-            card_title(f"{who[0].upper() + who[1:]}: goals, marks, possessions",
-                       "real counts · SIMULATED spots",
+            card_title("On the ground", "real counts · SIMULATED spots",
                        takeaway=" · ".join(f"{k} {len(found[k][0])}" for k in sim.LAYERS))
-        _plot(CH.ground_events(shown, H - 70, attack))
+        _plot(CH.ground_events(shown, chart_h, attack))
 
 
-def render_scout_ground(team_df, player_df, opp, sz):
-    """Scout, on the ground (SIMULATED): the club's players in their games against
-    Freo beside Freo's players in the same games, every season. Real counts at
-    simulated spots, each side attacking to the right."""
+def match_ground_card(player_df, season, game, H):
+    """The team in one game on the ground (SIMULATED), with its running load."""
     import sim
-    H = _full_h(sz)
-    theirs = sim.opp_rows(opp)
-    ours = player_df[player_df["opponent"] == opp]
-    arrange(desktop=[([1, 1], [lambda: _ground_card("sg_opp", theirs, sim.roles(theirs), H, opp, attack=D.abbr(opp)),
-                               lambda: _ground_card("sg_freo", ours, sim.roles(player_df), H, "Freo",
-                                                    show_mode=False)])],
-            grid=[[lambda: _ground_card("sg_opp", theirs, sim.roles(theirs), H, opp, attack=D.abbr(opp))],
-                  [lambda: _ground_card("sg_freo", ours, sim.roles(player_df), H, "Freo",
-                                        show_mode=False)]],
-            phone=[lambda: _ground_card("sg_opp", theirs, sim.roles(theirs), H, opp, attack=D.abbr(opp)),
-                   lambda: _ground_card("sg_freo", ours, sim.roles(player_df), H, "Freo",
-                                        show_mode=False)])
-
-
-def render_ground(team_df, player_df, season, game_label, player, sz):
-    """The Ground switch on Match and Player: SIMULATED positions and running
-    (sim.py), never the real data. Real counts (goals, marks, contested and uncontested possessions) at
-    simulated spots, a simulated heat map, and simulated GPS running.
-    game_label: "Whole season" or a game picker label; player: "Whole team" or a name."""
-    import sim
-    H = _full_h(sz)
-    tdf = D.team_season(team_df, season)
     pdf = D.players_season(player_df, season)
-    one_game = game_label != "Whole season"
-    if one_game:
-        g = tdf.iloc[dict(D.game_choices(tdf))[game_label]]
-        pdf = pdf[(pdf["round"] == g["round"]) & (pdf["opponent"] == g["opponent"])]
-    rows = pdf if player == "Whole team" else pdf[pdf["player"] == player]
-    role = sim.roles(player_df)
-    run_all = sim.running(D.players_season(player_df, season))
-    run = run_all.merge(rows[["season", "round", "player"]], on=["season", "round", "player"])
+    rows = pdf[(pdf["round"] == game["round"]) & (pdf["opponent"] == game["opponent"])]
+    run = sim.running(pdf).merge(rows[["season", "round", "player"]],
+                                 on=["season", "round", "player"])
+    tab = (run.set_index("player")[["distance_km", "hsr_m", "sprints", "top_speed"]]
+           .sort_values("distance_km", ascending=False).reset_index())
 
-    def map_card():
-        _ground_card("gmap", rows, role, H, "the team" if player == "Whole team" else player)
+    def running(height):
+        # Plain numbers in narrow columns: the card is about 300px wide.
+        cfg = {"player": st.column_config.TextColumn("Player", pinned=True, width=96),
+               "distance_km": st.column_config.NumberColumn("km", help="Distance", format="%.1f",
+                                                            width=44),
+               "hsr_m": st.column_config.NumberColumn(
+                   "HSR", help="High-speed running (over 20 km/h), metres", format="%d", width=48),
+               "sprints": st.column_config.NumberColumn("Spr", help="Sprints", format="%d", width=38),
+               "top_speed": st.column_config.NumberColumn("Top", help="Top speed, km/h", format="%.1f",
+                                                          width=44)}
+        st.dataframe(tab, column_config=cfg, hide_index=True, row_height=26, height=height)
 
-    def running_card(height):
-        with card("grun", height=_h(height)):
-            if player != "Whole team" and one_game:      # one player, one game: four numbers
-                mine = run_all[run_all["player"] == player]
-                r = run.iloc[0] if len(run) else None
-                card_title("Running", "SIMULATED GPS · against his season average")
-                if r is not None:
-                    cells = [("Distance", f"{r['distance_km']:.1f} km", mine["distance_km"].mean(), r["distance_km"], "{:.1f} km"),
-                             ("High-speed running", f"{r['hsr_m']:,} m", mine["hsr_m"].mean(), r["hsr_m"], "{:,.0f} m"),
-                             ("Sprints", f"{r['sprints']}", mine["sprints"].mean(), r["sprints"], "{:.0f}"),
-                             ("Top speed", f"{r['top_speed']:.1f} km/h", mine["top_speed"].mean(), r["top_speed"], "{:.1f} km/h")]
-                    st.markdown('<div class="cv-tiles" style="--n:2">' + "".join(
-                        f'<div class="cv-tile"><div class="lbl">{lbl}</div><div class="val">{val}</div>'
-                        f'<div class="fr">season avg {fmt.format(avg)} ({(v / avg - 1) * 100 if avg else 0:+.0f}%)</div></div>'
-                        for lbl, val, avg, v, fmt in cells) + '</div>', unsafe_allow_html=True)
-                return
-            if player != "Whole team" and not one_game:
-                card_title("Running, game by game", "SIMULATED GPS",
-                           takeaway=f"Average {run['distance_km'].mean():.1f} km, "
-                                    f"{run['hsr_m'].mean():,.0f} m at high speed" if len(run) else "")
-                if len(run):
-                    _plot(CH.running_trend(run.sort_values("game_dt"), height - 64))
-                return
-            tab = (run.groupby("player")[["distance_km", "hsr_m", "sprints", "top_speed"]].mean()
-                   if not one_game else run.set_index("player")[["distance_km", "hsr_m", "sprints",
-                                                                  "top_speed"]])
-            tab = tab.sort_values("distance_km", ascending=False).reset_index()
-            card_title("Running load" + ("" if one_game else ", a game"), "SIMULATED GPS",
-                       takeaway=(f"Most: {tab['player'].iloc[0]} {tab['distance_km'].iloc[0]:.1f} km"
-                                 if len(tab) else ""))
-            cfg = {"player": st.column_config.TextColumn("Player", pinned=True),
-                   "distance_km": st.column_config.ProgressColumn(
-                       "km", min_value=0, max_value=float(tab["distance_km"].max() or 1), format="%.1f"),
-                   "hsr_m": st.column_config.ProgressColumn(
-                       "HSR m", help="High-speed running (over 20 km/h)", min_value=0,
-                       max_value=float(tab["hsr_m"].max() or 1), format="%d"),
-                   "sprints": st.column_config.NumberColumn("Sprints", format="%d"),
-                   "top_speed": st.column_config.NumberColumn("Top km/h", format="%.1f")}
-            st.dataframe(tab, column_config=cfg, hide_index=True, row_height=26,
-                         height=(height - 70) if LAYOUT == "desktop" else 360)
+    take = f"Most: {tab['player'].iloc[0]} {tab['distance_km'].iloc[0]:.1f} km" if len(tab) else ""
+    _ground_card("gmatch", rows, sim.roles(player_df), H, "the team", running=(take, running))
 
-    def quarters_card(height):
-        with card("gquarters", height=_h(height)):
-            season_run = run_all if player == "Whole team" else run_all[run_all["player"] == player]
-            by_q = season_run.groupby("result")[["q1_km", "q2_km", "q3_km", "q4_km"]].mean()
-            fade = {r: by_q.loc[r, "q1_km"] - by_q.loc[r, "q4_km"] for r in by_q.index}
-            card_title("Running by quarter", "SIMULATED · the season, wins v losses",
-                       takeaway=(f"Fades {fade.get('L', 0):.2f} km a player from Q1 to Q4 in losses, "
-                                 f"{fade.get('W', 0):.2f} in wins") if fade else "")
-            _plot(CH.running_quarters(by_q, height - 64))
 
-    def side():
-        run_h = int(H * 0.56)
-        running_card(run_h)
-        quarters_card(H - run_h - 8)
+def player_ground_card(player_df, season, player, H):
+    """One player's season on the ground (SIMULATED), with his running game by game."""
+    import sim
+    pdf = D.players_season(player_df, season)
+    rows = pdf[pdf["player"] == player]
+    run = sim.running(pdf).merge(rows[["season", "round", "player"]],
+                                 on=["season", "round", "player"]).sort_values("game_dt")
 
-    arrange(desktop=[([1.5, 1], [map_card, side])], grid=[[map_card], [side]],
-            phone=[map_card, side])
+    def running(height):
+        if len(run):
+            _plot(CH.running_trend(run, height))
+
+    take = (f"Average {run['distance_km'].mean():.1f} km, {run['hsr_m'].mean():,.0f} m at high speed"
+            if len(run) else "")
+    _ground_card("gplayer", rows, sim.roles(player_df), H, player.split()[-1],
+                 running=(take, running))
+
+
+def scout_ground_card(player_df, opp, H):
+    """The club's players in their games against Freo, every season, on the ground
+    (SIMULATED spots, their real counts), attacking to the right."""
+    import sim
+    theirs = sim.opp_rows(opp)
+    _ground_card("gscout", theirs, sim.roles(theirs), H, f"{D.abbr(opp)} v Freo", attack=D.abbr(opp))

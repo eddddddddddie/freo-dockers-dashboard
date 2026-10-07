@@ -853,7 +853,7 @@ def compare_ranks(cmp, names, height):
 
 
 # ---- Demo (simulated): the ground, positions and running --------------------------
-# Only for the Ground switch (sim.py). Every figure here carries a SIMULATED tag.
+# Only for the ground cards on Match, Player and Scout (sim.py). Every one says SIMULATED.
 GROUND_LINE = "#C4C4C4"
 EVENT_COLORS = {"Goals": COLORS["series3"], "Marks": COLORS["series4"],
                 "Contested": COLORS["freo"], "Uncontested": COLORS["opp"]}
@@ -893,7 +893,8 @@ def ground(fig, height, attack="Freo"):
     fig.add_annotation(x=0, xref="paper", y=0, yref="paper", text="<b>SIMULATED</b>", showarrow=False,
                        xanchor="left", yanchor="bottom", bgcolor="#E8A33D", borderpad=3,
                        font=dict(size=10, color="#1A1A1A"))
-    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text=f"{attack} attack →", showarrow=False,
+    # Bottom right, clear of the events key along the top.
+    fig.add_annotation(x=1, xref="paper", y=0, yref="paper", text=f"{attack} attack →", showarrow=False,
                        xanchor="right", yanchor="bottom", font=dict(size=10, color=COLORS["muted"]))
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(margin=dict(l=4, r=4, t=16, b=4), showlegend=False)
@@ -954,35 +955,13 @@ def running_trend(run, height):
         hovertemplate="%{x}<br><b>%{y:.1f} km</b> · %{customdata[0]:,} m high speed · "
                       "%{customdata[1]} sprints · top %{customdata[2]:.1f} km/h"
                       "<br>(simulated)<extra></extra>"))
-    fig.add_hline(y=avg, line=dict(color=COLORS["muted"], width=1, dash="dash"),
-                  annotation_text=f"avg {avg:.1f} km", annotation_position="top left",
-                  annotation_font=dict(size=10, color=COLORS["muted"]))
-    fig = style_fig(fig, "Distance (km, simulated)", unified=False, height=height)
-    fig.update_layout(margin=dict(l=4, r=8, t=10, b=4), bargap=0.25)
+    fig.add_hline(y=avg, line=dict(color=COLORS["muted"], width=1, dash="dash"))
+    # The average is named at the line's end, clear of the bars.
+    fig.add_annotation(x=1, xref="paper", y=avg, text=f"avg<br>{avg:.1f}", showarrow=False,
+                       xanchor="left", align="left", font=dict(size=10, color=COLORS["muted"]))
+    fig = style_fig(fig, "km (simulated)", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=36, t=10, b=4), bargap=0.25)
     _round_ticks(fig, x)
     lo = run["distance_km"].min()
     fig.update_yaxes(range=[max(0, lo * 0.8), run["distance_km"].max() * 1.08])
-    return fig
-
-
-def running_quarters(by_q, height):
-    """Simulated distance per player in each quarter, wins against losses: the
-    late-game fade. by_q: rows W / L, columns q1_km..q4_km."""
-    qs = ["Q1", "Q2", "Q3", "Q4"]
-    fig = go.Figure()
-    ends = []
-    for res, name, color in (("W", "wins", COLORS["win"]), ("L", "losses", COLORS["loss"])):
-        if res not in by_q.index:
-            continue
-        y = [by_q.loc[res, f"q{i}_km"] for i in range(1, 5)]
-        fig.add_trace(go.Scatter(x=qs, y=y, mode="lines+markers", name=name,
-                                 line=dict(color=color, width=2), marker=dict(size=7),
-                                 hovertemplate=name + " %{x}: %{y:.2f} km a player<br>(simulated)"
-                                               "<extra></extra>"))
-        ends.append((y[-1], name))
-    fig = style_fig(fig, "km a player (simulated)", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=56, t=10, b=4))
-    vals = by_q.values.ravel()
-    if len(vals):
-        _end_labels(fig, "Q4", ends, height, float(vals.min()), float(vals.max()))
     return fig

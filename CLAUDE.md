@@ -107,18 +107,22 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   - Pressure acts track with not having the ball: Freo win more often when the opposition wins the
     pressure count, so the pressure tile has no good/bad colour.
 - Still not available anywhere we use: shot locations, xG, player positions or zones, GPS
-  running. Do not invent these. The one exception is the Ground switch below: simulated, and
-  says so on everything it shows.
-- Ground switch (`sim.py`): a "Ground" switch in the top bar on Match, Player and Scout (white
-  outline off, amber on; `GROUND` in app.py), for everyone: the app is a showcase. On, that view's body shows its subject on the ground instead,
-  with the same pickers and band: Match, the team in that game (`views.render_ground`: heat map or
-  goals, marks, contested and uncontested possessions, the running load table, the quarter fade);
-  Player, his season (map, game-by-game running, quarter fade); Scout, the club's players in their
-  games against Freo beside Freo's (`views.render_scout_ground`, each side attacking right; their
-  roles come from their stats, as their positions aren't listed). Counts are the real box score;
-  only the places and the GPS running are simulated (listed position, time on ground, work rate),
-  seeded from season, round and player so they never change. Every figure carries an amber
-  SIMULATED tag; Wharf-ai's tools never see it and its page note says the ground view is a demo.
+  running. Do not invent these. The one exception is the ground cards below: simulated, and
+  say so on everything they show.
+- Ground cards (`sim.py`, `views._ground_card`): Match, Player and Scout each carry one card
+  that shows its subject on the ground, with no switch to find it (the app is a showcase). Each
+  card has its own Heat / Events / Running control: Heat, where they spent the time; Events,
+  their real goals, marks, contested and uncontested possessions at simulated spots; Running,
+  simulated GPS. Match (`match_ground_card`, beside the players table): the team in that game,
+  running load table. Player (`player_ground_card`, beside the range card): his season, running
+  game by game. Scout (`scout_ground_card`, third in the bottom row; Heat and Events only): the
+  club's players in their games against Freo, attacking right (their roles come from their
+  stats, as their positions aren't listed). Counts are the real box score; only the places and
+  the GPS running are simulated (listed position, time on ground, work rate), seeded from
+  season, round and player so they never change. Every figure carries an amber SIMULATED tag;
+  Wharf-ai's tools never see it and its page note says the ground card is a demo. The match
+  players table has pixel column widths so it fits beside the card at 1440 (at 1280 the last
+  column scrolls inside the table).
   `tests/test_sim.py` checks counts, repeatability and that the real data and Wharf-ai are
   untouched.
 

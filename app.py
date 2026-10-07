@@ -99,8 +99,6 @@ WAIT_PHRASES = [
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
-    if focus and focus.startswith("a SIMULATED demo"):   # real-data questions only
-        focus = None
     if focus and focus.startswith(f"the {season} season"):   # the season, cut to a slice
         focus = None
     if focus and focus.startswith("a comparison of "):
@@ -523,7 +521,6 @@ nav.apply_pending(all_seasons, _game_label,
 if PHONE:
     with st.container(key="topbar"):
         h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
-        hg = st.container()                   # the Ground switch (simulated)
         htk = st.container()                  # the insights ticker, under the controls
     band_slot = st.container()
     pick_slot = pick2_slot = pick3_slot = st.container()
@@ -534,7 +531,6 @@ elif SCROLL:
     with st.container(key="topbar"):
         hb, h2, h3, h4, h5, h6 = st.columns([1.6, 0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
                                             vertical_alignment="center")
-        hg = st.container()                   # the Ground switch (simulated)
         htk = st.container()                  # the insights ticker, under the controls
     top = st.container()
     if LAYOUT == "split":
@@ -550,8 +546,8 @@ else:
     seasons_w = 0.55 * len(all_seasons)       # the season buttons, about 0.55 each
     with st.container(key="topbar"):
         # The insights ticker runs in the gap between the views and the icons.
-        hb, h2, h3, htk, hg, h4, h5, h6 = st.columns(
-            [1.9, seasons_w, 2.7, 4.75 - seasons_w, 1.15, 0.3, 0.3, 0.3],
+        hb, h2, h3, htk, h4, h5, h6 = st.columns(
+            [1.9, seasons_w, 2.7, 5.9 - seasons_w, 0.3, 0.3, 0.3],
                                                 vertical_alignment="center")
     main, side = st.columns([3.55, 1])
     with main:
@@ -576,13 +572,6 @@ season = season or all_seasons[-1]
 baseline = D.baseline_season(season, all_seasons)
 tdf = D.team_season(team_df, season)
 pdf_season = D.players_season(player_df, season)
-# Match, Player and Scout can show their subject on the ground (SIMULATED, sim.py).
-GROUND = False
-if view in ("Match", "Player", "Scout"):
-    with hg:
-        GROUND = st.toggle("Ground", key="ground_mode",
-                           help="Simulated: positions on the ground, where goals, marks and "
-                                "possessions happened, and GPS running for this game, player or club")
 with htk:
     insight_ticker(season_insights(season, baseline), cls="tk-bar" if not SCROLL else "tk-bar tk-strip")
 pos = scout = player = game_round = None
@@ -737,9 +726,11 @@ else:
         focus = f"the {season} season, {games_slice.lower()} only"
 
 
-if GROUND and focus:
-    focus += ("; the page is showing SIMULATED positions and GPS running for it (a demo, not "
-              "real data): answer only from the real match data and say the ground view is a demo")
+# Match, Player and Scout pages carry a ground card of SIMULATED positions and running.
+if focus and view in ("Match", "Player", "Scout") and page is None and not vs:
+    focus += ("; the page also has a ground card of SIMULATED positions and GPS running (a demo, "
+              "not real data): answer only from the real data, and if asked about positions or "
+              "running say the ground card is a demo")
 
 
 def usage_button():
@@ -772,20 +763,14 @@ if CHAT_TOP:
 with main:
     if CHAT_TOP:
         st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
-    if GROUND and view == "Match" and pos is not None:      # demo: the game on the ground
-        V.render_ground(team_df, player_df, season, label, "Whole team", SZ)
-    elif GROUND and view == "Player" and player is not None and page is None:
-        V.render_ground(team_view, player_view, season, "Whole season", player, SZ)
-    elif GROUND and view == "Scout" and scout is not None and page is None:
-        V.render_scout_ground(team_df, player_df, scout, SZ)
-    elif page == "squad":
+    if page == "squad":
         V.render_squad(player_view, season, baseline, SZ)
     elif page == "clubs":
         V.render_clubs(team_df, all_seasons, SZ)
     elif page == "qt":
         V.render_quarter_time(team_df, all_seasons, SZ)
     elif scout is not None:
-        V.render_scout(team_df, league, season, scout, SZ)
+        V.render_scout(team_df, player_df, league, season, scout, SZ)
     elif view in ("Season", "Player") and not len(tdf):
         st.info(f"No {games_slice.lower()} in {season}. Pick another slice of games.")
     elif player is not None and vs:
