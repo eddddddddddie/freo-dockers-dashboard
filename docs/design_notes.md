@@ -504,3 +504,9 @@ pages they belong to (Lab removed; five places):
   and what's needed to draw an example game). The app reads one in about 1 ms instead of
   working it out in about 2 s; a club missing from the file is worked out live. Example games
   are seeded by club and venue, so each matchup has its own.
+- Our season, Game by game: a Momentum / Counts switch. Momentum (default) overlays every game
+  on one clock with each quarter stretched to 30 units (`data.season_momentum`,
+  `charts.season_momentum`): each game's margin line (purple wins, grey losses; click one to open
+  it), bold average lines for wins and losses, and the season's average momentum underneath;
+  the takeaway names the strongest and weakest third of a quarter (2026: the middle of Q3, +2.0;
+  early Q2, -0.4). Counts is the game strip with its Biggest run row.

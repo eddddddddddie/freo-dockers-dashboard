@@ -219,6 +219,18 @@ def club_last5(games, runs, club_label):
     return f"{head}; their biggest run {r['goals']}.{r['behinds']} ({lbl})"
 
 
+def season_momentum(avg):
+    """'Strongest: the middle of Q3 (+2.0 momentum on average); weakest: early Q2 (-0.4)'.
+    avg: data.season_momentum's average momentum on the common clock."""
+    if not len(avg):
+        return ""
+    third = (avg["x"] % D.QUARTER_UNITS // (D.QUARTER_UNITS / 3)).clip(upper=2).astype(int)
+    m = avg.groupby([avg["quarter"], third])["momentum"].mean()
+    name = lambda k: f"{['early', 'the middle of', 'late'][k[1]]} Q{k[0]}"   # noqa: E731
+    hi, lo = m.idxmax(), m.idxmin()
+    return f"Strongest: {name(hi)} ({m[hi]:+.1f} momentum on average); weakest: {name(lo)} ({m[lo]:+.1f})"
+
+
 def match_leaders(goals, opp_goals=None, opp_label=None):
     """'Goals: Voss 3, Dudley 2 · BRL: Neale 3' (the opposition's when known)."""
     text = f"Goals: {goals}" if goals != "none" else "No Freo goals recorded"

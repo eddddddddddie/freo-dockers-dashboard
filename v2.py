@@ -569,13 +569,34 @@ def our_season(ctx, season, baseline, tdf, pdf, games_slice):
     tiles(from_stat_tiles(D.tiles(ctx["team_view"], season, baseline), str(baseline)))
 
     def strip_card():
-        rows, z, hover, labels = D.game_strip(tdf, runs=True)
-        with finding("v2_strip", "Game by game", T.strip(tdf),
-                     "each count shaded by who won it: purple Freo, cyan the opposition · click a game",
-                     question="What do our losses have in common?"):
-            ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), CHART_H,
-                                     focus=T.top_driver(D.margin_drivers(tdf))), key=f"v2strip_{season}")
-            _open_game_from(ev, labels, season)
+        has_events = D.load_score_events() is not None
+        mode = (st.session_state.get("v2_strip_mode") or "Momentum") if has_events else "Counts"
+        if mode == "Momentum":
+            worms, avg = D.season_momentum(tdf)
+            head, how = (T.season_momentum(avg),
+                         "every game's margin after every score, each quarter the same length (purple "
+                         "wins, grey losses, bold the averages), then the season's average momentum · "
+                         "click a game")
+            question = "When in games do we usually take control, and when do we lose it?"
+        else:
+            rows, z, hover, labels = D.game_strip(tdf, runs=True)
+            head, how = (T.strip(tdf), "each count shaded by who won it: purple Freo, cyan the "
+                                       "opposition · click a game")
+            question = "What do our losses have in common?"
+        with finding("v2_strip", "Game by game", head, how, question=question):
+            if has_events:
+                st.segmented_control("Show", ["Momentum", "Counts"], default="Momentum", key="v2_strip_mode",
+                                     label_visibility="collapsed")
+            if mode == "Momentum":
+                ev = _plot(CH.season_momentum(worms, avg, TALL_H), key=f"v2smom_{season}")
+                point = nav.clicked(ev)
+                if point and point.get("customdata"):
+                    label = point["customdata"]
+                    go(place="Last game", season=season, game=str(label).split(" ")[0])
+            else:
+                ev = _plot(CH.game_strip(rows, z, hover, labels, tdf["result"].tolist(), CHART_H,
+                                         focus=T.top_driver(D.margin_drivers(tdf))), key=f"v2strip_{season}")
+                _open_game_from(ev, labels, season)
 
     def wins_card():
         ww = D.what_wins(tdf)

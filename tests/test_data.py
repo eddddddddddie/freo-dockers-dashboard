@@ -287,3 +287,17 @@ def test_league_score_events_match_every_final_score():
                  & ((lg["game_dt"] - g["game_dt"].normalize()).abs() <= pd.Timedelta(days=1))].iloc[0]
         theirs, _ = D.club_game_events(row)
         assert theirs["margin"].tolist() == mine["margin"].tolist(), (g["season"], g["round"])
+
+
+def test_season_momentum_lines_up_every_game(team):
+    """Every game on the common clock: each line starts level at 0, ends at the
+    game's real final margin at the full-time mark, and moves forward in time."""
+    t26 = D.team_season(team, 2026)
+    worms, avg = D.season_momentum(t26)
+    assert len(worms) == len(t26)
+    end = 4 * D.QUARTER_UNITS
+    for w, (_, g) in zip(worms, t26.iterrows()):
+        assert w["y"][0] == 0 and w["y"][-1] == int(g["margin"]) and w["x"][-1] == end
+        assert all(b >= a for a, b in zip(w["x"], w["x"][1:]))
+        assert 0 <= min(w["x"]) and max(w["x"]) <= end
+    assert avg["x"].min() == 0 and avg["x"].max() == end and avg["momentum"].notna().all()

@@ -699,6 +699,67 @@ def momentum_multiples(games, height, us, us_color, them_color, cols=None):
     return fig
 
 
+def season_momentum(worms, avg, height):
+    """Every game of the season on one clock (each quarter the same length): each
+    game's margin after every score as a faint line (purple wins, grey losses),
+    the average line for wins and for losses in bold, named at their ends; under
+    it the season's average momentum, Freo up, the opposition down. Each game's
+    line carries invisible points so a click opens it (the label is customdata)."""
+    import numpy as np
+    from plotly.subplots import make_subplots
+    import data as D
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.68, 0.32], vertical_spacing=0.06)
+    end = 4 * D.QUARTER_UNITS
+    colour = {"W": COLORS["freo"], "L": COLORS["neutral"], "D": COLORS["muted"]}
+    for w in worms:
+        label = f"{w['round']} v {D.abbr(w['opponent'])}"
+        fig.add_trace(go.Scatter(
+            x=w["x"], y=w["y"], mode="lines+markers", line=dict(color=colour[w["result"]], width=1, shape="hv"),
+            marker=dict(size=7, opacity=0), opacity=0.35 if w["result"] == "W" else 0.45, showlegend=False,
+            customdata=[label] * len(w["x"]),
+            hovertemplate=f"{label} ({w['result']} {w['margin']:+d})<br>margin %{{y:+d}}<extra></extra>"),
+            row=1, col=1)
+    grid = np.arange(0, end + 1e-9, 1.0)
+    ends = []
+    for res, name, col in (("W", "avg win", COLORS["win"]), ("L", "avg loss", COLORS["loss"])):
+        mine = [w for w in worms if w["result"] == res]
+        if not mine:
+            continue
+        # Each game's margin read off its step line at every point of the clock, then averaged.
+        ys = [np.array([w["y"][max(0, np.searchsorted(w["x"], g, side="right") - 1)] for g in grid])
+              for w in mine]
+        mean = np.mean(ys, axis=0)
+        fig.add_trace(go.Scatter(x=grid, y=mean, mode="lines", line=dict(color=col, width=2.5),
+                                 hovertemplate=name + ": %{y:+.1f}<extra></extra>", showlegend=False),
+                      row=1, col=1)
+        ends.append((float(mean[-1]), f"{name} ({len(mine)})", col))
+    step = float(avg["x"].diff().median() or 0.5)
+    for vals, col, name in ((avg["momentum"].clip(lower=0), COLORS["freo"], "Freo"),
+                            (avg["momentum"].clip(upper=0), COLORS["opp"], "opposition")):
+        fig.add_trace(go.Bar(x=avg["x"], y=vals, width=step, marker=dict(color=col, line=dict(width=0)),
+                             hovertemplate="average momentum %{y:+.1f} (" + name + ")<extra></extra>",
+                             showlegend=False), row=2, col=1)
+    for q in range(1, 4):
+        for r in (1, 2):
+            fig.add_vline(x=q * D.QUARTER_UNITS, line=dict(color=COLORS["neutral"], width=1), row=r, col=1)
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"), row=1, col=1)
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(showlegend=False, bargap=0, margin=dict(l=4, r=70, t=8, b=4))
+    fig.update_xaxes(range=[0, end], showticklabels=False, row=1, col=1)
+    fig.update_xaxes(range=[0, end], tickmode="array", tickvals=[15, 45, 75, 105],
+                     ticktext=["Q1", "Q2", "Q3", "Q4"], row=2, col=1)
+    lo = min(min(w["y"]) for w in worms) if worms else -10
+    hi = max(max(w["y"]) for w in worms) if worms else 10
+    fig.update_yaxes(range=[lo - 5, hi + 5], title=dict(text="Margin", font=dict(size=10)), row=1, col=1)
+    top = max(float(avg["momentum"].abs().max()), 1)
+    fig.update_yaxes(range=[-top * 1.2, top * 1.2], showticklabels=False, row=2, col=1,
+                     title=dict(text="Avg momentum", font=dict(size=10)))
+    for y, text, col in ends:        # the average lines named at their ends, in place of a key
+        fig.add_annotation(x=end, y=y, row=1, col=1, text=text, showarrow=False, xanchor="left", xshift=4,
+                           font=dict(size=10, color=col))
+    return fig
+
+
 def run_bars(summary, height, opp_color=None):
     """Each game's biggest scoring run: Freo's up, the opposition's down (points),
     dotted lines at 3 goals, the result letter above each game. Invisible point

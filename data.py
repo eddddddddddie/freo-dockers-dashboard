@@ -628,6 +628,46 @@ def season_events(tdf):
     return out
 
 
+QUARTER_UNITS = 30     # each quarter drawn as 30 units, so games of different lengths line up
+
+
+def _norm_time(t, quarter, quarters):
+    """Game minutes -> a common clock where every quarter is QUARTER_UNITS long."""
+    start = quarter.map(quarters["start"]).values
+    length = quarter.map(quarters["length"]).values
+    return (quarter.values - 1) * QUARTER_UNITS + (t.values - start) / length * QUARTER_UNITS
+
+
+@st.cache_data
+def season_momentum(tdf, step=0.5):
+    """Every game of a season on one clock (each quarter stretched to the same
+    length): each game's margin after every score, and the season's average
+    momentum at each point (data.momentum, averaged across the games).
+    Returns (worms, avg) where worms is a list of dicts (round, opponent,
+    result, margin, x, y) and avg a DataFrame (x, momentum, quarter)."""
+    worms, curves = [], []
+    grid = np.arange(0, 4 * QUARTER_UNITS + 1e-9, step)
+    for g, e, q in season_events(tdf):
+        x = _norm_time(e["t"], e["quarter"], q)
+        worms.append({"round": g["round"], "opponent": g["opponent"], "result": g["result"],
+                      "margin": int(g["margin"]), "x": [0.0] + list(x) + [4.0 * QUARTER_UNITS],
+                      "y": [0] + e["margin"].astype(int).tolist() + [int(g["margin"])]})
+        mom = momentum(e, q)
+        mx = _norm_time(mom["t"], mom["quarter"], q)
+        curve = np.full(len(grid), np.nan)
+        for qq in range(1, 5):      # interpolate within each quarter (momentum restarts at each)
+            sel = mom["quarter"].values == qq
+            gsel = (grid >= (qq - 1) * QUARTER_UNITS) & (grid <= qq * QUARTER_UNITS)
+            if sel.sum() >= 2:
+                curve[gsel] = np.interp(grid[gsel], mx[sel], mom["momentum"].values[sel])
+        curves.append(curve)
+    if not worms:
+        return [], pd.DataFrame(columns=["x", "momentum", "quarter"])
+    avg = pd.DataFrame({"x": grid, "momentum": np.nanmean(np.vstack(curves), axis=0)})
+    avg["quarter"] = np.minimum(avg["x"] // QUARTER_UNITS + 1, 4).astype(int)
+    return worms, avg
+
+
 @st.cache_data
 def run_table(tdf, min_goals=RUN_GOALS):
     """Every run of min_goals+ goals unanswered in these games, in game order:
