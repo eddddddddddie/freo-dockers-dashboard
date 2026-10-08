@@ -24,6 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   minutes: 2 requests a match for ~430 matches). Writes `league_team_games.csv`, one row per team
   per match, team totals summed from player stats, cumulative quarter scores (the API's
   `periodScore` is per quarter, so it is summed). Checks Fremantle rows against AFL Tables.
+- Single test: `pytest tests/test_data.py::test_name` (or `-k <pattern>`).
 - Tests: `pip install -r requirements-dev.txt`, then `pytest -m "not ui"` (data rules, Wharf-ai
   tools vs plain pandas, login, usage cap, insights, headless app start via AppTest) and
   `pytest -m ui` (Playwright: one-screen fit in every view at 1440x790, 1920x960, 1280x680,
@@ -51,7 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `evals/results/`, gitignored). Run it after any change to the prompt, tools or model.
 - Check the merge: `python -c "import data; data.ext_check()"` (coverage, surname mismatches,
   and where the two sources disagree on shared stats).
-- Run: `streamlit run app.py`. There are no tests or linter config.
+- Run: `streamlit run app.py`. There is no linter config.
 - Secrets live in `.streamlit/secrets.toml` locally (gitignored, never commit it) or the app's
   Secrets on Streamlit Cloud, read through `settings.get()`: `APP_USERNAME` / `APP_PASSWORD`
   (login, required: the app stays locked without them), optional `APP_COOKIE_SECRET` (signs the
@@ -59,6 +60,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_BASE_URL`, `FREO_CHAT_MODEL`, `USAGE_DATABASE_URL`
   (Postgres for the usage log). The repo is public, so
   never put credentials in code.
+
+## Code map
+- Entry and wiring: `app.py` (sign-in gate, top bar, season band, pickers, Wharf-ai panel as a
+  fragment) calls `views.render`, which picks a view and lays out cards through `views.arrange`.
+- Data: `data.py` loads and merges every CSV (cached) and computes all derived tables, tiles and
+  records. Views, takeaways, insights and Wharf-ai's tools all read from it, so stat logic belongs here,
+  not in views or charts.
+- Presentation: `charts.py` (Plotly figures), `theme.py` (CSS, colours, HTML blocks), `layout.py`
+  (window size to card heights and layout mode), `nav.py` (address bar state, `nav.go`),
+  `takeaways.py` (card one-liners and chart focus), `marks.py` (band drawings), `sim.py`
+  (simulated ground cards), `tour.py` + `components/` (custom JS components).
+- Wharf-ai: `chatbot.py` (prompt, streaming tool loop) -> `wharf_tools.py` (pandas tools) ->
+  `evidence.py` (traces numbers in answers to tool tables); `insights.py` (no-LLM insights);
+  `usage.py` (caps, log, saved chats), `admin.py` (usage dialog).
+- Infra: `auth.py` (Google or password login, cookie), `settings.py` (secrets/env lookup).
+- Data pipeline: `freo_scraper.py`, `afl_api_scraper.py`, `league_scraper.py`, orchestrated by
+  `refresh.py`. The CSVs are committed and are the app's only data source.
 
 ## Goal
 Build a player-by-player, game-by-game stats dashboard for the Fremantle Dockers (AFL),
@@ -68,7 +86,7 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
 
 ## Data
 - Source: afltables.com (free, public). Be polite: keep the 1.5 s delay between requests.
-- `freo_scraper.py` (already written) builds two CSVs. Run: `python freo_scraper.py 2025 2026`
+- `freo_scraper.py` builds three CSVs. Run: `python freo_scraper.py 2025 2026`
   - `freo_player_games.csv`: one row per player per game. Game columns: season, round, date,
     type (Home/Away/Final), opponent, venue, result, margin, jumper, player, sub (on/off).
     Stats: kicks, marks, handballs, disposals, goals, behinds, hitouts, tackles, rebound_50s,
@@ -87,11 +105,11 @@ Inspiration: an Aston Villa performance dashboard (side nav, season picker,
   `refresh.py 2024`: 74 games (2024: 23, no finals), 23 players per game, 1702 player rows. The
   same refresh brought in Champion Data's later revisions to 2026 metres gained (a few metres in
   some games).
+  Player sums match team totals, score = 6 x goals + behinds, and margin = freo_score - opp_score.
 - Draws exist (2024 R12 v Collingwood, 75-75, result "D"). A draw is neither a win nor a loss:
   `data.record` and the other record counts carry `draws`, `theme.record_text` shows "12-10-1",
   and `theme.result_colour` gives draws the neutral grey (with the D letter). Never count
   "not a win" as a loss.
-  Player sums match team totals, score = 6 x goals + behinds, and margin = freo_score - opp_score.
 - Data quirks to handle in the dashboard:
   - Team `freo_behinds`/`opp_behinds` include rushed behinds; summed player behinds don't. Use team totals for goal accuracy.
   - AFL Tables doesn't mark substitutes on 2026 pages, so `sub` is blank for all of 2026. Don't infer subs
@@ -311,7 +329,7 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   table key changes after, so the old pick isn't reported again). 26px rows, scrolls inside the
   card; on a phone four stats and no RP. The takeaway names the biggest games on own average. Wharf-ai is
   told which match is on screen.
-- 8 tiles: season value, change vs baseline season, per-game sparkline. Differentials and goal
+- 6 tiles (`data.TILES`, `data.PLAYER_TILES`): season value, change vs baseline season, per-game sparkline. Differentials and goal
   accuracy change in absolute units (a % change of a value that can cross zero is meaningless);
   plain averages change in %. Accuracy is pooled (total goals / total scoring shots).
 - Middle row: game strip (one column per game: result, then margin and key differentials shaded
@@ -424,14 +442,14 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   server-side refusal fallback `fallbacks: "default"`), and the model gets every number from
   `wharf_tools.py` (team_games, team_aggregate, correlate, quarter_breakdown, player_aggregate,
   player_games, show_chart, league_aggregate, ladder, opp_players: the opposition's players in
-  their games against Freo, from `opp_player_games_ext.csv`, with the usual game filters).
+  their games against Freo, from `opp_player_games_ext.csv`, with the usual game filters). They are fixed pandas queries, no model-written code.
   Game filters include `behind_at` / `ahead_at` (Q1, Q2 = half time, Q3), and team metrics
   include `loss`, `draw` and `margin_q1`-`margin_q3`; the prompt says every win-loss record
   comes from team_aggregate sums of win/loss/draw, never from counting listed games (the
   baseline eval caught a "2-1" from four listed games that were 2-2). The API sometimes
   stops for "tool_use" with no tool call or no content at all: `_stream_answer` asks again
   (twice at most) instead of sending an empty tool-result turn (a 400). Wording in a tool
-  description can trigger it: "Use for who hurt us" did, 4 in 10; reworded, 0 in 10.: fixed pandas queries, no model-written code. show_chart draws a small
+  description can trigger it: "Use for who hurt us" did, 4 in 10; reworded, 0 in 10. show_chart draws a small
   team_trend / player_trend / player_bar chart under the answer from the data itself (the model
   never supplies the numbers); charts are stored with the message as figure JSON and only role +
   content go back to the API. Tool inputs stream eagerly, so
