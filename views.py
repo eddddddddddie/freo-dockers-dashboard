@@ -829,6 +829,92 @@ def render_quarter_time(team_df, all_seasons, sz):
             phone=[result_card, scatter_card, games_card])
 
 
+def render_momentum_season(team_df, season, all_seasons, sz):
+    """Momentum across a season, from every score in order: each game's biggest
+    runs, whether momentum carries from goal to goal (against chance), the first
+    and last 10 minutes of each quarter, and every run of 3+ goals."""
+    H = _full_h(sz)
+    top_h = int(H * 0.52) if LAYOUT == "desktop" else 340
+    low_h = H - top_h - 8 if LAYOUT == "desktop" else 340
+    tdf = D.team_season(team_df, season)
+    summary = D.game_run_summary(tdf)
+    if not len(summary):
+        st.info(f"No scores in order for {season} yet.")
+        return
+
+    def runs_card():
+        with card("momruns", height=_h(top_h)):
+            card_title("Biggest run, game by game", "points kicked unanswered · "
+                       + ("tap" if PHONE else "click") + " a game",
+                       takeaway=T.runs_season(summary))
+            ev = _plot(CH.run_bars(summary, top_h - 76), key=f"momruns_{season}")
+            point = nav.clicked(ev)
+            if point and point.get("x"):
+                nav.go(view="Match", season=season, game=str(point["x"]).split(" ")[0])
+
+    def carry_card():
+        with card("momcarry", height=_h(top_h)):
+            tests = {str(s): D.momentum_test(D.team_season(team_df, s)) for s in all_seasons}
+            tests["All"] = D.momentum_test(team_df[team_df["season"].isin(all_seasons)])
+            tests = {k: v for k, v in tests.items() if v}
+            card_title("Does momentum carry?", "after a goal, the next one in that quarter",
+                       takeaway=T.carry(tests.get(str(season)), str(season)))
+            _plot(CH.carry_dots(tests, top_h - 112))
+            st.caption("Grey: chance (each quarter's goals shuffled). A dot past it would mean "
+                       "momentum.")
+
+    def windows_card():
+        with card("momwin", height=_h(low_h)):
+            w, n = D.window_scoring(tdf)
+            card_title("First and last 10 minutes", "F first 10, M middle, L last 10",
+                       takeaway=T.windows(w))
+            _plot(CH.window_bars(w, low_h - 76, focus=T.window_focus(w)))
+
+    def list_card():
+        with card("momlist", height=_h(low_h)):
+            runs = D.run_table(tdf)
+            t, s = st.columns([2.4, 1], vertical_alignment="center")
+            with s:
+                side = st.segmented_control("Runs", ["Against", "By Freo"], default="Against",
+                                            key="mom_side", label_visibility="collapsed") or "Against"
+            against = side == "Against"
+            mine = runs[runs["team"] == ("Opp" if against else "Freo")] if len(runs) else runs
+            with t:
+                card_title(f"Every {D.RUN_GOALS}+ goal run " + ("against Freo" if against else "by Freo"),
+                           "click a row for the game", takeaway=T.run_list(mine, against))
+            if not len(mine):
+                st.caption("None this season.")
+                return
+            show = pd.DataFrame({
+                "Game": mine["round"] + " v " + mine["opponent"].map(D.abbr),
+                "Result": [f"{r} {m:+d}" if r != "D" else "D" for r, m in
+                           zip(mine["result"], mine["margin_final"])],
+                "Run": mine["goals"].astype(str) + "." + mine["behinds"].astype(str),
+                "From": mine["starts"], "Min": mine["minutes"],
+                "Margin": [f"{a:+d} to {b:+d}" for a, b in zip(mine["margin_before"], mine["margin_after"])],
+                # Text, so a run nobody answered (the game ended) shows blank, not "None".
+                "Reply (min)": [f"{v:.1f}" if v == v and v is not None else ""
+                                for v in mine["answered_in"]]})
+            n_sel = st.session_state.get("momlist_n", 0)
+            ev = st.dataframe(show, hide_index=True, width="stretch", row_height=26,
+                              column_config={"Reply (min)": st.column_config.TextColumn(
+                                  help="Minutes of play until the other side scored again "
+                                       "(blank: they didn't)"),
+                                  "Min": st.column_config.NumberColumn(help="How long the run lasted",
+                                                                       format="%.1f")},
+                              height=(low_h - 80) if LAYOUT == "desktop" else 300,
+                              on_select="rerun", selection_mode="single-row",
+                              key=f"momlist_{season}_{side}_{n_sel}")
+            rows = (ev.selection.get("rows") if ev and hasattr(ev, "selection") else None) or []
+            if rows:
+                st.session_state["momlist_n"] = n_sel + 1
+                nav.go(view="Match", season=season, game=mine["round"].iloc[rows[0]])
+
+    arrange(desktop=[([1.6, 1], [runs_card, carry_card]), ([1, 1.45], [windows_card, list_card])],
+            grid=[[runs_card], [carry_card, windows_card], [list_card]],
+            phone=[runs_card, carry_card, windows_card, list_card])
+
+
 # ---- On the ground (SIMULATED): positions and GPS running --------------------------
 def _ground_card(name, rows, role, H, who, attack="Freo", running=None, heat=True):
     """A SIMULATED ground card for some player-game rows, with its own switch:

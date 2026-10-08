@@ -72,6 +72,9 @@ How to answer:
 - If a tool returns an error, fix the call and try again.
 - If a question needs data we do not have, say so plainly. We do NOT have: {UNAVAILABLE}.
   Box-score data shows what happened, not why or where on the ground.
+- Every Freo game has every score in order with its time (the momentum tool), so runs,
+  leads lost and when a game turned can be answered. Nothing else is timed: no stats by
+  quarter or minute other than scores.
 - Correlations and splits are associations, not causes; say so when it matters.
 - Goal accuracy uses team totals (team behinds include rushed behinds; summed player
   behinds do not).

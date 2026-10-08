@@ -137,3 +137,45 @@ def test_behind_and_ahead_at_a_break_match_plain_pandas():
     assert f"Games matched: {ahead}." in run_ok("team_aggregate", {
         "metrics": ["margin"], "filters": {"season": 2026, "ahead_at": "Q2"}})
     assert W.run("team_games", {"metrics": ["margin"], "filters": {"behind_at": "Q9"}})[1]
+
+
+def _rows(text):
+    import io
+
+    import pandas as pd
+    body = [l for l in text.splitlines()[1:] if not l.startswith("(")]
+    return pd.read_csv(io.StringIO("\n".join(body)))
+
+
+def test_momentum_tool_matches_plain_pandas():
+    """Runs of 3+ goals against Freo in 2026, and the share of goals followed by
+    the same side's goal (same quarter, all seasons), counted from the raw CSV."""
+    import pandas as pd
+    ev = pd.read_csv(D.EVENTS_CSV).sort_values(["season", "round", "event"])
+    opp_runs = 0
+    for _, g in ev[ev["season"] == 2026].groupby("round"):
+        block = (g["team"] != g["team"].shift()).cumsum()
+        runs = g.assign(goal=g["kind"] == "goal").groupby(block).agg(
+            team=("team", "first"), goals=("goal", "sum"))
+        opp_runs += int(((runs["team"] == "Opp") & (runs["goals"] >= 3)).sum())
+    runs = _rows(run_ok("momentum", {"kind": "runs", "side": "against", "filters": {"season": 2026}}))
+    assert len(runs) == opp_runs
+    same = pairs = 0
+    for _, g in ev[ev["kind"] == "goal"].groupby(["season", "round", "quarter"]):
+        teams = g["team"].tolist()
+        pairs += len(teams) - 1
+        same += sum(a == b for a, b in zip(teams, teams[1:]))
+    carry = _rows(run_ok("momentum", {"kind": "carry", "filters": {"season": "all"}})).iloc[0]
+    assert (carry["pairs"], carry["same"]) == (pairs, same)
+
+
+@pytest.mark.parametrize("args", [
+    {"kind": "scores", "filters": {"season": 2026}},           # 27 games, not one
+    {"kind": "runs", "min_goals": 1},
+    {"kind": "windows", "minutes": 40},
+    {"kind": "momentum"},
+    {"kind": "runs", "filters": {"venue": "M.C.G."}},
+])
+def test_momentum_bad_input_is_an_error(args):
+    _, is_error, _ = W.run("momentum", args)
+    assert is_error

@@ -596,6 +596,105 @@ def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None
     return fig
 
 
+def run_bars(summary, height, opp_color=None):
+    """Each game's biggest scoring run: Freo's up, the opposition's down (points),
+    dotted lines at 3 goals, the result letter above each game. Invisible point
+    markers carry the click (Streamlit doesn't report clicks on bars)."""
+    opp_color = opp_color or COLORS["opp"]
+    x = (summary["round"] + " " + summary["opponent"].map(D.abbr)).tolist()
+    fig = go.Figure()
+    for col, best, sign, color, name in (("freo_best_pts", "freo_best", 1, COLORS["freo"], "Freo"),
+                                         ("opp_best_pts", "opp_best", -1, opp_color, "Opposition")):
+        fig.add_trace(go.Bar(
+            x=x, y=sign * summary[col], marker=dict(color=color, cornerradius=2), name=name,
+            customdata=summary[[best]].values, hoverinfo="skip"))
+    hover = [f"{lbl}: {r} by {abs(m)}" if r != "D" else f"{lbl}: drew"
+             for lbl, r, m in zip(x, summary["result"], summary["margin"])]
+    hover = [f"{h}<br>Freo's best run {fb}, theirs {ob}<br>Click to open the game"
+             for h, fb, ob in zip(hover, summary["freo_best"], summary["opp_best"])]
+    top = float(max(summary["freo_best_pts"].max(), summary["opp_best_pts"].max(), 18))
+    fig.add_trace(go.Scatter(x=x, y=[0] * len(x), mode="markers", customdata=hover,
+                             marker=dict(size=24, opacity=0.001), showlegend=False,
+                             hovertemplate="%{customdata}<extra></extra>"))
+    fig.add_trace(go.Scatter(
+        x=x, y=[top * 1.12] * len(x), mode="text", text=summary["result"].tolist(), hoverinfo="skip",
+        textfont=dict(size=10, color=[{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["muted"])
+                                      for r in summary["result"]]), showlegend=False))
+    for yv in (18, -18):
+        fig.add_hline(y=yv, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1))
+    fig = style_fig(fig, "Points in the run", unified=False, height=height)
+    fig.update_layout(barmode="relative", showlegend=False, bargap=0.3, margin=dict(l=4, r=40, t=8, b=4))
+    fig.update_yaxes(range=[-top * 1.2, top * 1.25])
+    # Which way is whose, and the 3 goal lines, named at the right edge.
+    for yv, text, color in ((top * 0.7, "Freo", COLORS["freo"]), (-top * 0.7, "Opp", opp_color),
+                            (18, "3 goals", COLORS["muted"]), (-18, "3 goals", COLORS["muted"])):
+        fig.add_annotation(x=1, xref="paper", y=yv, text=text, showarrow=False, xanchor="left",
+                           font=dict(size=10, color=color))
+    _round_ticks(fig, x)
+    return fig
+
+
+def carry_dots(tests, height):
+    """Is momentum real? One row per season (and all seasons): the grey bar is the
+    range chance gives (5th to 95th percentile of the shuffles) with a tick at its
+    middle, the dot is what happened. A dot past the bar would say the side that
+    kicked the last goal kicks the next more often than chance."""
+    fig = go.Figure()
+    names = list(tests)
+    for name in names:
+        r = tests[name]
+        fig.add_trace(go.Scatter(x=[r["lo"] * 100, r["hi"] * 100], y=[name, name], mode="lines",
+                                 line=dict(color=COLORS["neutral"], width=10), hoverinfo="skip",
+                                 showlegend=False, opacity=0.5))
+        fig.add_trace(go.Scatter(x=[r["chance"] * 100], y=[name], mode="markers", hoverinfo="skip",
+                                 marker=dict(symbol="line-ns", size=14, line=dict(color=COLORS["muted"], width=2)),
+                                 showlegend=False))
+        out = r["observed"] > r["hi"]
+        fig.add_trace(go.Scatter(
+            x=[r["observed"] * 100], y=[name], mode="markers+text", showlegend=False,
+            text=[f"{r['observed'] * 100:.0f}%"], textposition="middle right",
+            textfont=dict(size=11, color=COLORS["ink"]),
+            marker=dict(size=11, color=COLORS["freo"] if out else COLORS["ink"],
+                        line=dict(color="#FFFFFF", width=1.5)),
+            hovertemplate=(f"{name}: {r['same']} of {r['pairs']} goals followed by the same side "
+                           f"({r['observed'] * 100:.1f}%)<br>chance {r['chance'] * 100:.1f}% "
+                           f"(range {r['lo'] * 100:.1f} to {r['hi'] * 100:.1f}), p = {r['p']:.2f}"
+                           "<extra></extra>")))
+    lo = min(min(t["lo"], t["observed"]) for t in tests.values()) * 100 - 3
+    hi = max(max(t["hi"], t["observed"]) for t in tests.values()) * 100 + 5
+    fig = style_fig(fig, "", unified=False, height=height)
+    fig.update_layout(margin=dict(l=4, r=8, t=8, b=4))
+    fig.update_xaxes(range=[lo, hi], ticksuffix="%", title=dict(
+        text="next goal by the same side", font=dict(size=10, color=COLORS["muted"])))
+    fig.update_yaxes(categoryorder="array", categoryarray=names[::-1])
+    return fig
+
+
+def window_bars(w, height, focus=None):
+    """Net points a game in the first 10 minutes, the middle and the last 10 of
+    each quarter: Freo ahead up in purple, behind down in the opposition colour.
+    focus: (quarter, part) labels to keep full strength."""
+    # F / M / L under each quarter (first 10, middle, last 10): short enough to stay level.
+    x = [w["quarter"].tolist(), w["part"].str[0].tolist()]
+    keep = set(focus or [])
+    colors = [COLORS["freo"] if v >= 0 else COLORS["opp"] for v in w["net"]]
+    op = [1 if not keep or (q, p) in keep else FADE for q, p in zip(w["quarter"], w["part"])]
+    fig = go.Figure(go.Bar(
+        x=x, y=w["net"], marker=dict(color=colors, opacity=op, cornerradius=2),
+        text=[f"{v:+.1f}" for v in w["net"]], textposition="outside", textfont=dict(size=10),
+        customdata=w[["freo_pts", "opp_pts", "part"]].values,
+        hovertemplate="%{customdata[2]}: Freo %{customdata[0]:.1f}, opposition %{customdata[1]:.1f} "
+                      "a game (net %{y:+.1f})<extra></extra>", cliponaxis=False))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1))
+    fig = style_fig(fig, "Net points a game", unified=False, height=height)
+    fig.update_layout(bargap=0.25, margin=dict(l=4, r=6, t=14, b=34))   # room for both label rows
+    fig.update_xaxes(tickfont=dict(size=10), tickangle=0)
+    span = float(w["net"].abs().max() or 1)
+    fig.update_yaxes(range=[min(0, w["net"].min()) - span * 0.25, max(0, w["net"].max()) + span * 0.3])
+    return fig
+
+
 def match_player_grid(vals, pct, labels, height):
     """Every Freo player in one game: the number, shaded light to dark purple by
     that number as a % of the player's own season average."""

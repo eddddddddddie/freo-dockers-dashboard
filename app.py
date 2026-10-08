@@ -143,6 +143,13 @@ def example_prompts(season, baseline, focus=None):
                 "Which quarter do we fade in, and against whom?",
                 "How do we go in the last quarter of close games?",
                 "Do we finish games better at home or away?"]
+    if focus and focus.startswith("season momentum"):
+        return ["How often do we concede a run of three goals or more?",
+                "How quickly do we answer the opposition's runs?",
+                "Which games did we lose after leading in the last quarter?",
+                "When in a quarter do we score most?",
+                "Is momentum real in our games?",
+                "Which opponents kicked the biggest runs against us?"]
     if focus and focus.startswith("the opponent scout report for "):
         club = focus.split(" for ", 1)[1].split(",")[0]
         scout = [f"What wins {club} games?",
@@ -156,6 +163,7 @@ def example_prompts(season, baseline, focus=None):
         scout = []
     match = [
         "Why did we win or lose this game?",
+        "When did this game turn?",
         "Who were our best players in this game?",
         "How did this game compare with our season average?",
         "Where did the game turn, quarter by quarter?",
@@ -504,6 +512,8 @@ def _game_label(season, rnd):
     """The game picker's label for a round in a season (for links like ?game=GF)."""
     if rnd == nav.QT_ROUND:
         return nav.QT
+    if rnd == nav.MOM_ROUND:
+        return nav.MOM
     tdf_ = D.team_season(team_df, season)
     for label, i in D.game_choices(tdf_):
         if tdf_["round"].iloc[i] == rnd:
@@ -695,16 +705,23 @@ elif view == "Player":
 elif view == "Match" and len(tdf):
     choices = D.game_choices(tdf)
     labels = [c[0] for c in choices]
-    if st.session_state.get(f"game_{season}") not in [nav.QT] + labels:
+    pages = [nav.QT] + ([nav.MOM] if D.load_score_events() is not None else [])
+    if st.session_state.get(f"game_{season}") not in pages + labels:
         st.session_state[f"game_{season}"] = labels[0]   # the latest game
     with pick:
-        label = st.selectbox("Game", [nav.QT] + labels, key=f"game_{season}",
+        label = st.selectbox("Game", pages + labels, key=f"game_{season}",
                              label_visibility="collapsed")
     if label == nav.QT:
         page = "qt"
         game_round = nav.QT_ROUND
         season_band()
         focus = "the quarter-time check (how Freo have gone from a margin at a break)"
+    elif label == nav.MOM:
+        page = "mom"
+        game_round = nav.MOM_ROUND
+        season_band()
+        focus = (f"season momentum for {season}: scoring runs, the first and last 10 minutes of "
+                 "quarters, and whether momentum carries from goal to goal")
     else:
         pos = dict(choices)[label]
         game = tdf.iloc[pos]
@@ -763,6 +780,8 @@ with main:
         V.render_squad(player_view, season, baseline, SZ)
     elif page == "clubs":
         V.render_clubs(team_df, all_seasons, SZ)
+    elif page == "mom":
+        V.render_momentum_season(team_df, season, all_seasons, SZ)
     elif page == "qt":
         V.render_quarter_time(team_df, all_seasons, SZ)
     elif scout is not None:

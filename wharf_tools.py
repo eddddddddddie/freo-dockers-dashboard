@@ -450,6 +450,66 @@ _FILTERS = {
 }
 
 
+# ---- momentum: every score in order (freo_score_events.csv) -------------------
+MOMENTUM_KINDS = ["games", "runs", "windows", "carry", "scores"]
+
+
+def momentum(kind, filters=None, side="both", min_goals=3, minutes=10):
+    if D.load_score_events() is None:
+        raise ToolError("Scores in order are not in the data.")
+    if kind not in MOMENTUM_KINDS:
+        raise ToolError(f"kind must be one of {MOMENTUM_KINDS}.")
+    t = _filter(_team(), filters)
+    if not len(t):
+        raise ToolError("No games match those filters.")
+    note = _games_note(t)
+    if kind == "games":
+        out = D.game_run_summary(t)
+        return _csv(out, "One row per game. freo_best / opp_best: each side's biggest run of "
+                         "unanswered scores (goals.behinds; _pts its points); freo_runs / opp_runs: "
+                         f"runs of {D.RUN_GOALS}+ goals; max_lead / max_deficit: Freo's biggest lead "
+                         "and deficit at any point; q4_max_lead: biggest lead during the last "
+                         "quarter; lead_changes: times the lead changed hands. " + note)
+    if kind == "runs":
+        if side not in ("both", "for", "against"):
+            raise ToolError("side must be both, for (Freo's runs) or against.")
+        if not 2 <= int(min_goals) <= 10:
+            raise ToolError("min_goals must be 2 to 10.")
+        out = D.run_table(t, int(min_goals))
+        if len(out) and side != "both":
+            out = out[out["team"] == ("Freo" if side == "for" else "Opp")]
+        out = out.drop(columns=["t_start"], errors="ignore")
+        return _csv(out, f"Every run of {int(min_goals)}+ goals with no score by the other side. "
+                         "team: who kicked it; starts: quarter and clock; minutes: its length; "
+                         "margin_before/after: Freo's margin; answered_in: minutes of play until the "
+                         "other side scored (blank: the game ended first). " + note)
+    if kind == "windows":
+        if not 3 <= int(minutes) <= 15:
+            raise ToolError("minutes must be 3 to 15.")
+        out, n = D.window_scoring(t, int(minutes))
+        return _csv(out, f"Average points a game in the first and last {int(minutes)} minutes of "
+                         f"each quarter and the middle, over {n} games; net = Freo minus opposition.")
+    if kind == "carry":
+        r = D.momentum_test(t)
+        if not r:
+            raise ToolError("Not enough goals in those games.")
+        out = pd.DataFrame([{**r, **{k: r[k] * 100 for k in ("observed", "chance", "lo", "hi")}}])
+        out = out.rename(columns={"observed": "observed_pct", "chance": "chance_pct",
+                                  "lo": "lo_pct", "hi": "hi_pct"})
+        return _csv(out, "After a goal, how often the next goal in the same quarter was by the "
+                         "same side (observed, %), against chance: each quarter's goals shuffled "
+                         "2,000 times keeping the score (chance = mean, lo-hi = 5th to 95th "
+                         "percentile, p = share of shuffles at or above observed). Observed above "
+                         "hi would be evidence of momentum; inside the range is none. " + note)
+    if len(t) != 1:
+        raise ToolError(f"kind 'scores' needs filters matching one game; {len(t)} match. "
+                        "Add season and rounds, e.g. {\"season\": 2026, \"rounds\": [\"GF\"]}.")
+    events, quarters = D.game_events(t.iloc[0])
+    out = events.assign(clock=[D._clock(x, quarters) for x in events["t"]])[
+        ["event", "clock", "team", "kind", "player", "freo_score", "opp_score", "margin"]]
+    return _csv(out, "Every score in the game in order (player blank: rushed behind).")
+
+
 def _tool(name, description, props, required):
     return {
         "name": name, "description": description,
@@ -543,11 +603,25 @@ TOOLS.append(_tool(
      "group_by": {"type": "string", "enum": OPP_GROUPS},
      "sort_by": {"type": "string"}, "limit": {"type": "integer"}}, ["stats"]))
 
+TOOLS.append(_tool(
+    "momentum",
+    "Every score of every Freo game in order, with its time. kind: games (per game: each "
+    "side's biggest unanswered run, runs of 3+ goals, Freo's biggest lead and deficit, biggest "
+    "lead in the last quarter, lead changes), runs (every run of min_goals+ goals unanswered; "
+    "side for/against/both; how fast the other side answered), windows (points in the first "
+    "and last N minutes of each quarter), carry (does the side that kicked the last goal kick "
+    "the next one more often than chance), scores (one game's scores in order; filters must "
+    "match one game). Use for momentum, runs, when a game turned, and leads lost or overturned.",
+    {"kind": {"type": "string", "enum": MOMENTUM_KINDS}, "filters": _FILTERS,
+     "side": {"type": "string", "enum": ["both", "for", "against"]},
+     "min_goals": {"type": "integer"}, "minutes": {"type": "integer"}}, ["kind"]))
+
 _IMPL = {
     "team_games": team_games, "team_aggregate": team_aggregate, "correlate": correlate,
     "quarter_breakdown": quarter_breakdown, "player_aggregate": player_aggregate,
     "player_games": player_games, "show_chart": show_chart,
     "league_aggregate": league_aggregate, "ladder": ladder, "opp_players": opp_players,
+    "momentum": momentum,
 }
 
 

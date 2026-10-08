@@ -269,6 +269,19 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
     record, average final margin and net scoring after the break in games within a +/- window, a
     scatter of margin at the break vs final margin, and the matching games. Matched on score
     only, since there are no quarter-by-quarter stats.
+  - Match -> Season momentum (`views.render_momentum_season`, `game=MOM`; only when
+    `freo_score_events.csv` exists), for the season in the top bar: biggest run, game by game
+    (`charts.run_bars`: each game's biggest unanswered run, Freo up, the opposition down, dotted
+    3 goal lines, W/L letters, click a game to open it); does momentum carry?
+    (`charts.carry_dots`, `data.momentum_test`: after a goal, how often the next goal in the same
+    quarter is by the same side, against chance from shuffling each quarter's goals 2,000 times,
+    which keeps the score; per season and all seasons. As of 2026-10-08: 52.8% against 52.3% by
+    chance over 1486 pairs, p 0.30, so no sign of momentum; 2024 alone was closest, p 0.07);
+    first and last 10 minutes (`data.window_scoring`, `charts.window_bars`: net points a game in
+    the first 10, middle and last 10 of each quarter; 2026 best Q3's first 10, +4.6); every run
+    of 3+ goals against or by Freo (`data.run_table`: clock, length, margin before and after,
+    minutes until the other side scored again; click a row for the game). The season functions
+    are `st.cache_data`; the page takes about 1-2 s cold.
 - Wharf-ai usage (`admin.usage_log`, a dialog from the chart icon by the ? button) shows only to
   the emails in `WHARF_ADMINS` (comma separated, in secrets; Google sign-in only, so it never
   shows with the password login).
@@ -347,7 +360,11 @@ change, check the fit with screenshots at 1440x790, 1920x960 and 1280x680.
   server-side refusal fallback `fallbacks: "default"`), and the model gets every number from
   `wharf_tools.py` (team_games, team_aggregate, correlate, quarter_breakdown, player_aggregate,
   player_games, show_chart, league_aggregate, ladder, opp_players: the opposition's players in
-  their games against Freo, from `opp_player_games_ext.csv`, with the usual game filters). They are fixed pandas queries, no model-written code.
+  their games against Freo, from `opp_player_games_ext.csv`, with the usual game filters;
+  momentum: every score in order, kinds games / runs / windows / carry / scores, the last
+  needing filters that match one game). They are fixed pandas queries, no model-written code.
+  The prompt says every Freo game has its scores in order with times, and that nothing else is
+  timed. `evals/wharf_eval.py` cases 35-38 cover it (38/38 on 2026-10-08, US$0.35).
   Game filters include `behind_at` / `ahead_at` (Q1, Q2 = half time, Q3), and team metrics
   include `loss`, `draw` and `margin_q1`-`margin_q3`; the prompt says every win-loss record
   comes from team_aggregate sums of win/loss/draw, never from counting listed games (the

@@ -1,13 +1,13 @@
 """Wharf-ai accuracy test set.
 
-Asks Wharf-ai 34 questions whose answers are known, and checks each answer
+Asks Wharf-ai 38 questions whose answers are known, and checks each answer
 for the right number, record, name or refusal. Expected values are computed
 here with plain pandas from the CSVs (not through Wharf-ai's own tools), so
 the checks stay correct when the data is refreshed and a tool bug can't hide
 behind itself. Grading is deterministic string/number matching, no model.
 
 Run (needs ANTHROPIC_API_KEY, spends real money, about US$0.30-0.60 a run):
-    python evals/wharf_eval.py            # all cases (26 Freo + 2 league + 6 newer)
+    python evals/wharf_eval.py            # all cases (26 Freo + 2 league + 6 newer + 4 momentum)
     python evals/wharf_eval.py 3 7 12     # just these case numbers
 
 Writes evals/results/<timestamp>.json. Exit code 1 if any case fails.
@@ -119,7 +119,7 @@ def build_cases():
          "and by how much?", "nums",
          [round(p26[p26["player"] == n]["contested_poss"].mean(), 1)
           for n in ("Caleb Serong", "Andrew Brayshaw")]),
-    ] + league_cases() + newer_cases(t, p)
+    ] + league_cases() + newer_cases(t, p) + momentum_cases(t)
 
 
 def newer_cases(t, p):
@@ -159,6 +159,47 @@ def newer_cases(t, p):
          "many?", "all", [("text", [top["player"]]), ("num", (float(top["disposals"]), 0))]),
         ("Which opposition player laid the most tackles in a single game against us in 2026?",
          "text", tacklers),
+    ]
+
+
+def momentum_cases(t):
+    """Scores in order (the momentum tool), expected values from the raw events CSV."""
+    if not os.path.exists(D.EVENTS_CSV):
+        return []
+    ev = pd.read_csv(D.EVENTS_CSV)
+    e26 = ev[ev["season"] == S]
+    gf = e26[e26["round"] == "GF"].sort_values("event")
+    tail = 0
+    for team, kind in zip(gf["team"][::-1], gf["kind"][::-1]):
+        if team != "Opp":
+            break
+        tail += kind == "goal"
+    opp_runs, lost_after_q4_lead = 0, 0
+    res = t[t["season"] == S].set_index("round")["result"]
+    for rnd, g in e26.groupby("round"):
+        g = g.sort_values("event")
+        block = (g["team"] != g["team"].shift()).cumsum()
+        goals = g.assign(goal=g["kind"] == "goal").groupby(block).agg(team=("team", "first"),
+                                                                       goals=("goal", "sum"))
+        opp_runs += int(((goals["team"] == "Opp") & (goals["goals"] >= 3)).sum())
+        m = g["freo_score"] - g["opp_score"]
+        q4 = pd.concat([m[g["quarter"] < 4].tail(1), m[g["quarter"] == 4]])
+        lost_after_q4_lead += bool(res[rnd] == "L" and (q4 > 0).any())
+    same = pairs = 0
+    for _, g in ev[ev["kind"] == "goal"].sort_values("event").groupby(["season", "round", "quarter"]):
+        teams = g["team"].tolist()
+        pairs += len(teams) - 1
+        same += sum(a == b for a, b in zip(teams, teams[1:]))
+    gf_opp = t[(t["season"] == S) & (t["round"] == "GF")]["opponent"].iloc[0]
+    return [
+        (f"How many goals in a row did {gf_opp} kick to finish the 2026 grand final?",
+         "num", (float(tail), 0)),
+        ("In 2026, how many runs of three or more unanswered goals did the opposition kick "
+         "against us?", "num", (float(opp_runs), 0)),
+        ("In 2026, how many games did we lose after leading at some point in the last quarter?",
+         "num", (float(lost_after_q4_lead), 0)),
+        ("Across 2024 to 2026, after a goal, what percentage of the time was the next goal in "
+         "the same quarter kicked by the same team?", "num", (round(same / pairs * 100, 1), 0.1)),
     ]
 
 

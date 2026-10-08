@@ -241,3 +241,23 @@ def test_momentum_halves_every_half_life():
     assert q1[1.5] == 0 and q1[2.0] == 6
     assert abs(q1[2.0 + D.MOMENTUM_HALF_LIFE] - 3) < 1e-9
     assert (mom[mom["quarter"] == 2]["momentum"] == 0).all()
+
+
+def test_season_momentum_tables(team):
+    """Runs, per game summaries and windows agree with each other and the scores."""
+    t26 = D.team_season(team, 2026)
+    runs, summary = D.run_table(t26), D.game_run_summary(t26)
+    assert len(summary) == len(t26)
+    against = runs[runs["team"] == "Opp"]
+    assert int(summary["opp_runs"].sum()) == len(against)
+    assert (runs["goals"] >= D.RUN_GOALS).all()
+    # Each run moves the margin by exactly its points, in its side's direction.
+    sign = runs["team"].map({"Freo": 1, "Opp": -1})
+    assert ((runs["margin_after"] - runs["margin_before"]) == sign * runs["points"]).all()
+    gf = summary[summary["round"] == "GF"].iloc[0]
+    assert (gf["max_lead"], gf["q4_max_lead"], gf["opp_best"]) == (17, 17, "4.0")
+    w, n = D.window_scoring(t26)
+    assert n == len(t26)
+    # Every point lands in exactly one window.
+    total = (w["freo_pts"].sum() * n, w["opp_pts"].sum() * n)
+    assert total == pytest.approx((t26["freo_score"].sum(), t26["opp_score"].sum()))

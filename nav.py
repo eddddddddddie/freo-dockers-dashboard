@@ -20,6 +20,7 @@ VIEWS = ["Season", "Match", "Player", "Scout"]
 # address like any other pick: player=Whole squad, opp=All clubs, game=QT).
 SQUAD, ALL_CLUBS, QT = "Whole squad", "All clubs", "Quarter-time check"
 QT_ROUND = "QT"
+MOM, MOM_ROUND = "Season momentum", "MOM"      # game=MOM: runs and momentum across the season
 
 
 def go(**state):

@@ -556,13 +556,147 @@ def scoring_runs(events):
     if not len(events):
         return pd.DataFrame()
     block = (events["team"] != events["team"].shift()).cumsum()
-    runs = events.groupby(block).agg(
-        team=("team", "first"), goals=("kind", lambda k: int((k == "goal").sum())),
-        behinds=("kind", lambda k: int((k == "behind").sum())),
+    e = events.assign(_g=(events["kind"] == "goal").astype(int),
+                      _b=(events["kind"] == "behind").astype(int))
+    runs = e.groupby(block).agg(
+        team=("team", "first"), goals=("_g", "sum"), behinds=("_b", "sum"),
         start=("t", "first"), end=("t", "last"), q_start=("quarter", "first"),
         q_end=("quarter", "last"), first=("event", "first"))
     runs["points"] = 6 * runs["goals"] + runs["behinds"]
     return runs.sort_values(["points", "goals"], ascending=False).reset_index(drop=True)
+
+
+def _clock(t, quarters):
+    """Minutes from the first bounce -> 'Q3 12:05'."""
+    q = int(quarters.index[quarters["start"] <= t + 1e-9].max())
+    m = (t - quarters.loc[q, "start"]) * 60
+    return f"Q{q} {int(m // 60)}:{int(m % 60):02d}"
+
+
+def season_events(tdf):
+    """Every game in tdf with its scores in order: a list of (game row, events,
+    quarters) for the games that have score events."""
+    out = []
+    for _, g in tdf.iterrows():
+        ev = game_events(g)
+        if ev is not None:
+            out.append((g, *ev))
+    return out
+
+
+@st.cache_data
+def run_table(tdf, min_goals=RUN_GOALS):
+    """Every run of min_goals+ goals unanswered in these games, in game order:
+    who kicked it, its score (goals, behinds, points), when (clock, minutes long),
+    the margin before and after it, and how long the other side took to score
+    again (minutes of play; blank if they never did)."""
+    rows = []
+    for g, e, quarters in season_events(tdf):
+        runs = scoring_runs(e)
+        for _, r in runs[runs["goals"] >= min_goals].iterrows():
+            first = int(r["first"])
+            before = 0 if first == 1 else int(e.loc[e["event"] == first - 1, "margin"].iloc[0])
+            last = e[(e["t"] <= r["end"]) & (e["team"] == r["team"])]["event"].max()
+            after = int(e.loc[e["event"] == last, "margin"].iloc[0])
+            reply = e[(e["event"] > last) & (e["team"] != r["team"])]
+            rows.append({
+                "season": g["season"], "round": g["round"], "opponent": g["opponent"],
+                "result": g["result"], "margin_final": int(g["margin"]), "team": r["team"],
+                "goals": int(r["goals"]), "behinds": int(r["behinds"]), "points": int(r["points"]),
+                "starts": _clock(r["start"], quarters), "q_start": int(r["q_start"]),
+                "minutes": round(float(r["end"] - r["start"]), 1),
+                "margin_before": before, "margin_after": after,
+                "answered_in": round(float(reply["t"].iloc[0] - r["end"]), 1) if len(reply) else None,
+                "t_start": float(r["start"])})
+    return pd.DataFrame(rows)
+
+
+@st.cache_data
+def game_run_summary(tdf):
+    """One row per game: each side's biggest run (points, as goals.behinds), how
+    many runs of RUN_GOALS+ goals each side kicked, Freo's biggest lead and
+    deficit at any point, Freo's biggest lead in the last quarter, and how many
+    times the lead changed hands."""
+    rows = []
+    for g, e, _ in season_events(tdf):
+        runs = scoring_runs(e)
+        sign = np.sign(e["margin"])
+        sign = sign[sign != 0]
+        before_q4 = e[e["quarter"] < 4]["margin"]       # the margin at three quarter time too
+        q4 = pd.concat([before_q4.tail(1), e[e["quarter"] == 4]["margin"]])
+        row = {"season": g["season"], "round": g["round"], "opponent": g["opponent"],
+               "result": g["result"], "margin": int(g["margin"]),
+               "max_lead": max(int(e["margin"].max()), 0),
+               "max_deficit": max(-int(e["margin"].min()), 0),
+               "q4_max_lead": max(int(q4.max()) if len(q4) else 0, 0),
+               "lead_changes": int((sign != sign.shift()).sum() - 1) if len(sign) else 0}
+        for team, key in (("Freo", "freo"), ("Opp", "opp")):
+            mine = runs[runs["team"] == team]
+            top = mine.iloc[0] if len(mine) else None
+            row[f"{key}_best_pts"] = int(top["points"]) if top is not None else 0
+            row[f"{key}_best"] = f"{int(top['goals'])}.{int(top['behinds'])}" if top is not None else "0.0"
+            row[f"{key}_runs"] = int((mine["goals"] >= RUN_GOALS).sum())
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+@st.cache_data
+def window_scoring(tdf, minutes=10):
+    """Average points a game for and against in the first and last `minutes` of
+    each quarter, and the rest of it (quarters run about 30 minutes)."""
+    acc = {}
+    games = season_events(tdf)
+    for _, e, quarters in games:
+        for q, (start, length) in quarters.iterrows():
+            in_q = e[e["quarter"] == q]
+            into = in_q["t"] - start
+            part = pd.Series("Middle", index=in_q.index)
+            part[into <= minutes] = f"First {minutes}"
+            part[into > length - minutes] = f"Last {minutes}"
+            for p, grp in in_q.groupby(part):
+                f = float(grp.loc[grp["pts"] > 0, "pts"].sum())
+                o = float(-grp.loc[grp["pts"] < 0, "pts"].sum())
+                a = acc.setdefault((q, p), [0.0, 0.0])
+                a[0] += f
+                a[1] += o
+    n = max(len(games), 1)
+    rows = [{"quarter": f"Q{q}", "part": p, "freo_pts": f / n, "opp_pts": o / n, "net": (f - o) / n}
+            for (q, p), (f, o) in acc.items()]
+    order = {f"First {minutes}": 0, "Middle": 1, f"Last {minutes}": 2}
+    out = pd.DataFrame(rows, columns=["quarter", "part", "freo_pts", "opp_pts", "net"])
+    return out.sort_values(["quarter", "part"], key=lambda c: c.map(order) if c.name == "part" else c
+                           ).reset_index(drop=True), len(games)
+
+
+@st.cache_data
+def momentum_test(tdf, shuffles=2000, seed=7):
+    """Is momentum real? After a goal, how often is the next goal (in the same
+    quarter) kicked by the same side, against chance: each game's goals shuffled
+    within each quarter `shuffles` times, which keeps the score and how many goals
+    each side kicked in each quarter. Returns pairs, observed share, the chance
+    share (mean of the shuffles) and its 5th to 95th percentile, and a one-sided
+    p-value (share of shuffles at or above the observed)."""
+    rng = np.random.default_rng(seed)
+    seqs = []
+    for _, e, _ in season_events(tdf):
+        goals = e[e["kind"] == "goal"]
+        for _, grp in goals.groupby("quarter"):
+            if len(grp) >= 2:
+                seqs.append((grp["team"] == "Freo").to_numpy())
+    pairs = sum(len(x) - 1 for x in seqs)
+    if not pairs:
+        return None
+    same = sum(int((x[1:] == x[:-1]).sum()) for x in seqs)
+    sims = np.zeros(shuffles)
+    for x in seqs:
+        m = np.tile(x, (shuffles, 1))
+        m = rng.permuted(m, axis=1)
+        sims += (m[:, 1:] == m[:, :-1]).sum(axis=1)
+    obs = same / pairs
+    sims = sims / pairs
+    return {"pairs": pairs, "same": same, "observed": obs, "chance": float(sims.mean()),
+            "lo": float(np.percentile(sims, 5)), "hi": float(np.percentile(sims, 95)),
+            "p": float((sims >= obs - 1e-12).mean())}
 
 
 # ---- Quarter-time check ---------------------------------------------------------

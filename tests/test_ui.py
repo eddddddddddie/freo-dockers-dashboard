@@ -101,7 +101,8 @@ def test_every_view_fits_one_screen(browser, server, w, h):
     # cookie carries over): whole squad, all clubs, quarter-time check.
     for name, query in [("compare", "view=Player&player=Caleb%20Serong&vs=Andrew%20Brayshaw"),
                         ("squad", "view=Player&player=Whole%20squad"),
-                        ("clubs", "view=Scout&opp=All%20clubs"), ("qt", "view=Match&game=QT")]:
+                        ("clubs", "view=Scout&opp=All%20clubs"), ("qt", "view=Match&game=QT"),
+                        ("momentum", "view=Match&game=MOM")]:
         pg.goto(f"{server}/?season=2026&{query}")
         pg.wait_for_selector(".cv-band", timeout=60000)
         pg.wait_for_timeout(3000)

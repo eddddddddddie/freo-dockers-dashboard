@@ -159,6 +159,52 @@ def momentum(events, run, result, margin, opp_label):
     return f"{head}: {run_txt}" if run_txt else head
 
 
+def runs_season(summary):
+    """'Conceded a 3+ goal run in 15 of 27 games, won 9 of them'."""
+    if not len(summary):
+        return ""
+    hit = summary[summary["opp_runs"] > 0]
+    w = int((hit["result"] == "W").sum())
+    return (f"Conceded a {D.RUN_GOALS}+ goal run in {len(hit)} of {len(summary)} games, "
+            f"won {w} of them")
+
+
+def carry(test, label):
+    """Does the side that kicked the last goal kick the next one more often?"""
+    if not test:
+        return ""
+    obs, ch = test["observed"] * 100, test["chance"] * 100
+    if test["observed"] > test["hi"]:
+        return f"Yes in {label}: {obs:.0f}% against {ch:.0f}% by chance"
+    return f"No sign of it in {label}: {obs:.0f}% against {ch:.0f}% by chance"
+
+
+def window_focus(w):
+    """The best and the worst window: [(quarter, part), (quarter, part)]."""
+    if not len(w):
+        return None
+    hi, lo = w.loc[w["net"].idxmax()], w.loc[w["net"].idxmin()]
+    return [(hi["quarter"], hi["part"]), (lo["quarter"], lo["part"])]
+
+
+def windows(w):
+    if not len(w):
+        return ""
+    hi, lo = w.loc[w["net"].idxmax()], w.loc[w["net"].idxmin()]
+    name = lambda r: f"{r['quarter']} {r['part'].lower()}"
+    return f"Best: {name(hi)} ({hi['net']:+.1f} a game); worst: {name(lo)} ({lo['net']:+.1f})"
+
+
+def run_list(runs, against=True):
+    """'19 runs conceded; Freo scored again within 3.2 min on average'."""
+    if not len(runs):
+        return ""
+    who = "Freo" if against else "the opposition"
+    ans = runs["answered_in"].dropna()
+    tail = f"; {who} replied in {ans.median():.1f} min (median)" if len(ans) else ""
+    return f"{len(runs)} runs {'conceded' if against else 'kicked'}{tail}"
+
+
 def match_leaders(goals, opp_goals=None, opp_label=None):
     """'Goals: Voss 3, Dudley 2 · BRL: Neale 3' (the opposition's when known)."""
     text = f"Goals: {goals}" if goals != "none" else "No Freo goals recorded"

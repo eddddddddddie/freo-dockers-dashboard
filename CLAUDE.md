@@ -97,6 +97,9 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   `cfs/afl/playerStats|teamStats/match/{id}`) is unpublished: URLs and fields can change.
 - `freo_score_events.csv` is parsed from raw HTML (`freo_scraper.parse_scoring`) because AFL
   Tables leaves its quarter rows unclosed. Game clock = earlier quarters' full lengths + seconds.
+- Momentum (`data.momentum`, `momentum_test`, the Season momentum page, Wharf-ai's `momentum`
+  tool) comes from scores only: no other stat is timed. The shuffle test finds no momentum in
+  Freo's games so far; say so rather than implying runs predict the next goal.
 - Pressure acts rise when Freo don't have the ball (Freo win more often when the opposition wins
   the pressure count), so the pressure tile has no good/bad colour.
 - Tile changes: differentials and accuracy change in absolute units (a % change of a value that
