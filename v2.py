@@ -1,7 +1,8 @@
-"""Coach View v2 (behind ?v2=1): six places around a coach's week.
+"""Coach View v2 (behind ?v2=1): five places around a coach's week.
 
-Last game, Next opponent, Our season, Players, Game day and Lab (the simulated
-demos), with Wharf-ai always visible: beside the page on a desktop or landscape
+Last game, Next opponent, Our season, Players and Game day, with the simulated
+ground maps (heat maps, event spots, GPS running) and momentum charts on the
+pages they belong to, and Wharf-ai always visible: beside the page on a desktop or landscape
 tablet, docked to the bottom of the screen on a phone or portrait tablet. Pages
 scroll under the top bar, so nothing is squeezed to fit one screen.
 
@@ -29,13 +30,25 @@ from theme import (COLORS, _avatar, _ordinal, _sparkline, card_title, club_colou
                    leaders_list, record_text, result_colour, tape)
 import marks
 
-PLACES = ["Last game", "Next opponent", "Our season", "Players", "Game day", "Lab"]
+PLACES = ["Last game", "Next opponent", "Our season", "Players", "Game day"]
 # The first option of the club, player and compare pickers (a real option, so it shows).
 EVERY_CLUB, SQUAD, NOBODY = "Every club", "The squad", "Compare with..."
 SLUGS = {p: p.lower().replace(" ", "-") for p in PLACES}
 FROM_SLUG = {v: k for k, v in SLUGS.items()}
 OLD_VIEWS = {"Match": "Last game", "Scout": "Next opponent", "Season": "Our season",
              "Player": "Players"}
+GROUND_H = 430         # the ground cards (simulated heat maps and events)
+GROUND_NOTE = ("; the page also has SIMULATED ground maps (heat maps, event spots and GPS running: "
+               "a demo, not real data): answer only from the real data, and if asked about "
+               "positions, zones or running say the ground maps are a demo")
+# The AFL's finals round names, shortened ("Qualifying & Elimination Finals" -> "Finals wk 1").
+FINALS = [("Qualifying", "Finals wk 1"), ("Elimination", "Finals wk 1"), ("Semi", "SF"),
+          ("Preliminary", "PF"), ("Grand", "GF")]
+
+
+def short_round(api_round):
+    name = str(api_round)
+    return next((s for k, s in FINALS if k in name), name.replace("Round ", "Rd "))
 CHART_H = 300          # a card's chart height; pages scroll, so this never has to shrink
 TALL_H = 380
 DOCK = False           # set by run(): Wharf-ai docked to the bottom (phones, portrait tablets)
@@ -180,7 +193,7 @@ def finding(name, label, headline="", how="", question=None):
     "Ask Wharf-ai" button that sends `question` to the panel."""
     with V.card(name):
         if question:
-            t, b = st.columns([6, 1], vertical_alignment="top")
+            t, b = st.columns([4.2, 1], vertical_alignment="top")
             with b:
                 if st.button("Ask", key=f"ask_{name}", icon=":material/forum:",
                              type="tertiary", help=f"Ask Wharf-ai: {question}"):
@@ -264,11 +277,15 @@ def last_game(ctx, season, tdf, pdf, pos):
                      question="Which counts decided this game?"):
             tape(rows, opp_color=club["chart"], names=("Freo", short))
 
-    def players_card():
+    def ground_card():
+        V.match_ground_card(ctx["player_df"], season, game, GROUND_H)
+
+    def leaders_card():
         leaders, goals = D.match_leaders(pdf, game)
         theirs = D.opp_match_leaders(game)
-        with st.container(key="v2_leaders"):
-            st.markdown('<div class="v2-sub">Game leaders · Fremantle</div>', unsafe_allow_html=True)
+        with finding("v2_leaders", "Game leaders", T.match_leaders(goals, theirs[1], short) if theirs
+                     else T.match_leaders(goals), "Freo's leaders open the player",
+                     question="Who were our best players in this game?"):
             names = {f"{l['role']}: {l['player'].split()[-1]} {l['value']}": l["player"] for l in leaders}
             n = st.session_state.get("v2_lead_n", 0)
             pick = st.pills("Freo leaders", list(names), key=f"v2_lead_{season}_{game['round']}_{n}",
@@ -281,12 +298,15 @@ def last_game(ctx, season, tdf, pdf, pos):
                                   for l in theirs[0])
                 st.markdown(f'<div class="v2-line"><b>{html.escape(short)}</b> · {html.escape(line)}</div>',
                             unsafe_allow_html=True)
+
+    def players_card():
         V._match_players(pdf, game, season, pos, TALL_H)
 
-    grid([([1.55, 1], [momentum_card, tape_card]), ([1], [players_card])])
+    grid([([1.55, 1], [momentum_card, ground_card]), ([1.1, 1], [tape_card, leaders_card]),
+          ([1], [players_card])])
     return (f"{game['round']} v {opp} at {game['venue']}, "
             + ("drew" if game["result"] == "D" else
-               f"{'won' if game['result'] == 'W' else 'lost'} by {margin}"))
+               f"{'won' if game['result'] == 'W' else 'lost'} by {margin}") + GROUND_NOTE)
 
 
 def next_opponent(ctx, season, club):
@@ -314,6 +334,36 @@ def next_opponent(ctx, season, club):
             "note": f"Freo {t['freo']}"} for t in D.scout_tiles(lg, club, season)])
     short = D.abbr(club)
     tint, grey = colours["chart"], colours["vs"]
+    last5 = games.tail(5)
+
+    def last5_card():
+        shown, runs = [], []
+        for g in last5.itertuples():
+            ev = D.club_game_events(g._asdict())
+            rnd = short_round(g.api_round)
+            label = f"{rnd} v {D.abbr(g.opponent)} · {g.result} {int(g.margin):+d}"
+            if ev is None:
+                continue
+            events, quarters = ev
+            r = D.scoring_runs(events)
+            runs.append((label.split(" · ")[0], r.iloc[0] if len(r) else None))
+            shown.append((label, events, quarters, D.momentum(events, quarters)))
+        with finding("v2_last5", "Their last 5 games", T.club_last5(last5, runs, short),
+                     f"each game from {short}'s side: the margin after every score, then who had "
+                     "been scoring lately", question=f"How have {club} been winning and losing "
+                     "their recent games: fast starts or strong finishes?"):
+            if not shown:
+                st.caption("Scores in order for these games aren't in the data yet "
+                           "(league_events_scraper.py).")
+                return
+            fig = CH.momentum_multiples(shown, 300 if not DOCK else 230 * len(shown), short, tint, grey,
+                                        cols=None if not DOCK else 1)
+            _plot(fig)
+
+    def heat_card():
+        import sim
+        rows, role = sim.team_rows(last5, club)
+        V._ground_card("v2_opp_ground", rows, role, GROUND_H, f"{short}, last 5 games", attack=short)
 
     def style_card():
         avg, ranks = D.team_ranks(lg, season)
@@ -363,9 +413,9 @@ def next_opponent(ctx, season, club):
             _table_pick(show, f"v2h2h_{club}", lambda i: go(
                 place="Last game", season=int(rows["season"].iloc[i]), game=rows["round"].iloc[i]))
 
-    grid([([1.1, 1], [style_card, win_card]), ([1, 1], [quarters_card, form_card]),
-          ([1], [h2h_card])])
-    return f"the opponent scout report for {club}, {season} season"
+    grid([([1], [last5_card]), ([1.1, 1], [heat_card, style_card]), ([1.1, 1], [win_card, quarters_card]),
+          ([1, 1.1], [form_card, h2h_card])])
+    return f"the opponent scout report for {club}, {season} season" + GROUND_NOTE
 
 
 def club_index(ctx):
@@ -474,8 +524,14 @@ def our_season(ctx, season, baseline, tdf, pdf, games_slice):
                             lambda i: go(place="Last game", season=season, game=mine["round"].iloc[i]),
                             height=min(36 + 28 * len(show), 320))
 
-    grid([([1], [strip_card]), ([1, 1], [wins_card, quarters_card]), ([1], [momentum_card])])
-    return None if games_slice == D.GAME_SLICES[0] else f"the {season} season, {games_slice.lower()} only"
+    def ground_card():
+        import sim
+        V._ground_card("v2_season_ground", pdf, sim.roles(ctx["player_df"]), GROUND_H + 160,
+                       f"the team in {season}")
+
+    grid([([1], [strip_card]), ([1, 1], [wins_card, quarters_card]), ([1.6, 1], [momentum_card, ground_card])])
+    focus = None if games_slice == D.GAME_SLICES[0] else f"the {season} season, {games_slice.lower()} only"
+    return (focus or f"the {season} season") + GROUND_NOTE
 
 
 def players(ctx, season, baseline, pdf, player, vs, games_slice):
@@ -522,9 +578,12 @@ def players(ctx, season, baseline, pdf, player, vs, games_slice):
     def range_card():
         V._player_log(pdf, player, TALL_H)
 
-    grid([([1.6, 1], [trend_card, ranks_card]), ([1], [range_card])])
+    def ground_card():
+        V.player_ground_card(ctx["player_df"], season, player, GROUND_H)
+
+    grid([([1.6, 1], [trend_card, ranks_card]), ([1.6, 1], [range_card, ground_card])])
     focus = f"the player profile for {player}, {season} season"
-    return focus + (f", {games_slice.lower()} only" if games_slice != D.GAME_SLICES[0] else "")
+    return focus + (f", {games_slice.lower()} only" if games_slice != D.GAME_SLICES[0] else "") + GROUND_NOTE
 
 
 def compare(ctx, season, pdf, a, b):
@@ -667,32 +726,6 @@ def game_day(ctx, season, sz):
     return "the quarter-time check (how Freo have gone from a margin at a break)"
 
 
-def lab(ctx, season, tdf, pdf, player, club):
-    band("Lab", "simulated demos of what tracking data could show · not real data",
-         lead=("SIMULATED", "Every figure on this page"), cls="lab")
-    game = tdf.iloc[-1] if len(tdf) else None
-
-    def match_card():
-        if game is not None:
-            V.match_ground_card(ctx["player_df"], season, game, 460)
-
-    def player_card():
-        who = player or (D.player_list(pdf)[0] if len(pdf) else None)
-        if who:
-            V.player_ground_card(ctx["player_df"], season, who, 460)
-
-    def club_card():
-        opp = club or (game["opponent"] if game is not None else None)
-        if opp:
-            V.scout_ground_card(ctx["player_df"], opp, 460)
-
-    st.caption("The team in the last game, the player picked in Players, and the club picked in "
-               "Next opponent, each on the ground. Counts are real; places and running are simulated.")
-    grid([([1, 1], [match_card, player_card]), ([1], [club_card])])
-    return ("the Lab: SIMULATED ground maps and GPS running (a demo, not real data); answer only "
-            "from the real data and say the Lab is a demo")
-
-
 def _plot(fig, key=None):
     return V._plot(fig, key=key)
 
@@ -821,7 +854,7 @@ def _place(ctx, place, season, baseline, picks):
         picks.update(player=player, vs=vs, games=games_slice if games_slice != D.GAME_SLICES[0] else None)
         return players(ctx, season, baseline, D.players_season(ctx["player_view"], season), player, vs,
                        games_slice)
-    pick = st.session_state.get("v2_player")
+    return None
     club = st.session_state.get("v2_club")
     return lab(ctx, season, tdf, D.players_season(ctx["player_df"], season),
                None if pick in (None, SQUAD) else pick, None if club in (None, EVERY_CLUB) else club)
@@ -856,7 +889,6 @@ def inject_css(dock_mode, win_h):
           .card-title, .card-take, .card-title .take, .cv-band .ttl, .cv-band .ttl small {{ white-space:normal !important; }}
           .cv-band.v2 {{ height:auto; min-height:56px; flex-wrap:wrap; row-gap:6px; margin:6px 0 4px; }}
           .cv-band.v2 .opt, .cv-band.v2 .opt2 {{ display:block; }}
-          .cv-band.v2.lab {{ background:#8A5800; }}
           .cv-band.v2 .cv-stat span {{ display:block; }}
           /* Tiles fill whole rows: 6, then 3, then 2 a row as the window narrows. */
           .cv-tiles.v2 {{ grid-template-columns:repeat(6, minmax(0, 1fr)) !important; margin:6px 0; }}

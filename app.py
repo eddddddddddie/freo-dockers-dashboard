@@ -101,8 +101,8 @@ WAIT_PHRASES = [
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
-    if focus and (focus.startswith(f"the {season} season") or focus.startswith("the Lab")):
-        focus = None          # a slice of the season, or the Lab (simulated): season questions
+    if focus and focus.startswith(f"the {season} season"):   # the season, cut to a slice
+        focus = None
     if focus and focus.startswith("a comparison of "):
         pair = focus[len("a comparison of "):].split(",")[0]
         a, b = pair.split(" and ", 1)

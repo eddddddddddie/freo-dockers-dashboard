@@ -527,12 +527,56 @@ def game_events(game_row):
            & (ev["opponent"] == game_row["opponent"])].sort_values("event").copy()
     if not len(e):
         return None
+    return _with_clock(e)
+
+
+def _with_clock(e):
+    """Add the game clock (t, minutes from the first bounce), pts (+ the side the
+    page is about, - the other) and margin to one game's scores in order, which
+    have team "Freo" / "Opp" (the side the page is about / the other) and
+    freo_score / opp_score. Returns (events, quarters)."""
     lens = e.groupby("quarter")["quarter_secs"].first().reindex(range(1, 5)).fillna(30 * 60) / 60
     quarters = pd.DataFrame({"start": lens.cumsum().shift(fill_value=0), "length": lens})
     e["t"] = e["quarter"].map(quarters["start"]) + e["secs"] / 60
     e["pts"] = e["kind"].map({"goal": 6, "behind": 1}) * e["team"].map({"Freo": 1, "Opp": -1})
     e["margin"] = e["freo_score"] - e["opp_score"]
     return e.reset_index(drop=True), quarters
+
+
+LEAGUE_EVENTS_CSV = "league_score_events.csv"   # every score in every AFL game
+
+
+@st.cache_data
+def load_league_events():
+    """league_score_events.csv (league_events_scraper.py), or None."""
+    if not os.path.exists(LEAGUE_EVENTS_CSV):
+        return None
+    ev = pd.read_csv(LEAGUE_EVENTS_CSV)
+    ev["player"] = ev["player"].fillna("")
+    ev["_d"] = pd.to_datetime(ev["date"])
+    return ev
+
+
+def club_game_events(game):
+    """Any club's game, from that club's side: a league_team_games row (team,
+    opponent, season, date_local) -> (events, quarters) with team "Freo" meaning
+    the club (the side the page is about) and "Opp" its opponent, or None.
+    Matched on season, the two clubs and the date (within a day), never round."""
+    ev = load_league_events()
+    if ev is None:
+        return None
+    club, opp = game["team"], game["opponent"]
+    day = pd.Timestamp(game["date_local"])
+    m = ev[(ev["season"] == game["season"]) & ((ev["_d"] - day).abs() <= pd.Timedelta(days=1))
+           & (((ev["home"] == club) & (ev["away"] == opp)) | ((ev["home"] == opp) & (ev["away"] == club)))]
+    if not len(m):
+        return None
+    e = m.sort_values("event").copy()
+    home = e["home"].iloc[0] == club
+    e["team"] = (e["team"] == club).map({True: "Freo", False: "Opp"})
+    e["freo_score"] = e["home_score"] if home else e["away_score"]
+    e["opp_score"] = e["away_score"] if home else e["home_score"]
+    return _with_clock(e)
 
 
 def momentum(events, quarters, step=0.5):

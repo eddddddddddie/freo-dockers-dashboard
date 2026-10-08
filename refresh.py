@@ -44,6 +44,7 @@ STEPS = [
     ("afl_api_scraper.py", ["freo_player_games_ext.csv", "freo_team_games_ext.csv",
                             "opp_player_games_ext.csv", "freo_squad.csv"]),
     ("league_scraper.py", ["league_team_games.csv"]),
+    ("league_events_scraper.py", ["league_score_events.csv"]),   # every score of every game
 ]
 GAMES = {"freo_team_games.csv": "Fremantle games (AFL Tables)",
          "freo_team_games_ext.csv": "Fremantle games (AFL match centre)"}

@@ -42,7 +42,6 @@ def _wharf_ai_shown(at):
     {"place": "players", "player": "Caleb Serong"},
     {"place": "players", "player": "Caleb Serong", "vs": "Andrew Brayshaw"},
     {"place": "game-day"},
-    {"place": "lab"},
 ])
 def test_every_place_draws_with_wharf_ai(query):
     at = _app({"season": "2026", **query})

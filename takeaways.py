@@ -205,6 +205,20 @@ def run_list(runs, against=True):
     return f"{len(runs)} runs {'conceded' if against else 'kicked'}{tail}"
 
 
+def club_last5(games, runs, club_label):
+    """'4-1 in their last 5; biggest run 7.2 v ADE (R24)'. games: league rows;
+    runs: [(label, biggest run row or None)] in the same order."""
+    if not len(games):
+        return ""
+    w, lo = int((games["result"] == "W").sum()), int((games["result"] == "L").sum())
+    head = f"{w}-{lo}" + (f"-{len(games) - w - lo}" if len(games) - w - lo else "") + " in their last 5"
+    mine = [(lbl, r) for lbl, r in runs if r is not None and r["team"] == "Freo"]
+    if not mine:
+        return head
+    lbl, r = max(mine, key=lambda x: (x[1]["points"], x[1]["goals"]))
+    return f"{head}; their biggest run {r['goals']}.{r['behinds']} ({lbl})"
+
+
 def match_leaders(goals, opp_goals=None, opp_label=None):
     """'Goals: Voss 3, Dudley 2 · BRL: Neale 3' (the opposition's when known)."""
     text = f"Goals: {goals}" if goals != "none" else "No Freo goals recorded"

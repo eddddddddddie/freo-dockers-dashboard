@@ -33,6 +33,9 @@ Feature-by-feature descriptions, measurements and history live in `docs/design_n
     `freo_squad.csv`. Optional: the app runs on the AFL Tables CSVs alone and hides extra stats.
   - `python league_scraper.py 2025 2026` (about 22 min): `league_team_games.csv`, every team's
     totals per match, for Scout and the ladder. Checks Freo rows against AFL Tables.
+  - `python league_events_scraper.py 2025 2026` (about 5.5 min a season, AFL Tables, same
+    delay): `league_score_events.csv`, every score of every AFL game in order (home and away as
+    AFL Tables lists them), for other clubs' momentum charts. Checks each game's last score.
 - Check the merge of the two sources: `python -c "import data; data.ext_check()"`.
 - Wharf-ai accuracy eval: `python evals/wharf_eval.py` (34 questions, answers computed with plain
   pandas, deterministic grading; spends about US$0.20; results in `evals/results/`, gitignored).
@@ -82,7 +85,10 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Never invent stats we don't have: shot locations, xG, player positions or zones, GPS running.
   The only exception is the ground cards (`sim.py`): places and running are simulated from real
   counts, seeded so they never change, tagged SIMULATED on every figure, and never seen by
-  Wharf-ai's tools. `tests/test_sim.py` guards this.
+  Wharf-ai's tools. The app is a showcase, so in v2 they sit on the pages they belong to (Last
+  game, Next opponent, Our season, Players), and the page note tells Wharf-ai they are a demo.
+  Other clubs' heat maps share their real team totals across a standard 22 (`sim.team_rows`),
+  since their players' stats exist only for games against Freo. `tests/test_sim.py` guards this.
 - Draws exist (2024 R12, result "D"). A draw is neither a win nor a loss: records carry `draws`
   (`data.record`, `theme.record_text` gives "12-10-1"). Never count "not a win" as a loss.
 - Team `freo_behinds`/`opp_behinds` include rushed behinds; summed player behinds don't. Use team
@@ -99,7 +105,9 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - `freo_score_events.csv` is parsed from raw HTML (`freo_scraper.parse_scoring`) because AFL
   Tables leaves its quarter rows unclosed. Game clock = earlier quarters' full lengths + seconds.
 - Momentum (`data.momentum`, `momentum_test`, the Season momentum page, Wharf-ai's `momentum`
-  tool) comes from scores only: no other stat is timed. The shuffle test finds no momentum in
+  tool) comes from scores only: no other stat is timed. Any club's game: `data.club_game_events`
+  (league_score_events.csv) gives the same shape as `game_events`, from that club's side
+  (team "Freo" means the side the page is about); matched on season, clubs and date, never round. The shuffle test finds no momentum in
   Freo's games so far; say so rather than implying runs predict the next goal.
 - Pressure acts rise when Freo don't have the ball (Freo win more often when the opposition wins
   the pressure count), so the pressure tile has no good/bad colour.
@@ -119,8 +127,10 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - It warns (doesn't stop) when kicks + handballs != disposals or a game has no Freo table.
 
 ## Coach View v2 (`?v2=1`, being built; the old views stay the default until switch-over)
-- `v2.py`: six places around a coach's week: Last game, Next opponent, Our season, Players,
-  Game day, Lab (simulated ground cards only). `app.py` hands over to `v2.run` right after sign-in
+- `v2.py`: five places around a coach's week: Last game, Next opponent, Our season, Players,
+  Game day. The momentum charts and the simulated ground cards are folded into them (Lab is gone):
+  Next opponent shows the club's last 5 games as momentum small multiples
+  (`charts.momentum_multiples`, from `data.club_game_events`) beside their heat map. `app.py` hands over to `v2.run` right after sign-in
   and sizing, before the old navigation reads queued moves, then stops.
 - Wharf-ai is always visible: a sticky panel beside the page (1000px+ wide and 600px+ tall),
   otherwise docked to the bottom of the screen (`wa_dock`, opens over the page as

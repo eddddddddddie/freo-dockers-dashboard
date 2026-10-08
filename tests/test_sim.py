@@ -2,6 +2,7 @@
 every time; never touching the real data or Wharf-ai."""
 
 import numpy as np
+import pytest
 
 import data as D
 import sim
@@ -42,3 +43,22 @@ def test_wharf_ai_never_sees_the_simulation():
     import wharf_tools
     for mod in (wharf_tools, chatbot):
         assert "sim" not in {n for n, _ in inspect.getmembers(mod, inspect.ismodule)}
+
+
+def test_team_rows_share_real_team_totals_exactly():
+    """Other clubs' heat maps: a club's real team totals shared across a standard
+    22, summing exactly to the totals, the same every time."""
+    lg = D.load_league()
+    if lg is None:
+        pytest.skip("league file not scraped")
+    games = lg[(lg["team"] == "Sydney") & (lg["season"] == 2026)].tail(5)
+    rows, role = sim.team_rows(games, "Sydney")
+    assert len(rows) == 22 * len(games) and set(role.values()) <= set(sim.ZONES)
+    for g in games.itertuples():
+        mine = rows[rows["round"] == f"{g.api_round} {g.date_local}"]
+        assert mine["goals"].sum() == g.goals and mine["marks"].sum() == g.marks
+        assert mine["contested_poss"].sum() == g.contested_possessions
+        assert mine["uncontested_poss"].sum() == g.uncontested_possessions
+        assert (mine["marks_inside_50"] <= mine["marks"]).all()
+    again, _ = sim.team_rows(games, "Sydney")
+    assert again.equals(rows)

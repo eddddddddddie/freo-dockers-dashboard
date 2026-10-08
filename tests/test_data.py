@@ -261,3 +261,29 @@ def test_season_momentum_tables(team):
     # Every point lands in exactly one window.
     total = (w["freo_pts"].sum() * n, w["opp_pts"].sum() * n)
     assert total == pytest.approx((t26["freo_score"].sum(), t26["opp_score"].sum()))
+
+
+def test_league_score_events_match_every_final_score():
+    """league_score_events.csv (if scraped): every game's last score is the final
+    score in the league file, and Freo's games agree score by score with
+    freo_score_events.csv."""
+    lev = D.load_league_events()
+    if lev is None:
+        pytest.skip("league_score_events.csv not scraped")
+    lg = D.load_league()
+    checked = 0
+    for g in lg[lg["season"].isin(lev["season"].unique())].itertuples():
+        ev = D.club_game_events(g._asdict())
+        assert ev is not None, (g.season, g.api_round, g.team)
+        events, _ = ev
+        assert (int(events["freo_score"].iloc[-1]), int(events["opp_score"].iloc[-1])) == (
+            int(g.score_for), int(g.score_against)), (g.season, g.api_round, g.team)
+        checked += 1
+    assert checked == len(lg[lg["season"].isin(lev["season"].unique())])
+    team = D.load_team()
+    for _, g in team.iterrows():
+        mine, _ = D.game_events(g)
+        row = lg[(lg["team"] == "Fremantle") & (lg["season"] == g["season"])
+                 & ((lg["game_dt"] - g["game_dt"].normalize()).abs() <= pd.Timedelta(days=1))].iloc[0]
+        theirs, _ = D.club_game_events(row)
+        assert theirs["margin"].tolist() == mine["margin"].tolist(), (g["season"], g["round"])

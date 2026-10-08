@@ -174,3 +174,46 @@ def opp_rows(opp):
         "uncontested_possessions": "uncontested_poss", "marks_inside50": "marks_inside_50",
         "api_round": "round"})
     return o.assign(round=o["round"].astype(str) + " " + o["date_local"].astype(str))
+
+
+# A standard 22: the roles a club's team totals are shared across when only
+# team totals are known (other clubs' games against other clubs).
+LINEUP = (["key_def"] * 2 + ["def"] * 4 + ["mid"] * 6 + ["ruck"] + ["mid_fwd"] * 3
+          + ["fwd"] * 4 + ["key_fwd"] * 2)
+# How each count leans by role (relative weights; each count is shared out to sum
+# exactly to the real team total).
+SHARE = {
+    "goals": {"key_fwd": 6, "fwd": 4, "mid_fwd": 2.5, "mid": 0.8, "ruck": 0.5, "def": 0.15, "key_def": 0.05},
+    "marks": {"key_fwd": 2, "fwd": 1.3, "mid_fwd": 1, "mid": 1, "ruck": 1, "def": 1.4, "key_def": 1.8},
+    "contested_poss": {"mid": 2.4, "ruck": 2, "mid_fwd": 1.4, "key_fwd": 1.1, "fwd": 0.9, "def": 0.8,
+                       "key_def": 0.9},
+    "uncontested_poss": {"mid": 1.9, "def": 1.8, "mid_fwd": 1.4, "fwd": 1, "key_def": 1, "ruck": 0.7,
+                         "key_fwd": 0.6},
+}
+
+
+def team_rows(games, club):
+    """Pseudo player rows for one club's games from its real team totals
+    (league_team_games.csv rows): 22 players in a standard line-up, each count
+    shared out by role so it sums exactly to the team's real total. Returns
+    (rows, {player: role}) for events() and positions()."""
+    rows, role = [], {}
+    for g in games.itertuples():
+        rnd = f"{g.api_round} {g.date_local}"
+        totals = {"goals": int(g.goals), "marks": int(g.marks),
+                  "contested_poss": int(g.contested_possessions),
+                  "uncontested_poss": int(g.uncontested_possessions)}
+        mi50 = int(getattr(g, "marks_inside50", 0) or 0)
+        rng = _rng("team", g.season, rnd, club)
+        players = [f"{club} {r} {i + 1}" for i, r in enumerate(LINEUP)]
+        split = {}
+        for col, total in totals.items():
+            w = np.array([SHARE[col][r] for r in LINEUP], dtype=float)
+            split[col] = rng.multinomial(total, w / w.sum())
+        fwd = np.array([r in ("key_fwd", "fwd", "mid_fwd") for r in LINEUP])
+        mi = np.minimum(rng.multinomial(mi50, fwd / fwd.sum()), split["marks"])
+        for i, (p, r) in enumerate(zip(players, LINEUP)):
+            role[p] = r
+            rows.append({"season": g.season, "round": rnd, "player": p, "marks_inside_50": int(mi[i]),
+                         **{c: int(v[i]) for c, v in split.items()}})
+    return pd.DataFrame(rows), role

@@ -457,3 +457,20 @@ Follows the UX audit (https://claude.ai/artifact/1RoZy8WmzVGieFngzF8amz; 46 item
   questions. Each card's "Ask" button sends its own question (tooltip shows it).
 - Still to do before switch-over: rewrite the tour for v2, tablet layout polish, then make v2
   the default and delete the old views (`views.render*`, `nav` view handling, old CSS).
+
+### Heat maps and momentum folded in (2026-10-08)
+The app is a showcase, so the two most striking views moved out of a separate Lab onto the
+pages they belong to (Lab removed; five places):
+- Last game: Momentum beside the team's ground card (Heat / Events / Running); Tale of the tape
+  beside Game leaders; the players table full width.
+- Next opponent: Their last 5 games, five momentum small multiples from the club's side on
+  shared scales (`charts.momentum_multiples`; titles like "Rd 24 v NTH · W +53", finals
+  shortened by `v2.short_round`), then their heat map across those games beside Style vs league.
+  Their games against other clubs come from `league_score_events.csv` (league_events_scraper.py:
+  650 games, 30,643 scores for 2024-2026, every game's last score equal to its final score in
+  the league file, Freo's games identical score by score to freo_score_events.csv). Their heat
+  map shares the club's real team totals across a standard 22 (`sim.team_rows`), since their
+  players' stats exist only for games against Freo.
+- Our season: Momentum beside the team's season heat map.
+- Players: Range on each stat beside the player's ground card.
+- Wharf-ai's page note on these pages says the ground maps are simulated.

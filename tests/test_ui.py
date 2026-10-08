@@ -268,7 +268,7 @@ def test_stay_signed_in_and_sign_out(browser, server):
 
 V2_PAGES = ["place=last-game&game=GF", "place=next-opponent", "place=next-opponent&club=Sydney",
             "place=our-season", "place=players", "place=players&player=Caleb%20Serong",
-            "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw", "place=game-day", "place=lab"]
+            "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw", "place=game-day"]
 
 
 @pytest.mark.parametrize("w,h", SIZES)
