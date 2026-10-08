@@ -365,6 +365,9 @@ def next_opponent(ctx, season, club):
         rows, role = sim.team_rows(last5, club)
         V._ground_card("v2_opp_ground", rows, role, GROUND_H, f"{short}, last 5 games", attack=short)
 
+    def sim_card():
+        sim_card_body(club, short, tint)
+
     def style_card():
         avg, ranks = D.team_ranks(lg, season)
         with finding("v2_style", "Style vs league", T.style(ranks, club), "rank of 18 on each stat",
@@ -413,9 +416,89 @@ def next_opponent(ctx, season, club):
             _table_pick(show, f"v2h2h_{club}", lambda i: go(
                 place="Last game", season=int(rows["season"].iloc[i]), game=rows["round"].iloc[i]))
 
-    grid([([1], [last5_card]), ([1.1, 1], [heat_card, style_card]), ([1.1, 1], [win_card, quarters_card]),
-          ([1, 1.1], [form_card, h2h_card])])
-    return f"the opponent scout report for {club}, {season} season" + GROUND_NOTE
+    grid([([1], [sim_card]), ([1], [last5_card]), ([1.1, 1], [heat_card, style_card]),
+          ([1.1, 1], [win_card, quarters_card]), ([1, 1.1], [form_card, h2h_card])])
+    return (f"the opponent scout report for {club}, {season} season" + GROUND_NOTE
+            + f"; it also shows a model FORECAST of Freo v {club} (simulated games from a model, not "
+            "data): answer from the real data, and say any forecast on the page comes from the model")
+
+
+@st.cache_resource(show_spinner=False)
+def _match_model():
+    import model as M
+    return M.app_model()
+
+
+@st.cache_data(show_spinner=False)
+def _forecast(club, venue):
+    import model as M
+    m, lg, X = _match_model()
+    f = M.forecast(m, lg, X, "Fremantle", club, venue)
+    return {k: v for k, v in f.items() if k != "points"}
+
+
+VENUES = {"At home": 1, "Away": -1, "Neutral": 0}
+
+
+def sim_card_body(club, short, tint):
+    """Freo v the club, simulated 10,000 times by the match model (model.py): win
+    chance, likely margins, each side's chance of a 3+ goal run, and one example
+    game as a momentum chart. Plainly a forecast, with how the model tested."""
+    import model as M
+    ev = M.load_eval()
+    venue = st.session_state.get("v2_sim_venue") or "At home"
+    f = _forecast(club, VENUES[venue])
+    win, lose = f["win"], 1 - f["win"] - f["draw"]
+    where = {"At home": "at home", "Away": "away", "Neutral": "at a neutral ground"}[venue]
+    head = (f"Freo win {win:.0%} of 10,000 simulated games {where}; {short} {lose:.0%}. "
+            f"Typical margin {'level' if round(f['p50']) == 0 else format(f['p50'], '+.0f')}, "
+            f"8 in 10 between {f['p10']:+.0f} and {f['p90']:+.0f}")
+    with finding("v2_sim", f"Simulate Freo v {short}", head,
+                 "a forecast from both clubs' recent form (whole-game stats): MODEL, not a result",
+                 question=f"How would we go against {club}, and what would decide it?"):
+        st.segmented_control("Venue", list(VENUES), default="At home", key="v2_sim_venue",
+                             label_visibility="collapsed")
+        g = f["lam"] * f["acc"]
+        b = f["lam"] - g
+        tiles([
+            {"label": "Freo win chance", "value": f"{win:.0%}", "note": f"{short} {lose:.0%}, draw {f['draw']:.0%}"},
+            {"label": "Likely margin", "value": "Level" if round(f["p50"]) == 0 else f"{f['p50']:+.0f}",
+             "note": f"8 in 10: {f['p10']:+.0f} to {f['p90']:+.0f}"},
+            {"label": "Expected score", "value": f"{g[0]:.0f}.{b[0]:.0f} v {g[1]:.0f}.{b[1]:.0f}",
+             "note": f"{f['lam'][0] * (1 + 5 * f['acc'][0]):.0f} v {f['lam'][1] * (1 + 5 * f['acc'][1]):.0f} points"},
+            {"label": "A 3+ goal run", "value": f"{f['run_chance'][0]:.0%}",
+             "note": f"Freo's chance; {short} {f['run_chance'][1]:.0%}"},
+        ])
+        c1, c2 = (st.container(), st.container()) if DOCK else st.columns([1, 1.5])
+        with c1:
+            _plot(CH.margin_histogram(f["margin"], CHART_H, us="Freo", them=short, them_color=tint))
+        with c2:
+            n = st.session_state.get("v2_sim_seed", 0)
+            m, *_ = _match_model()
+            e = M.one_game(f["lam"], f["acc"], m.k, f["shares"], f["qlen"], seed=10_000 + n, kq=m.kq,
+                           stick=m.stick)
+            if e is not None:
+                events, quarters = e
+                runs = D.scoring_runs(events)
+                run = runs.iloc[0] if len(runs) and runs.iloc[0]["goals"] >= D.RUN_GOALS else None
+                mg = int(events["margin"].iloc[-1])
+                res = "W" if mg > 0 else "L" if mg < 0 else "D"
+                st.markdown(f'<div class="card-take">One simulated game: '
+                            f'{html.escape(T.momentum(events, run, res, mg, short))}</div>',
+                            unsafe_allow_html=True)
+                _plot(CH.momentum_chart(events, quarters, D.momentum(events, quarters), run, CHART_H,
+                                        opp=short, opp_color=tint, tag="SIMULATED"))
+            if st.button("Simulate another game", key="v2_sim_again", icon=":material/refresh:",
+                         type="tertiary"):
+                st.session_state["v2_sim_seed"] = n + 1
+                st.rerun()
+        if ev:
+            st.caption(f"How good is it? Tested on all {ev['games']} games of {ev['test']}, each predicted "
+                       f"from form before it was played: it tipped {ev['model']['tips']:.0%} "
+                       f"(recent form alone {ev['form']['tips']:.0%}, home ground alone "
+                       f"{ev['home']['tips']:.0%}), with an average margin error of "
+                       f"{ev['model']['mae']:.0f} points. It knows nothing of injuries, selection, "
+                       "weather or tactics.")
 
 
 def club_index(ctx):

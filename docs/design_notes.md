@@ -474,3 +474,28 @@ pages they belong to (Lab removed; five places):
 - Our season: Momentum beside the team's season heat map.
 - Players: Range on each stat beside the player's ground card.
 - Wharf-ai's page note on these pages says the ground maps are simulated.
+
+### Match model and simulator (2026-10-08, `model.py`)
+- Form: each club's exponentially weighted average (half-life 8 games, carried across seasons)
+  of 18 metrics for and against, from games before the one predicted; clubs need 5 games of
+  history. Ridge regressions (numpy, standardised) predict each side's scoring shots and goal
+  accuracy from both clubs' form and home ground. No scikit-learn dependency.
+- Simulator: each side's scoring shots per quarter are Poisson around the prediction, times a
+  game factor (Gamma, fitted from the extra spread real games show) and a quarter swing (Gamma,
+  k = 15), split by the club's own quarter pattern; shots are timed uniformly within each
+  quarter, ordered with stickiness 0.0 (chosen on 2025: the measured league carry is
+  too small to change the shape), and each is a goal with the side's predicted accuracy plus the
+  extra game-to-game accuracy variation beyond each shot's luck. An early bug applied accuracy
+  noise in percentage points, spreading margins to SD 56 against a real 33; fixed.
+- Test (2026-10-08): trained on 2024, tuned on 2025, predicted all 218 2026 games
+  from form before each: margin error 26.1, tipped 70.2%,
+  Brier 0.181; recent form alone 26.7 / 69.3% /
+  0.196; home ground alone 31.3 / 59.6% /
+  0.239. Calibrated except at the top (said 70%+, won 95%). Simulated games
+  match real ones on runs of 3+ goals (2.04 v
+  2.13 a game) and the longest run, but have fewer
+  lead changes (2.6 v 3.2).
+- App: Next opponent's first card, "Simulate Freo v <club>": venue switch, win chance, likely
+  margin (median and 10th to 90th percentile of 10,000 games), expected score, each side's
+  chance of a 3+ goal run, the margin distribution (`charts.margin_histogram`), one example game
+  as a momentum chart tagged SIMULATED ("Simulate another game"), and the test results as a caption.

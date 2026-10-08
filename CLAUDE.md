@@ -37,6 +37,10 @@ Feature-by-feature descriptions, measurements and history live in `docs/design_n
     delay): `league_score_events.csv`, every score of every AFL game in order (home and away as
     AFL Tables lists them), for other clubs' momentum charts. Checks each game's last score.
 - Check the merge of the two sources: `python -c "import data; data.ext_check()"`.
+- Match model: `python model.py` (about 3 min) trains on 2024 (2025 tunes the settings), predicts
+  every 2026 game from form before it, and saves the results and tuned settings to
+  `model_eval.json`, which the app reads (it refits the fast part on all seasons at start-up).
+  Re-run it after a data refresh adds a season or the model changes.
 - Wharf-ai accuracy eval: `python evals/wharf_eval.py` (34 questions, answers computed with plain
   pandas, deterministic grading; spends about US$0.20; results in `evals/results/`, gitignored).
   Run it after any change to the prompt, tools or model.
@@ -77,6 +81,7 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Wharf-ai: `chatbot.py` (prompt, streaming tool loop) -> `wharf_tools.py` (pandas tools) ->
   `evidence.py` (traces numbers in answers to tool tables); `insights.py` (no-LLM insights);
   `usage.py` (caps, log, saved chats), `admin.py` (usage dialog).
+- Model: `model.py` (form, ridge regressions, the score-by-score simulator, `model_eval.json`).
 - Infra: `auth.py` (Google or password login, cookie), `settings.py` (secrets/env lookup).
 - Data pipeline: the three scrapers, orchestrated by `refresh.py`. The CSVs are committed and are
   the app's only data source.
@@ -105,10 +110,16 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - `freo_score_events.csv` is parsed from raw HTML (`freo_scraper.parse_scoring`) because AFL
   Tables leaves its quarter rows unclosed. Game clock = earlier quarters' full lengths + seconds.
 - Momentum (`data.momentum`, `momentum_test`, the Season momentum page, Wharf-ai's `momentum`
-  tool) comes from scores only: no other stat is timed. Any club's game: `data.club_game_events`
-  (league_score_events.csv) gives the same shape as `game_events`, from that club's side
-  (team "Freo" means the side the page is about); matched on season, clubs and date, never round. The shuffle test finds no momentum in
-  Freo's games so far; say so rather than implying runs predict the next goal.
+  tool) comes from scores only: no other stat is timed (public sources have whole-game stats
+  only; timed and located data is Champion Data's, licensed). Any club's game:
+  `data.club_game_events` (league_score_events.csv) gives the same shape as `game_events`, from
+  that club's side (team "Freo" means the side the page is about); matched on season, clubs and
+  date, never round. The shuffle test finds no momentum in Freo's games alone, and a small one
+  league-wide (52.9% next goal by the same side against 52.1% by chance, 13,651 pairs, p 0.005):
+  real but under a point. Say that, not more.
+- The match model (`model.py`) is a forecast, never data: it is labelled MODEL / SIMULATED in
+  the app, Wharf-ai's tools don't see it, and the page note says forecasts come from a model.
+  Form inputs use only games before the one predicted (tests/test_model.py checks this).
 - Pressure acts rise when Freo don't have the ball (Freo win more often when the opposition wins
   the pressure count), so the pressure tile has no good/bad colour.
 - Tile changes: differentials and accuracy change in absolute units (a % change of a value that

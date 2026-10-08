@@ -531,7 +531,7 @@ def _clock(t, quarters):
 
 
 def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None, us="Freo",
-                   us_color=None):
+                   us_color=None, tag=None):
     """The game minute by minute, in two panels on the same clock.
     Top: the margin after every score (a step line), goals as dots in each side's
     colour, behinds as small ticks; the game's biggest scoring run shaded.
@@ -602,6 +602,40 @@ def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None
     for yv, name, color in ((top, us, us_color), (-top, opp, opp_color)):
         fig.add_annotation(x=0.3, y=yv, row=2, col=1, text=name, showarrow=False, xanchor="left",
                            yanchor="top" if yv > 0 else "bottom", font=dict(size=10, color=color))
+    if tag:     # e.g. SIMULATED: plainly marked, wherever the picture ends up
+        fig.add_annotation(x=0, xref="paper", y=1, yref="paper", text=f"<b>{tag}</b>", showarrow=False,
+                           xanchor="left", yanchor="top", bgcolor="#E8A33D", borderpad=3,
+                           font=dict(size=10, color="#1A1A1A"))
+    return fig
+
+
+def margin_histogram(margins, height, us="Freo", them="Opp", us_color=None, them_color=None):
+    """Simulated final margins (us minus them): bars every 6 points, our wins in
+    our colour, theirs in theirs, the median marked."""
+    import numpy as np
+    us_color, them_color = us_color or COLORS["freo"], them_color or COLORS["opp"]
+    lo, hi = np.percentile(margins, 0.5), np.percentile(margins, 99.5)
+    edges = np.arange(np.floor(lo / 6) * 6, np.ceil(hi / 6) * 6 + 6, 6)
+    counts, edges = np.histogram(np.clip(margins, edges[0], edges[-1] - 0.01), bins=edges)
+    mids = (edges[:-1] + edges[1:]) / 2
+    share = counts / len(margins) * 100
+    fig = go.Figure(go.Bar(
+        x=mids, y=share, width=5.2, marker=dict(color=[us_color if m > 0 else them_color for m in mids],
+                                                cornerradius=2),
+        customdata=np.stack([edges[:-1], edges[1:]], axis=1),
+        hovertemplate="margin %{customdata[0]:+.0f} to %{customdata[1]:+.0f}: %{y:.1f}% of games<extra></extra>"))
+    med = float(np.median(margins))
+    fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1))
+    fig.add_vline(x=med, line=dict(color=COLORS["ink"], width=1, dash="dash"))
+    fig.add_annotation(x=med, y=1, yref="paper", text=f"median {med:+.0f}", showarrow=False,
+                       yanchor="bottom", font=dict(size=10, color=COLORS["ink"]))
+    for x, text, color, anchor in ((edges[-1], f"{us} win →", us_color, "right"),
+                                   (edges[0], f"← {them} win", them_color, "left")):
+        fig.add_annotation(x=x, y=0.92, yref="paper", text=text, showarrow=False, xanchor=anchor,
+                           font=dict(size=10, color=color))
+    fig = style_fig(fig, "% of games", unified=False, height=height)
+    fig.update_layout(bargap=0, margin=dict(l=4, r=6, t=18, b=4))
+    fig.update_xaxes(title=dict(text=f"final margin ({us} minus {them})", font=dict(size=10)))
     return fig
 
 
