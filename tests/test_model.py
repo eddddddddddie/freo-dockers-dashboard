@@ -57,3 +57,16 @@ def test_saved_evaluation_beats_the_simple_baselines():
     assert ev["games"] > 150
     assert ev["model"]["brier"] < ev["home"]["brier"] and ev["model"]["mae"] < ev["home"]["mae"]
     assert ev["model"]["brier"] <= ev["form"]["brier"] + 0.01
+
+
+def test_saved_forecasts_cover_every_club_and_match_a_live_run(fitted):
+    saved = M.load_forecasts()
+    if saved is None:
+        pytest.skip("run python model.py forecasts")
+    clubs = sorted(t for t in D.load_league()["team"].unique() if t != "Fremantle")
+    assert set(saved["forecasts"]) == {f"{c}|{v}" for c in clubs for v in (1, -1, 0)}
+    m, lg, X = fitted
+    live = M.forecast(m, lg, X, "Fremantle", "Sydney", 1, runs_sims=10)
+    f = saved["forecasts"]["Sydney|1"]
+    assert f["win"] == pytest.approx(live["win"]) and f["p50"] == pytest.approx(live["p50"])
+    assert sum(f["counts"]) == f["n"]

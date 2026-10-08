@@ -507,7 +507,48 @@ def forecast(m, lg, X, club, opp, venue, runs_sims=400):
     return out
 
 
+FORECASTS_JSON = "model_forecasts.json"
+HIST_EDGES = np.arange(-120, 126, 6)     # the margin distribution's bins (points, Freo minus them)
+
+
+def save_forecasts(path=FORECASTS_JSON, club="Fremantle"):
+    """Every club v Freo at home, away and at a neutral ground, worked out ahead
+    so the app opens them instantly: the summary, the margin distribution as
+    binned counts, and what's needed to draw an example game."""
+    import json
+    from datetime import date
+    m, lg, X = app_model()
+    out = {"made": date.today().isoformat(), "club": club, "k": m.k, "kq": m.kq, "stick": m.stick,
+           "edges": HIST_EDGES.tolist(), "forecasts": {}}
+    for opp in sorted(t for t in lg["team"].unique() if t != club):
+        for venue in (1, -1, 0):
+            f = forecast(m, lg, X, club, opp, venue)
+            counts, _ = np.histogram(np.clip(f["margin"], HIST_EDGES[0], HIST_EDGES[-1] - 0.01),
+                                     bins=HIST_EDGES)
+            out["forecasts"][f"{opp}|{venue}"] = {
+                "lam": f["lam"].tolist(), "acc": f["acc"].tolist(),
+                "shares": [list(map(float, q)) for q in f["shares"]], "qlen": list(map(float, f["qlen"])),
+                "win": f["win"], "draw": f["draw"], "p10": f["p10"], "p50": f["p50"], "p90": f["p90"],
+                "run_chance": f["run_chance"].tolist(), "counts": counts.tolist(), "n": int(len(f["margin"]))}
+    with open(path, "w") as fh:
+        json.dump(out, fh)
+    return out
+
+
+def load_forecasts(path=FORECASTS_JSON):
+    import json
+    import os
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return json.load(fh)
+
+
 if __name__ == "__main__":
-    r = save_eval()
-    print(f"Saved {EVAL_JSON}: model tips {r['model']['tips']:.1%}, margin error "
-          f"{r['model']['mae']:.1f}, Brier {r['model']['brier']:.3f} on {r['games']} {r['test']} games")
+    import sys
+    if "forecasts" not in sys.argv[1:]:       # python model.py forecasts: skip the 3 min test
+        r = save_eval()
+        print(f"Saved {EVAL_JSON}: model tips {r['model']['tips']:.1%}, margin error "
+              f"{r['model']['mae']:.1f}, Brier {r['model']['brier']:.3f} on {r['games']} {r['test']} games")
+    f = save_forecasts()
+    print(f"Saved {FORECASTS_JSON}: {len(f['forecasts'])} forecasts")

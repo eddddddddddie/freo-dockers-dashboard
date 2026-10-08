@@ -609,22 +609,25 @@ def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None
     return fig
 
 
-def margin_histogram(margins, height, us="Freo", them="Opp", us_color=None, them_color=None):
-    """Simulated final margins (us minus them): bars every 6 points, our wins in
-    our colour, theirs in theirs, the median marked."""
+def margin_histogram(edges, counts, median, height, us="Freo", them="Opp", us_color=None,
+                     them_color=None):
+    """Simulated final margins (us minus them), already binned (edges, counts):
+    our wins in our colour, theirs in theirs, the median marked. Empty bins at
+    either end are trimmed."""
     import numpy as np
     us_color, them_color = us_color or COLORS["freo"], them_color or COLORS["opp"]
-    lo, hi = np.percentile(margins, 0.5), np.percentile(margins, 99.5)
-    edges = np.arange(np.floor(lo / 6) * 6, np.ceil(hi / 6) * 6 + 6, 6)
-    counts, edges = np.histogram(np.clip(margins, edges[0], edges[-1] - 0.01), bins=edges)
+    edges, counts = np.asarray(edges, float), np.asarray(counts, float)
+    nz = np.nonzero(counts)[0]
+    if len(nz):
+        counts, edges = counts[nz[0]:nz[-1] + 1], edges[nz[0]:nz[-1] + 2]
     mids = (edges[:-1] + edges[1:]) / 2
-    share = counts / len(margins) * 100
+    share = counts / max(counts.sum(), 1) * 100
     fig = go.Figure(go.Bar(
         x=mids, y=share, width=5.2, marker=dict(color=[us_color if m > 0 else them_color for m in mids],
                                                 cornerradius=2),
         customdata=np.stack([edges[:-1], edges[1:]], axis=1),
         hovertemplate="margin %{customdata[0]:+.0f} to %{customdata[1]:+.0f}: %{y:.1f}% of games<extra></extra>"))
-    med = float(np.median(margins))
+    med = float(median)
     fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1))
     fig.add_vline(x=med, line=dict(color=COLORS["ink"], width=1, dash="dash"))
     fig.add_annotation(x=med, y=1, yref="paper", text=f"median {med:+.0f}", showarrow=False,

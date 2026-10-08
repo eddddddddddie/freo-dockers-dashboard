@@ -499,3 +499,8 @@ pages they belong to (Lab removed; five places):
   margin (median and 10th to 90th percentile of 10,000 games), expected score, each side's
   chance of a 3+ goal run, the margin distribution (`charts.margin_histogram`), one example game
   as a momentum chart tagged SIMULATED ("Simulate another game"), and the test results as a caption.
+- Forecasts are worked out ahead (`model.save_forecasts` -> `model_forecasts.json`, 35 KB:
+  each club v Freo at three venues, the summary, the margin distribution binned every 6 points,
+  and what's needed to draw an example game). The app reads one in about 1 ms instead of
+  working it out in about 2 s; a club missing from the file is worked out live. Example games
+  are seeded by club and venue, so each matchup has its own.

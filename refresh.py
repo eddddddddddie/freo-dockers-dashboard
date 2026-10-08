@@ -170,6 +170,11 @@ def main(argv):
             "games": {str(s): int(n) for s, n in sorted(games.items())}}
     with open(os.path.join(ROOT, META), "w") as f:
         json.dump(meta, f, indent=2)
+    # The match model's forecasts follow the new form (about 2 minutes; the tuned
+    # settings in model_eval.json stay until python model.py is run again).
+    run = subprocess.run([sys.executable, os.path.join(ROOT, "model.py"), "forecasts"], cwd=ROOT,
+                         capture_output=True, text=True)
+    print(run.stdout[-500:] or run.stderr[-1500:])
     print(f"Updated {', '.join(files)}. Games per season: {meta['games']}")
     return 0
 

@@ -430,11 +430,29 @@ def _match_model():
 
 
 @st.cache_data(show_spinner=False)
-def _forecast(club, venue):
+def _saved_forecasts():
     import model as M
+    return M.load_forecasts()
+
+
+@st.cache_data(show_spinner=False)
+def _forecast(club, venue):
+    """Freo v club at a venue: from model_forecasts.json (worked out ahead by
+    python model.py), or worked out now (about 2 s) if it isn't there."""
+    import numpy as np
+    import model as M
+    saved = _saved_forecasts()
+    if saved and f"{club}|{venue}" in saved["forecasts"]:
+        f = dict(saved["forecasts"][f"{club}|{venue}"])
+        f.update(edges=saved["edges"], lam=np.array(f["lam"]), acc=np.array(f["acc"]),
+                 run_chance=np.array(f["run_chance"]), qlen=np.array(f["qlen"]))
+        return f
     m, lg, X = _match_model()
     f = M.forecast(m, lg, X, "Fremantle", club, venue)
-    return {k: v for k, v in f.items() if k != "points"}
+    counts, _ = np.histogram(np.clip(f["margin"], M.HIST_EDGES[0], M.HIST_EDGES[-1] - 0.01),
+                             bins=M.HIST_EDGES)
+    return {**{k: v for k, v in f.items() if k not in ("points", "margin")},
+            "edges": M.HIST_EDGES.tolist(), "counts": counts.tolist()}
 
 
 VENUES = {"At home": 1, "Away": -1, "Neutral": 0}
@@ -471,12 +489,16 @@ def sim_card_body(club, short, tint):
         ])
         c1, c2 = (st.container(), st.container()) if DOCK else st.columns([1, 1.5])
         with c1:
-            _plot(CH.margin_histogram(f["margin"], CHART_H, us="Freo", them=short, them_color=tint))
+            _plot(CH.margin_histogram(f["edges"], f["counts"], f["p50"], CHART_H, us="Freo", them=short,
+                                      them_color=tint))
         with c2:
             n = st.session_state.get("v2_sim_seed", 0)
-            m, *_ = _match_model()
-            e = M.one_game(f["lam"], f["acc"], m.k, f["shares"], f["qlen"], seed=10_000 + n, kq=m.kq,
-                           stick=m.stick)
+            saved = _saved_forecasts()
+            k, kq, stick = ((saved["k"], saved["kq"], saved["stick"]) if saved else
+                            (lambda m: (m.k, m.kq, m.stick))(_match_model()[0]))
+            import zlib     # each club and venue gets its own example games
+            seed = zlib.crc32(f"{club}|{venue}".encode()) % 1_000_000 + n
+            e = M.one_game(f["lam"], f["acc"], k, f["shares"], f["qlen"], seed=seed, kq=kq, stick=stick)
             if e is not None:
                 events, quarters = e
                 runs = D.scoring_runs(events)

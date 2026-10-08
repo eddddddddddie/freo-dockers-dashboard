@@ -40,7 +40,7 @@ jobs:
         run: python refresh.py ${{ github.event.inputs.season }}
       - name: Commit any new data
         run: |
-          git add -- *.csv data_refresh.json
+          git add -- *.csv data_refresh.json model_forecasts.json
           if git diff --cached --quiet; then
             echo "No new data."
             exit 0

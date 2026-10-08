@@ -40,7 +40,10 @@ Feature-by-feature descriptions, measurements and history live in `docs/design_n
 - Match model: `python model.py` (about 3 min) trains on 2024 (2025 tunes the settings), predicts
   every 2026 game from form before it, and saves the results and tuned settings to
   `model_eval.json`, which the app reads (it refits the fast part on all seasons at start-up).
-  Re-run it after a data refresh adds a season or the model changes.
+  It then works out every club v Freo at home, away and neutral into `model_forecasts.json`
+  (51 forecasts, about 70 s; `python model.py forecasts` does only this), so the app's
+  simulate card opens instantly. `refresh.py` rebuilds the forecasts after each data refresh;
+  re-run the full `python model.py` when a season is added or the model changes.
 - Wharf-ai accuracy eval: `python evals/wharf_eval.py` (34 questions, answers computed with plain
   pandas, deterministic grading; spends about US$0.20; results in `evals/results/`, gitignored).
   Run it after any change to the prompt, tools or model.
