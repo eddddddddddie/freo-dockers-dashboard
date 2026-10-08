@@ -66,6 +66,7 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Data: `data.py` loads and merges every CSV (cached) and computes all derived tables, tiles and
   records. Views, takeaways, insights and Wharf-ai's tools all read from it, so stat logic belongs
   here, not in views or charts.
+- v2 (`?v2=1`): `v2.py` draws the six places, reusing cards from `views.py` where they fit.
 - Presentation: `charts.py` (Plotly figures), `theme.py` (CSS, colours, HTML blocks), `layout.py`
   (window size to card heights and layout mode), `nav.py` (address bar state, `nav.go`),
   `takeaways.py` (card one-liners and chart focus), `marks.py` (band drawings), `sim.py`
@@ -116,6 +117,25 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Blank cells become 0. `to_num` falls back to the raw string, so a surprise value can land as text.
   Names flip from "Last, First". Opposition player rows are discarded (totals only).
 - It warns (doesn't stop) when kicks + handballs != disposals or a game has no Freo table.
+
+## Coach View v2 (`?v2=1`, being built; the old views stay the default until switch-over)
+- `v2.py`: six places around a coach's week: Last game, Next opponent, Our season, Players,
+  Game day, Lab (simulated ground cards only). `app.py` hands over to `v2.run` right after sign-in
+  and sizing, before the old navigation reads queued moves, then stops.
+- Wharf-ai is always visible: a sticky panel beside the page (1000px+ wide and 600px+ tall),
+  otherwise docked to the bottom of the screen (`wa_dock`, opens over the page as
+  `wa_dock_open`). Never hide it behind a page or a drawer that leaves nothing on screen.
+- Pages scroll; there is no one-screen rule in v2, so card text wraps and charts use the fixed
+  `CHART_H` / `TALL_H`. One band (`v2.band`), one tile row (`v2.tiles`), one card header
+  (`v2.finding`, whose "Ask" button queues its question in `pending_prompt`).
+- One click rule: any game opens Last game for it, any player their profile in Players. Move
+  with `v2.go(place=...)`. Cards reused from `views.py` call `nav.go(view=...)`; `v2.apply`
+  translates those (Match -> Last game, Player -> Players, Scout -> Next opponent).
+- Picker first options are real strings (`EVERY_CLUB`, `SQUAD`, `NOBODY`), not None: a None
+  value shows Streamlit's "Choose an option" placeholder.
+- Phones get a two-line top bar (seasons and icons, then the place picker): the old phone CSS
+  sizes the first top-bar column to its content.
+- Tests: `tests/test_v2.py` (AppTest, every place) and the `v2` tests in `tests/test_ui.py`.
 
 ## Layout and Streamlit gotchas
 - Layout modes (`layout.mode`): desktop (1280x600 or more) is one screen with no page scroll;

@@ -257,7 +257,8 @@ def game_strip(rows, z, hover, labels, results, height, focus=None, show_x=True)
     return fig
 
 
-def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, focus=None):
+def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, focus=None,
+                 show_r=False):
     """Where we win, as a dumbbell: on each stat, the win rate when the other side
     won the count (left dot) to the win rate when Freo won it (right dot), sorted
     by the gap, which is labelled at the end of each row. focus: the takeaway's
@@ -283,8 +284,11 @@ def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, f
                           "games<extra></extra>"))
     for (_, r), a in zip(wc.iterrows(), alpha):
         strong = a == 1 and focus is not None
-        fig.add_annotation(x=1, xref="paper", y=r["stat"], text=(f"<b>{r['swing']:+.0f}</b>" if strong
-                           else f"{r['swing']:+.0f}"), showarrow=False, xanchor="left", xshift=8,
+        label = f"{r['swing']:+.0f}"
+        if show_r and r.get("r") == r.get("r") and r.get("r") is not None:
+            label += f"   {r['r']:+.2f}"     # how the count tracks the margin (r)
+        fig.add_annotation(x=1, xref="paper", y=r["stat"], text=(f"<b>{label}</b>" if strong
+                           else label), showarrow=False, xanchor="left", xshift=8,
                            font=dict(size=11, color=COLORS["ink"] if a == 1 else COLORS["muted"]))
         if strong and r["stat"] != stats[0]:   # the focus rates (on the top row the takeaway has them)
             for v in (r["behind_winrate"], r["ahead_winrate"]):
@@ -292,12 +296,13 @@ def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, f
                                    yanchor="bottom", yshift=5,
                                    font=dict(size=10, color=COLORS["ink"]))
     fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=36, t=16, b=4))  # r: the swing column
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=86 if show_r else 36, t=16, b=4))
     fig.update_xaxes(range=[-6, 106], tickvals=[0, 50, 100], ticktext=["0%", "50%", "100%"],
                      tickfont=dict(size=10))
     fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11), tickmode="array",
                      tickvals=stats, ticktext=_bold(stats, focus if focus is not None else []))
-    fig.add_annotation(x=1, xref="paper", y=1, yref="paper", text="swing", showarrow=False,
+    fig.add_annotation(x=1, xref="paper", y=1, yref="paper",
+                       text="swing   r" if show_r else "swing", showarrow=False,
                        xanchor="left", xshift=4, yanchor="bottom",
                        font=dict(size=10, color=COLORS["muted"]))
     # The top row's two dots say what they are, in place of a colour key (with the

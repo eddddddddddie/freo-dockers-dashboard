@@ -427,3 +427,33 @@ claw marks for Richmond, Captain Carlton's mask, and so on), passed to the band 
   name the top row's two dots (`charts._tag_pair`), the highlighted quarter's bars carry the team
   names, and the tale of the tape names its columns, all in place of colour keys. Only the game
   strip and the two player tables (colour fills the cells) keep a key in the card title.
+
+
+## Coach View v2 (built 2026-10-08, behind ?v2=1)
+Follows the UX audit (https://claude.ai/artifact/1RoZy8WmzVGieFngzF8amz; 46 items: 28 keep,
+14 merge, 3 lab, 1 cut). Coaches approved the six places before the build.
+- Address: `?v2=1&season=2026&place=last-game&game=GF` (plus `player=`, `vs=`, `club=`,
+  `games=`). `?v2=0` turns it off for the session.
+- Last game (default): picker of games; band with the score as the lead and the result pill;
+  6 match tiles; Momentum (lead card) beside Tale of the tape; then the game leaders (Freo's as
+  pills that open the player, the opposition's as a line) above the players table, now full width.
+- Next opponent: lands on Every club (a table of every club, record, average margin and each
+  season's games; a row opens the club). A club: band in club colours, scout tiles, Style vs
+  league, How they win, Their quarters, Their form, Against Fremantle (rows open the game);
+  "Every club" goes back.
+- Our season: games slice picker; band; season tiles; Game by game (the game strip, with a
+  Biggest run row: each side's biggest unanswered run, from `data.game_strip(runs=True)`); What
+  wins us games (`data.what_wins`: the Where we win dumbbell with each count's r with the margin
+  as a second column; replaces What drives our margin); Quarters (points per quarter, then the
+  first 10 / middle / last 10 minutes); Momentum (the carry test for each season, then every
+  run of 3+ goals, against or by Freo, rows open the game).
+- Players: lands on The squad (Who's up who's down, Role leaders as pills, Player map, Year on
+  year; every player opens their profile). A player: band, tiles with squad rank, Game by game,
+  Squad rank, Range on each stat. "Compare with..." swaps to the compare view on the same
+  layout (tiles show both values in the pair colours and both ranks).
+- Game day: the quarter-time check. Lab: the three ground cards (last game, the player picked in
+  Players, the club picked in Next opponent), amber band, every figure SIMULATED.
+- Wharf-ai: the panel's header now reads "Answers from the data"; Lab pages get season
+  questions. Each card's "Ask" button sends its own question (tooltip shows it).
+- Still to do before switch-over: rewrite the tour for v2, tablet layout polish, then make v2
+  the default and delete the old views (`views.render*`, `nav` view handling, old CSS).

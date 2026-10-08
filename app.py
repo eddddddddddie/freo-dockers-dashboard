@@ -36,6 +36,7 @@ import admin
 import usage as U
 import tour
 import nav
+import v2
 
 inject_css()
 # The window size is asked for first, so it is usually known by the time the
@@ -55,6 +56,7 @@ LAYOUT = layout.mode(win_w, win_h)      # phone, stack, split or desktop (see la
 PHONE = LAYOUT == "phone"
 SCROLL = LAYOUT != "desktop"            # the page scrolls instead of fitting one screen
 CHAT_TOP = LAYOUT in ("phone", "stack")  # Wharf-ai above the dashboard, not beside it
+V2_DOCK = False                           # v2 on a narrow screen: Wharf-ai docked at the bottom
 V.set_layout(LAYOUT)
 if PHONE:
     inject_phone_css()
@@ -99,8 +101,8 @@ WAIT_PHRASES = [
 
 def example_prompts(season, baseline, focus=None):
     """Suggested questions, most useful first. The panel shows as many as fit."""
-    if focus and focus.startswith(f"the {season} season"):   # the season, cut to a slice
-        focus = None
+    if focus and (focus.startswith(f"the {season} season") or focus.startswith("the Lab")):
+        focus = None          # a slice of the season, or the Lab (simulated): season questions
     if focus and focus.startswith("a comparison of "):
         pair = focus[len("a comparison of "):].split(",")[0]
         a, b = pair.split(" and ", 1)
@@ -333,10 +335,10 @@ def chat_panel(season, baseline, focus=None):
     asked, limit = U.questions_today(), U.cap()
     mine, mine_limit = U.questions_this_login(sid), U.login_cap()
     if U.is_unlimited(email):   # WHARF_UNLIMITED: no per-person or daily limit
-        chat_header(f"From the match data · {mine} questions today, no limit")
+        chat_header(f"Answers from the data · {mine} questions today, no limit")
         day_capped = login_capped = False
     else:
-        chat_header(f"From the match data · {mine}/{mine_limit} questions today")
+        chat_header(f"Answers from the data · {mine}/{mine_limit} questions today")
         day_capped, login_capped = asked >= limit, mine >= mine_limit
     capped = day_capped or login_capped
     # On a phone the panel is as tall as its content until a chat starts, then
@@ -405,7 +407,7 @@ def chat_panel(season, baseline, focus=None):
                    else f"You've used your {mine_limit} questions for today" if login_capped
                    else "Ask Wharf-ai about the data")
     typed = st.chat_input(placeholder, disabled=client is None or capped)
-    if CHAT_TOP and msgs:
+    if CHAT_TOP and msgs and not V2_DOCK:
         # A button and a script, not a #link: Streamlit's page scrolls inside
         # its own container, where the browser's jump to an anchor lands wrong.
         if st.button("Dashboard ↓", key="jump_dash", type="tertiary"):
@@ -520,6 +522,38 @@ def _game_label(season, rnd):
             return label
     return None
 
+
+# v2 (?v2=1): six places around a coach's week (v2.py). It reads queued moves
+# itself, so it runs before the old views' navigation does.
+if v2.enabled():
+    V2_DOCK = CHAT_TOP = win_w < 1000 or win_h < 600
+    PANEL_H = win_h - 60
+    HISTORY_H = max(300, int(win_h * 0.55)) if V2_DOCK else PANEL_H - 150
+
+    def _v2_signout():
+        who = (auth.current_user() or {}).get("email")
+        if st.button("", icon=":material/logout:", key="signout_btn",
+                     help=f"Sign out ({who})" if who else "Sign out"):
+            auth.sign_out()
+
+    def _v2_usage():
+        if U.is_admin((auth.current_user() or {}).get("email")):
+            if st.button("", icon=":material/monitoring:", key="usage_btn", help="Wharf-ai usage"):
+                admin.usage_log()
+
+    def _v2_tour():
+        tour.replay()
+        st.rerun()
+
+    v2.run({
+        "win": (win_w, win_h), "sz": SZ, "team": team_df, "player_df": player_df,
+        "team_view": team_df, "player_view": player_df, "seasons": all_seasons,
+        "league": league, "clubs": CLUBS, "game_label": _game_label,
+        "players": lambda s: D.player_list(D.players_season(player_df, s)),
+        "photo": player_photo, "chat_panel": chat_panel, "brand_title": brand_title,
+        "usage_button": _v2_usage, "signout_button": _v2_signout, "tour_replay": _v2_tour,
+    })
+    st.stop()
 
 # A queued move from a click, or the web address on a visit's first run.
 nav.apply_pending(all_seasons, _game_label,

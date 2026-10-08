@@ -264,3 +264,49 @@ def test_stay_signed_in_and_sign_out(browser, server):
     pg.wait_for_selector("input[type=password]", timeout=60000)
     assert not [c for c in ctx.cookies() if c["name"] == "freo_coach_session"]
     ctx.close()
+
+
+V2_PAGES = ["place=last-game&game=GF", "place=next-opponent", "place=next-opponent&club=Sydney",
+            "place=our-season", "place=players", "place=players&player=Caleb%20Serong",
+            "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw", "place=game-day", "place=lab"]
+
+
+@pytest.mark.parametrize("w,h", SIZES)
+def test_v2_places_scroll_cleanly_with_wharf_ai_in_view(browser, server, w, h):
+    """v2 pages scroll (no one-screen rule) but never sideways, raise nothing, and
+    keep Wharf-ai in view beside them, also after scrolling to the bottom."""
+    pg = open_app(browser, server, w, h)
+    for query in V2_PAGES:
+        pg.goto(f"{server}/?v2=1&season=2026&{query}")
+        pg.wait_for_selector(".cv-band.v2", timeout=60000)
+        pg.wait_for_timeout(2500)
+        f = pg.evaluate("""() => {
+            const m = document.querySelector('[data-testid=stMain]');
+            m.scrollTop = m.scrollHeight;
+            return {wide: document.documentElement.scrollWidth - window.innerWidth,
+                    exceptions: document.querySelectorAll('[data-testid=stException]').length}}""")
+        pg.wait_for_timeout(400)
+        box = pg.locator(".st-key-card_wharfai").first.bounding_box()
+        assert f["exceptions"] == 0, (query, f)
+        assert f["wide"] <= 1, (query, w, f)
+        assert box and box["y"] < h and box["y"] + box["height"] > 0, (query, "Wharf-ai out of view")
+    pg.close()
+
+
+def test_v2_phone_docks_wharf_ai(browser, server):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    pg = ctx.new_page()
+    pg.goto(server + "/?v2=1&season=2026&place=our-season")
+    pg.wait_for_selector("input[type=password]", timeout=60000)
+    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
+    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
+    pg.get_by_role("button", name="Sign in").click()
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
+    pg.wait_for_timeout(2500)
+    dock = pg.locator(".st-key-wa_dock").bounding_box()
+    assert dock and dock["y"] + dock["height"] <= 844 + 1 and dock["y"] > 600   # along the bottom
+    assert pg.evaluate("document.documentElement.scrollWidth") <= 391
+    pg.get_by_role("button", name="Ask Wharf-ai about this page").click()
+    pg.wait_for_selector(".st-key-wa_dock_open", timeout=30000)
+    ctx.close()

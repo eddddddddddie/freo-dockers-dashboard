@@ -785,6 +785,18 @@ def win_conditions(tdf):
     return pd.DataFrame(rows)
 
 
+def what_wins(tdf):
+    """What wins us games, one row per stat: the win rate when Freo won the count
+    and when the opposition did (and the swing between them), plus how the
+    count's differential tracks the final margin (Pearson r, association only).
+    Sorted by the swing."""
+    wc = win_conditions(tdf).dropna(subset=["ahead_winrate", "behind_winrate"]).copy()
+    wc["swing"] = wc["ahead_winrate"] - wc["behind_winrate"]
+    r = margin_drivers(tdf).set_index("stat")["r"]
+    wc["r"] = wc["stat"].map(r)
+    return wc.sort_values("swing", ascending=False).reset_index(drop=True)
+
+
 def role_leaders(pdf_season):
     """Per role: the player who led it in the most games, how many games,
     and their per game average for that stat."""
@@ -850,13 +862,20 @@ STRIP_ROWS_EXT = [
 ]
 
 
-def game_strip(tdf):
+def game_strip(tdf, runs=False):
     """Matrix for the game strip: one column per game, a margin row then one row
     per stat. Returns (rows, z scaled to -1..1 per row, hover text, x labels).
     Each row is scaled to its 90th percentile gap (and clipped), so one blowout
-    does not wash out the rest of the row."""
+    does not wash out the rest of the row. runs: add a "Biggest run" row (each
+    side's biggest unanswered run in points, from the scores in order)."""
     rows_spec = [("Margin", "freo_score", "opp_score")] + (
         STRIP_ROWS_EXT if has_ext(tdf) else STRIP_ROWS)
+    if runs and load_score_events() is not None:
+        summary = game_run_summary(tdf).set_index(["season", "round"])
+        key = pd.MultiIndex.from_arrays([tdf["season"], tdf["round"]])
+        tdf = tdf.copy().assign(freo_best_run=summary["freo_best_pts"].reindex(key).fillna(0).values,
+                         opp_best_run=summary["opp_best_pts"].reindex(key).fillna(0).values)
+        rows_spec = rows_spec + [("Biggest run", "freo_best_run", "opp_best_run")]
     labels = game_labels(tdf)
     rows, z, hover = [], [], []
     for label, fcol, ocol in rows_spec:
