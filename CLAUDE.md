@@ -4,8 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Fremantle Dockers Performance Dashboard
 
-A one-screen "Coach View" Streamlit dashboard of Fremantle Dockers (AFL) stats, player by player
-and game by game, with a chatbot (Wharf-ai) that answers questions grounded in the data.
+A "Coach View" Streamlit dashboard of Fremantle Dockers (AFL) stats in five places around a
+coach's week (Last game, Next opponent, Our season, Players, Game day), with momentum charts, a
+match simulator, SIMULATED ground maps, and a chatbot (Wharf-ai) that answers questions grounded
+in the data.
 Feature-by-feature descriptions, measurements and history live in `docs/design_notes.md`.
 
 ## Commands
@@ -13,9 +15,9 @@ Feature-by-feature descriptions, measurements and history live in `docs/design_n
   requirements.txt` (pins Streamlit 1.64+, pandas 3, plotly 7, anthropic 1.9+).
 - Run: `streamlit run app.py`. There is no linter config.
 - Tests: `pip install -r requirements-dev.txt`, then `pytest -m "not ui"` (data rules, Wharf-ai
-  tools vs plain pandas, login, usage cap, insights, headless app via AppTest) and `pytest -m ui`
-  (Playwright: one-screen fit in every view at 1440x790, 1920x960, 1280x680, 1680x950, plus phone
-  and tablet layouts). Single test: `pytest tests/test_data.py::test_name` or `-k <pattern>`.
+  tools vs plain pandas, login, usage cap, insights, the model, every place via AppTest) and
+  `pytest -m ui` (Playwright: every place at 1440x790, 1920x960, 1280x680, 1680x950, phones and
+  tablets: no sideways scroll, Wharf-ai in view; clicks, links, Back, staying signed in). Single test: `pytest tests/test_data.py::test_name` or `-k <pattern>`.
   `.github/workflows/checks.yml` runs both on every push with a test-only login. Locally the
   tests sign in with the login in `.streamlit/secrets.toml` (Streamlit copies secrets into the
   environment at startup, overriding anything set before).
@@ -32,7 +34,7 @@ Feature-by-feature descriptions, measurements and history live in `docs/design_n
     Writes `freo_player_games_ext.csv`, `freo_team_games_ext.csv`, `opp_player_games_ext.csv`,
     `freo_squad.csv`. Optional: the app runs on the AFL Tables CSVs alone and hides extra stats.
   - `python league_scraper.py 2025 2026` (about 22 min): `league_team_games.csv`, every team's
-    totals per match, for Scout and the ladder. Checks Freo rows against AFL Tables.
+    totals per match, for Next opponent and the ladder. Checks Freo rows against AFL Tables.
   - `python league_events_scraper.py 2025 2026` (about 5.5 min a season, AFL Tables, same
     delay): `league_score_events.csv`, every score of every AFL game in order (home and away as
     AFL Tables lists them), for other clubs' momentum charts. Checks each game's last score.
@@ -71,14 +73,15 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   sign-in; `WHARF_LOGIN_CAP` is the old name), `WHARF_DAILY_CAP` (100, shared, midnight Perth), `PLAYER_PHOTOS = "afl"` (loads AFL headshots by URL; never store them in the repo).
 
 ## Code map
-- Entry and wiring: `app.py` (sign-in gate, top bar, season band, pickers, Wharf-ai panel as a
-  fragment) calls `views.render`, which picks a view and lays out cards through `views.arrange`.
+- Entry and wiring: `app.py` (sign-in gate, window size, the Wharf-ai panel as a fragment) hands
+  over to `v2.run`, which draws the top bar, the five places and the panel or dock.
 - Data: `data.py` loads and merges every CSV (cached) and computes all derived tables, tiles and
-  records. Views, takeaways, insights and Wharf-ai's tools all read from it, so stat logic belongs
-  here, not in views or charts.
-- v2 (the default): `v2.py` draws the five places, reusing cards from `views.py` where they fit.
+  records. Pages, takeaways, insights and Wharf-ai's tools all read from it, so stat logic belongs
+  here, not in pages or charts.
+- Pages: `v2.py` (places, band, tiles, card headers, navigation, the dock), reusing a few cards
+  from `views.py` (match players table, player game log, quarter-time check, ground cards).
 - Presentation: `charts.py` (Plotly figures), `theme.py` (CSS, colours, HTML blocks), `layout.py`
-  (window size to card heights and layout mode), `nav.py` (address bar state, `nav.go`),
+  (window size and layout mode, for the CSS), `nav.py` (`nav.go` for reused cards, Back/Forward),
   `takeaways.py` (card one-liners and chart focus), `marks.py` (band drawings), `sim.py`
   (simulated ground cards), `tour.py` + `components/` (custom JS components: viewport, cookie, tour).
 - Wharf-ai: `chatbot.py` (prompt, streaming tool loop) -> `wharf_tools.py` (pandas tools) ->
@@ -112,7 +115,7 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   `cfs/afl/playerStats|teamStats/match/{id}`) is unpublished: URLs and fields can change.
 - `freo_score_events.csv` is parsed from raw HTML (`freo_scraper.parse_scoring`) because AFL
   Tables leaves its quarter rows unclosed. Game clock = earlier quarters' full lengths + seconds.
-- Momentum (`data.momentum`, `momentum_test`, the Season momentum page, Wharf-ai's `momentum`
+- Momentum (`data.momentum`, `momentum_test`, the momentum cards, Wharf-ai's `momentum`
   tool) comes from scores only: no other stat is timed (public sources have whole-game stats
   only; timed and located data is Champion Data's, licensed). Any club's game:
   `data.club_game_events` (league_score_events.csv) gives the same shape as `game_events`, from
@@ -143,41 +146,36 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   Names flip from "Last, First". Opposition player rows are discarded (totals only).
 - It warns (doesn't stop) when kicks + handballs != disposals or a game has no Freo table.
 
-## Coach View v2 (the default since 2026-10-10; `?v2=0` shows the old views until they are deleted)
-- `v2.py`: five places around a coach's week: Last game, Next opponent, Our season, Players,
-  Game day. The momentum charts and the simulated ground cards are folded into them (Lab is gone):
-  Next opponent shows the club's last 5 games as momentum small multiples
-  (`charts.momentum_multiples`, from `data.club_game_events`) beside their heat map. `app.py` hands over to `v2.run` right after sign-in
-  and sizing, before the old navigation reads queued moves, then stops.
+## The pages (v2.py)
+- Five places around a coach's week: Last game, Next opponent, Our season, Players, Game day.
+  The momentum charts and the simulated ground cards are folded into them: Next opponent shows
+  the club's last 5 games as momentum small multiples (`charts.momentum_multiples`, from
+  `data.club_game_events`) beside their heat map. The old four views were deleted on 2026-10-11.
 - Wharf-ai is always visible: a sticky panel beside the page (1000px+ wide and 600px+ tall),
   otherwise docked to the bottom of the screen (`wa_dock`, opens over the page as
   `wa_dock_open`). Never hide it behind a page or a drawer that leaves nothing on screen.
-- Pages scroll; there is no one-screen rule in v2, so card text wraps and charts use the fixed
-  `CHART_H` / `TALL_H`. One band (`v2.band`), one tile row (`v2.tiles`), one card header
+- Pages scroll: card text wraps and charts use the fixed `CHART_H` / `TALL_H`. One band
+  (`v2.band`), one tile row (`v2.tiles`, 6 / 3 / 2 a row by window width), one card header
   (`v2.finding`, whose "Ask" button queues its question in `pending_prompt`).
 - One click rule: any game opens Last game for it, any player their profile in Players. Move
   with `v2.go(place=...)`. Cards reused from `views.py` call `nav.go(view=...)`; `v2.apply`
-  translates those (Match -> Last game, Player -> Players, Scout -> Next opponent).
+  translates those (Match -> Last game, Player -> Players, Scout -> Next opponent), which also
+  keeps old `?view=` links working.
 - Picker first options are real strings (`SQUAD`, `NOBODY`), not None: a None value shows
   Streamlit's "Choose an option" placeholder. Next opponent opens on the first club (Adelaide).
-- Phones get a two-line top bar (seasons and icons, then the place picker): the old phone CSS
-  sizes the first top-bar column to its content.
-- Tests: `tests/test_v2.py` (AppTest, every place) and the `v2` tests in `tests/test_ui.py`. The
-  old layout's tests ask for it with `?v2=0` (test_app's fixture, test_ui's `open_app` and old
-  view URLs); `nav.write_url` keeps `v2=0` in its address while it is open.
-- The tour (`components/tour`) describes v2: one step list for every place, each step skipped
-  when its element isn't on the page (a step may list several selectors; the first match is
-  used). Its "seen" key is `freoCoachTourDone_v2`; tests set both v1 and v2 keys.
+- Phones get a two-line top bar (seasons and icons, then the place picker): the phone CSS
+  (`theme.inject_phone_css`) sizes the first top-bar column to its content.
+- Tests: `tests/test_v2.py` (AppTest, every place) and `tests/test_ui.py` (browser).
+- The tour (`components/tour`): one step list for every place, each step skipped when its
+  element isn't on the page (a step may list several selectors; the first match is used). Its
+  "seen" key is `freoCoachTourDone_v2`.
 
 ## Layout and Streamlit gotchas
-- Layout modes (`layout.mode`): desktop (1280x600 or more) is one screen with no page scroll;
-  split (1000px+ wide, 600px+ tall) and stack scroll, with Wharf-ai beside or above; phone (under
-  700px wide) is one scrolling column. Each view hands `views.arrange` three arrangements (desktop
-  rows, tablet grid, phone order). Below about 1280px the one-screen layout breaks.
-- `components/viewport` reports the window size; `layout.sizes` turns it into chart and panel
-  heights, tuned at 1440x790. Cards and the Wharf-ai panel must end level, 9px above the window
-  bottom. Titles and tile values ellipsise rather than wrap. Text is 12px minimum. After any
-  layout change, check screenshots at 1440x790, 1920x960 and 1280x680, then run `pytest -m ui`.
+- `components/viewport` reports the window size. `layout.mode` picks the extra CSS: phones
+  (under 700px) get `theme.inject_phone_css`, tablets and small windows `inject_tablet_css`
+  (touch sizes), and with the side panel `inject_side_panel_css` (only the chat scrolls inside
+  it); `v2.inject_css` adds the page rules. Text is 12px minimum. After any layout change, check
+  screenshots at 1440x790, 1180x760, 820x1100 and 390x844, then run `pytest -m ui`.
 - On first run the app waits for the window size before drawing (so a phone never flashes the
   desktop layout). The viewport component remembers the last size it sent: every send reruns
   the app, and an extra rerun mid-answer cuts off a streaming Wharf-ai reply.
@@ -187,9 +185,9 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Streamlit gives HTML markdown blocks a -1rem bottom margin; `theme.inject_css` cancels it for
   specific blocks. Streamlit chrome and the sidebar are hidden by CSS. That CSS must not match
   `footer` generally: driver.js (the tour) draws its buttons in a `<footer>`.
-- Navigation state lives in the URL (`?season=&view=&game=&player=&opp=&vs=&games=`). Clicks go
-  through `nav.go()`, which queues the move and reruns, because a control can't change after it
-  is drawn. Streamlit doesn't rerun on browser Back/Forward, so the viewport component sends the
+- Navigation state lives in the URL (`?season=&place=&game=&club=&player=&vs=&games=`). Clicks
+  go through `v2.go()` (or `nav.go()` in reused cards), which queues the move and reruns, because
+  a control can't change after it is drawn. Streamlit doesn't rerun on browser Back/Forward, so the viewport component sends the
   new address and `nav._back_forward` applies it.
 - Streamlit doesn't report clicks on heatmap cells or bars: `charts._click_layer` adds invisible
   point markers. After a click is handled, change the chart or table key so the old selection

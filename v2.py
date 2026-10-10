@@ -1,4 +1,4 @@
-"""Coach View v2 (the default; ?v2=0 shows the old layout): five places around a coach's week.
+"""Coach View v2: five places around a coach's week.
 
 Last game, Next opponent, Our season, Players and Game day, with the simulated
 ground maps (heat maps, event spots, GPS running) and momentum charts on the
@@ -13,7 +13,8 @@ any player opens their profile in Players). The address holds the place and
 picks: ?season=2026&place=last-game&game=GF (player=, vs=, club=, games=).
 
 Cards reused from views.py navigate with nav.go(view=...); `apply` translates
-those moves to places, so their clicks follow the same rule.
+those moves to places, so their clicks follow the same rule (and old ?view=
+links still open the right place).
 """
 
 import html
@@ -27,7 +28,7 @@ import nav
 import takeaways as T
 import views as V
 from theme import (COLORS, _avatar, _ordinal, _sparkline, card_title, club_colours, compare_table,
-                   leaders_list, record_text, result_colour, tape)
+                   record_text, result_colour, tape)
 import marks
 
 PLACES = ["Last game", "Next opponent", "Our season", "Players", "Game day"]
@@ -37,7 +38,6 @@ SLUGS = {p: p.lower().replace(" ", "-") for p in PLACES}
 FROM_SLUG = {v: k for k, v in SLUGS.items()}
 OLD_VIEWS = {"Match": "Last game", "Scout": "Next opponent", "Season": "Our season",
              "Player": "Players"}
-GROUND_H = 430         # the ground cards (simulated heat maps and events)
 GROUND_NOTE = ("; the page also has SIMULATED ground maps (heat maps, event spots and GPS running: "
                "a demo, not real data): answer only from the real data, and if asked about "
                "positions, zones or running say the ground maps are a demo")
@@ -52,15 +52,6 @@ def short_round(api_round):
 CHART_H = 300          # a card's chart height; pages scroll, so this never has to shrink
 TALL_H = 380
 DOCK = False           # set by run(): Wharf-ai docked to the bottom (phones, portrait tablets)
-
-
-def enabled():
-    """v2 is the default; ?v2=0 shows the old layout for the session (kept in its
-    address), ?v2=1 comes back."""
-    q = st.query_params.get("v2")
-    if q in ("1", "0"):
-        st.session_state["v2"] = q == "1"
-    return bool(st.session_state.get("v2", True))
 
 
 # ---- navigation ---------------------------------------------------------------
@@ -279,7 +270,7 @@ def last_game(ctx, season, tdf, pdf, pos):
             tape(rows, opp_color=club["chart"], names=("Freo", short))
 
     def ground_card():
-        V.match_ground_card(ctx["player_df"], season, game, GROUND_H)
+        V.match_ground_card(ctx["player_df"], season, game)
 
     def leaders_card():
         leaders, goals = D.match_leaders(pdf, game)
@@ -301,7 +292,7 @@ def last_game(ctx, season, tdf, pdf, pos):
                             unsafe_allow_html=True)
 
     def players_card():
-        V._match_players(pdf, game, season, pos, TALL_H)
+        V._match_players(pdf, game, season, pos)
 
     grid([([1.55, 1], [momentum_card, ground_card]), ([1.1, 1], [tape_card, leaders_card]),
           ([1], [players_card])])
@@ -362,7 +353,7 @@ def next_opponent(ctx, season, club):
     def heat_card():
         import sim
         rows, role = sim.team_rows(last5, club)
-        V._ground_card("v2_opp_ground", rows, role, GROUND_H, f"{short}, last 5 games", attack=short)
+        V._ground_card("v2_opp_ground", rows, role, f"{short}, last 5 games", attack=short)
 
     def sim_card():
         sim_card_body(club, short, tint)
@@ -549,7 +540,6 @@ def what_if_body(club, short, tint):
     saved = _saved_forecasts()
     if not saved or "levers" not in saved:
         return
-    import model as M
     venue = VENUES[st.session_state.get("v2_sim_venue") or "At home"]
     levers = saved["levers"]
     changes = tuple((m, int(st.session_state.get(f"v2_wi_{m}", 0) or 0)) for m in levers)
@@ -695,8 +685,7 @@ def our_season(ctx, season, baseline, tdf, pdf, games_slice):
 
     def ground_card():
         import sim
-        V._ground_card("v2_season_ground", pdf, sim.roles(ctx["player_df"]), GROUND_H + 160,
-                       f"the team in {season}")
+        V._ground_card("v2_season_ground", pdf, sim.roles(ctx["player_df"]), f"the team in {season}")
 
     grid([([1], [strip_card]), ([1, 1], [wins_card, quarters_card]), ([1.6, 1], [momentum_card, ground_card])])
     focus = None if games_slice == D.GAME_SLICES[0] else f"the {season} season, {games_slice.lower()} only"
@@ -748,7 +737,7 @@ def players(ctx, season, baseline, pdf, player, vs, games_slice):
         V._player_log(pdf, player, TALL_H)
 
     def ground_card():
-        V.player_ground_card(ctx["player_df"], season, player, GROUND_H)
+        V.player_ground_card(ctx["player_df"], season, player)
 
     grid([([1.6, 1], [trend_card, ranks_card]), ([1.6, 1], [range_card, ground_card])])
     focus = f"the player profile for {player}, {season} season"
@@ -888,10 +877,10 @@ def squad(ctx, season, baseline, pdf, games_slice):
     return f"the whole squad (player map and year on year), {season} season"
 
 
-def game_day(ctx, season, sz):
+def game_day(ctx, season):
     band("Game day", "how Freo have gone from a margin at a break, every season",
          lead=(str(len(ctx["team"])), "Games to compare"))
-    V.render_quarter_time(ctx["team"], ctx["seasons"], sz)
+    V.render_quarter_time(ctx["team"], ctx["seasons"])
     return "the quarter-time check (how Freo have gone from a margin at a break)"
 
 
@@ -987,8 +976,8 @@ def _place(ctx, place, season, baseline, picks):
         picks["club"] = club
         return next_opponent(ctx, season, club)
     if place == "Game day":
-        return game_day(ctx, season, ctx["sz"])
-    # Our season, Players and Lab can be cut to a slice of games.
+        return game_day(ctx, season)
+    # Our season and Players can be cut to a slice of games.
     if st.session_state.get("games_slice") not in D.GAME_SLICES:
         st.session_state["games_slice"] = D.GAME_SLICES[0]
     if place == "Our season":
@@ -1023,9 +1012,6 @@ def _place(ctx, place, season, baseline, picks):
         return players(ctx, season, baseline, D.players_season(ctx["player_view"], season), player, vs,
                        games_slice)
     return None
-    club = st.session_state.get("v2_club")
-    return lab(ctx, season, tdf, D.players_season(ctx["player_df"], season),
-               None if pick in (None, SQUAD) else pick, club)
 
 
 def dock(ctx, season, baseline, focus):
@@ -1056,23 +1042,18 @@ def inject_css(dock_mode, win_h):
           /* Pages scroll, so card text wraps instead of being cut off. */
           .card-title, .card-take, .card-title .take, .cv-band .ttl, .cv-band .ttl small {{ white-space:normal !important; }}
           .cv-band.v2 {{ height:auto; min-height:56px; flex-wrap:wrap; row-gap:6px; margin:6px 0 4px; }}
-          .cv-band.v2 .opt, .cv-band.v2 .opt2 {{ display:block; }}
           .cv-band.v2 .cv-stat span {{ display:block; }}
           /* Tiles fill whole rows: 6, then 3, then 2 a row as the window narrows. */
           .cv-tiles.v2 {{ grid-template-columns:repeat(6, minmax(0, 1fr)) !important; margin:6px 0; }}
           @media (max-width: 1250px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }} }}
           @media (max-width: 699px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }} }}
           .cv-tiles.v2 .fr {{ font-size:.75rem; color:var(--muted); }}
-          .v2-sub {{ font-size:.78rem; font-weight:700; color:var(--muted); margin:2px 0 4px;
-            text-transform:uppercase; letter-spacing:.04em; }}
           .st-key-v2_leaders {{ background:#fff; border-radius:4px; padding:10px 14px 6px; }}
           .v2-line {{ font-size:.85rem; color:var(--muted); margin:2px 0 4px; }}
           .v2-line b {{ color:var(--ink); }}
           .cv-tiles.v2 .val small {{ font-size:.7em; color:var(--muted); font-weight:600; }}
           div[data-testid="stMarkdownContainer"]:has(> .card-take),
-          div[data-testid="stMarkdownContainer"]:has(> .v2-sub),
           div[data-testid="stMarkdownContainer"]:has(> .v2-line) {{ margin-bottom:0 !important; }}
-          .st-key-v2_leaders .v2-sub + div {{ margin-bottom:4px; }}
           div[data-testid="stColumn"]:has(.st-key-card_wharfai) {{
             position:sticky; top:8px; align-self:flex-start; }}
           /* Docked Wharf-ai: a bar along the bottom, opening over the page. */

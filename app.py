@@ -1,8 +1,8 @@
-"""Fremantle Dockers Coach View: the whole season on one screen.
+"""Fremantle Dockers Coach View: five places around a coach's week (v2.py).
 
 Run with:  streamlit run app.py
-One screen with no page scroll, sized to the browser window (layout.py): the
-dashboard on the left, the Wharf-ai chat panel down the right. Sign-in needs
+The page on the left, the Wharf-ai chat panel in a sticky column on the right
+(docked to the bottom of a narrow or short screen). Sign-in needs
 APP_USERNAME / APP_PASSWORD in the environment or Streamlit secrets. Wharf-ai opens with an insight
 computed from the data (no API needed); answering questions needs
 ANTHROPIC_API_KEY (environment or Streamlit secrets), plus
@@ -22,20 +22,18 @@ st.set_page_config(page_title="Fremantle Dockers Coach View",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
-from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, inject_tablet_css, compare_band, header_band, match_band, scout_band, player_band, chat_header,
-                   insight_card, insight_rotator)
+from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, inject_tablet_css,
+                   chat_header, insight_rotator)
 import auth
 import settings
 import layout
 import data as D
-import views as V
 import chatbot as C
 import evidence as E
 import insights as I
 import admin
 import usage as U
 import tour
-import nav
 import v2
 
 inject_css()
@@ -54,21 +52,20 @@ if first_run and not layout.size_known():
     st.stop()
 LAYOUT = layout.mode(win_w, win_h)      # phone, stack, split or desktop (see layout.mode)
 PHONE = LAYOUT == "phone"
-SCROLL = LAYOUT != "desktop"            # the page scrolls instead of fitting one screen
-CHAT_TOP = LAYOUT in ("phone", "stack")  # Wharf-ai above the dashboard, not beside it
-V2_DOCK = False                           # v2 on a narrow screen: Wharf-ai docked at the bottom
-V.set_layout(LAYOUT)
+SCROLL = LAYOUT != "desktop"
+# Wharf-ai docked to the bottom of the screen (narrow or short windows; v2.run
+# decides the same), else a sticky panel beside the page.
+DOCK = win_w < 1000 or win_h < 600
 if PHONE:
     inject_phone_css()
 elif SCROLL:
-    inject_tablet_css(LAYOUT)
-if not CHAT_TOP:
+    inject_tablet_css()
+if not DOCK:
     inject_side_panel_css()
 tour.show(phone=PHONE)        # first-visit walkthrough (once per browser)
 if st.session_state.pop("restored", False) and "messages" not in st.session_state:
     # Signed back in from the cookie: carry on this session's Wharf-ai chat.
     st.session_state["messages"] = U.load_chat(st.session_state.get("sid"))
-SZ = layout.scroll_sizes(LAYOUT, win_h, win_w) if SCROLL else layout.sizes(win_h, win_w)
 
 team_df = D.load_team()
 player_df = D.load_players()
@@ -77,9 +74,9 @@ all_seasons = D.seasons(team_df)
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 AVATARS = {"user": os.path.join(ASSETS, "supporter.svg"),        # supporter in a bobble beanie
            "assistant": os.path.join(ASSETS, "anchor.svg")}      # Wharf-ai's anchor
-PANEL_H = SZ["panel"]       # Wharf-ai panel height (px), level with the dashboard bottom
-HISTORY_H = SZ["history"]   # scrolling area inside the panel
-TOP_PROMPTS = 3 if PHONE or win_h < 500 else 4   # suggestions when Wharf-ai sits above the dashboard
+PANEL_H = win_h - 60        # the side panel: the window less the top bar and a gap
+HISTORY_H = max(300, int(win_h * 0.55)) if DOCK else PANEL_H - 150   # the chat's scrolling area
+TOP_PROMPTS = 3 if PHONE or win_h < 500 else 4   # suggestions in the docked panel
 TOOL_LABELS = {
     "team_games": "listing games", "team_aggregate": "averaging team stats",
     "correlate": "checking a correlation", "quarter_breakdown": "breaking down quarters",
@@ -133,25 +130,12 @@ def example_prompts(season, baseline, focus=None):
                 "Who wins the most contested ball in the squad?",
                 "Who leads our pressure acts, and does it matter?",
                 "Which players have the most score involvements?"]
-    if focus and focus.startswith("every Freo game against every club"):
-        return ["Which opponents have we struggled against?",
-                "Which clubs have we beaten most comfortably?",
-                "What decided our losses to the toughest clubs?",
-                "How do we go against this season's top eight?",
-                "Have we improved against any club over the seasons?"]
     if focus and focus.startswith("the quarter-time check"):
         return ["How often do we win from behind at three quarter time?",
                 "How often do we hold a half-time lead?",
                 "Which quarter do we fade in, and against whom?",
                 "How do we go in the last quarter of close games?",
                 "Do we finish games better at home or away?"]
-    if focus and focus.startswith("season momentum"):
-        return ["How often do we concede a run of three goals or more?",
-                "How quickly do we answer the opposition's runs?",
-                "Which games did we lose after leading in the last quarter?",
-                "When in a quarter do we score most?",
-                "Is momentum real in our games?",
-                "Which opponents kicked the biggest runs against us?"]
     if focus and focus.startswith("the opponent scout report for "):
         club = focus.split(" for ", 1)[1].split(",")[0]
         scout = [f"What wins {club} games?",
@@ -174,6 +158,7 @@ def example_prompts(season, baseline, focus=None):
         "How do our losses differ from our wins?",
         f"What has changed most since {baseline}?" if baseline else None,
         "Which quarter do we fade in, and against whom?",
+        "How often do we concede a run of three goals or more?",
         "Where are we losing the clearance battle?",
         "Which players are in the best form right now?",
         "Which players lift in finals?",
@@ -194,8 +179,8 @@ def example_prompts(season, baseline, focus=None):
     return scout + match + [q for q in season_q if q]
 
 
-# The chat panel's share of the window width: columns 3.55 : 1 (desktop), 2.6 : 1 (split).
-SIDE_SHARE = 1 / 3.6 if LAYOUT == "split" else 1 / 4.55
+# The chat panel's share of the window width: columns 3.2 : 1 (v2.run).
+SIDE_SHARE = 1 / 4.2
 CHAR_W = 6.4                   # average width of one character in panel text (px)
 
 
@@ -343,7 +328,7 @@ def chat_panel(season, baseline, focus=None):
     capped = day_capped or login_capped
     # On a phone the panel is as tall as its content until a chat starts, then
     # the chat scrolls inside about half the screen so the dashboard stays close.
-    history_h = (HISTORY_H if msgs else "content") if CHAT_TOP else HISTORY_H
+    history_h = (HISTORY_H if msgs else "content") if DOCK else HISTORY_H
     history = st.container(height=history_h, border=False, key="wa_history")
     with history:
         insight = st.session_state[key]
@@ -360,7 +345,7 @@ def chat_panel(season, baseline, focus=None):
             # Fill the panel to the bottom: as many suggestions as fit under the insight.
             st.markdown('<div class="wa-sub">Try asking</div>', unsafe_allow_html=True)
             longest = max(pool, key=len) if pool else insight  # the card is as tall as this
-            shown = (example_prompts(season, baseline, focus)[:TOP_PROMPTS] if CHAT_TOP else
+            shown = (example_prompts(season, baseline, focus)[:TOP_PROMPTS] if DOCK else
                      fitting_prompts(example_prompts(season, baseline, focus), longest,
                                      win_w, HISTORY_H))
             for i, q in enumerate(shown):
@@ -392,7 +377,7 @@ def chat_panel(season, baseline, focus=None):
             st.markdown('<div class="wa-sub wa-earlier">Questions for this page</div>',
                         unsafe_allow_html=True)
             fresh = [q for q in example_prompts(season, baseline, focus) if q not in asked_before]
-            page_qs = (fresh[:TOP_PROMPTS] if CHAT_TOP else
+            page_qs = (fresh[:TOP_PROMPTS] if DOCK else
                        fitting_prompts(fresh, None, win_w, HISTORY_H // 2 + 70))
             for i, q in enumerate(page_qs):
                 if st.button(q, key=f"pq_{i}", width="stretch",
@@ -407,13 +392,6 @@ def chat_panel(season, baseline, focus=None):
                    else f"You've used your {mine_limit} questions for today" if login_capped
                    else "Ask Wharf-ai about the data")
     typed = st.chat_input(placeholder, disabled=client is None or capped)
-    if CHAT_TOP and msgs and not V2_DOCK:
-        # A button and a script, not a #link: Streamlit's page scrolls inside
-        # its own container, where the browser's jump to an anchor lands wrong.
-        if st.button("Dashboard ↓", key="jump_dash", type="tertiary"):
-            components.html(
-                "<script>var e=window.parent.document.getElementById('cv-dash');"
-                "if(e){e.scrollIntoView({block:'start'});}</script>", height=0)
     pending = st.session_state.pop("pending_prompt", None)  # sent from a deep dive
     prompt = typed or clicked or (pending if client is not None else None)
     if not prompt:
@@ -499,23 +477,15 @@ def chat_panel(season, baseline, focus=None):
     st.rerun() if pending and not (typed or clicked) else st.rerun(scope="fragment")
 
 
-# ------------------------------------------------------------- layout
-# Desktop: one screen, the dashboard on the left and Wharf-ai down the right.
-# Split (landscape tablets): the same two columns, but the dashboard scrolls and
-# Wharf-ai stays pinned. Stack (portrait tablets, landscape phones): band,
-# controls, Wharf-ai, then the cards two to a row. Phone: one column, Wharf-ai
-# first, then the cards one under another (see layout.mode).
-focus = None
+# ------------------------------------------------------------- the pages
+# Five places around a coach's week (v2.py): the page on the left, Wharf-ai in a
+# sticky panel on the right, or docked to the bottom of a narrow or short screen.
 league = D.load_league()
 CLUBS = sorted(t for t in league["team"].unique() if t != "Fremantle") if league is not None else []
 
 
 def _game_label(season, rnd):
     """The game picker's label for a round in a season (for links like ?game=GF)."""
-    if rnd == nav.QT_ROUND:
-        return nav.QT
-    if rnd == nav.MOM_ROUND:
-        return nav.MOM
     tdf_ = D.team_season(team_df, season)
     for label, i in D.game_choices(tdf_):
         if tdf_["round"].iloc[i] == rnd:
@@ -523,320 +493,30 @@ def _game_label(season, rnd):
     return None
 
 
-# v2 (the default; ?v2=0 for the old views): five places around a coach's week
-# (v2.py). It reads queued moves itself, so it runs before the old navigation does.
-if v2.enabled():
-    V2_DOCK = CHAT_TOP = win_w < 1000 or win_h < 600
-    PANEL_H = win_h - 60
-    HISTORY_H = max(300, int(win_h * 0.55)) if V2_DOCK else PANEL_H - 150
-
-    def _v2_signout():
-        who = (auth.current_user() or {}).get("email")
-        if st.button("", icon=":material/logout:", key="signout_btn",
-                     help=f"Sign out ({who})" if who else "Sign out"):
-            auth.sign_out()
-
-    def _v2_usage():
-        if U.is_admin((auth.current_user() or {}).get("email")):
-            if st.button("", icon=":material/monitoring:", key="usage_btn", help="Wharf-ai usage"):
-                admin.usage_log()
-
-    def _v2_tour():
-        tour.replay()
-        st.rerun()
-
-    v2.run({
-        "win": (win_w, win_h), "sz": SZ, "team": team_df, "player_df": player_df,
-        "team_view": team_df, "player_view": player_df, "seasons": all_seasons,
-        "league": league, "clubs": CLUBS, "game_label": _game_label,
-        "players": lambda s: D.player_list(D.players_season(player_df, s)),
-        "photo": player_photo, "chat_panel": chat_panel, "brand_title": brand_title,
-        "usage_button": _v2_usage, "signout_button": _v2_signout, "tour_replay": _v2_tour,
-    })
-    st.stop()
-
-# A queued move from a click, or the web address on a visit's first run.
-nav.apply_pending(all_seasons, _game_label,
-                  lambda s: [nav.SQUAD] + D.player_list(D.players_season(player_df, s)),
-                  lambda: [nav.ALL_CLUBS] + CLUBS)
-
-# Every layout starts with the purple top bar (the club site's nav bar): the
-# title, seasons, views and the icon buttons. The band and picker sit under it.
-if PHONE:
-    with st.container(key="topbar"):
-        h2, h3, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
-    band_slot = st.container()
-    pick_slot = pick2_slot = pick3_slot = st.container()
-    chat_slot = st.container(border=True, key="card_wharfai")
-    main = st.container()
-elif SCROLL:
-    # Tablets and small windows: the bar, then the band on its own line and the picker.
-    with st.container(key="topbar"):
-        hb, h2, h3, h4, h5, h6 = st.columns([1.6, 0.52 * len(all_seasons), 2.3, 0.3, 0.3, 0.3],
-                                            vertical_alignment="center")
-    top = st.container()
-    if LAYOUT == "split":
-        main, side = st.columns([2.6, 1])
-        top = main
-    with top:
-        band_slot = st.container()
-        pick_slot, pick2_slot, pick3_slot = st.columns([1, 1, 1.2])
-    if LAYOUT == "stack":
-        chat_slot = st.container(border=True, key="card_wharfai")
-        main = st.container()
-else:
-    seasons_w = 0.55 * len(all_seasons)       # the season buttons, about 0.55 each
-    with st.container(key="topbar"):
-        # An empty gap between the views and the icons.
-        hb, h2, h3, _gap, h4, h5, h6 = st.columns(
-            [1.9, seasons_w, 2.7, 5.9 - seasons_w, 0.3, 0.3, 0.3],
-                                                vertical_alignment="center")
-    main, side = st.columns([3.55, 1])
-    with main:
-        h1 = st.container()                   # the picker and band row
-if not PHONE:
-    with hb:
-        brand_title()
-
-with h2:
-    season = st.segmented_control("Season", all_seasons, default=all_seasons[-1],
-                                  key="season", label_visibility="collapsed")
-with h3:
-    views = [v for v in nav.VIEWS if v != "Scout" or league is not None]
-    if st.session_state.get("view") not in views:
-        st.session_state["view"] = "Season"
-    if PHONE:  # four buttons don't fit next to the season at phone width
-        view = st.selectbox("View", views, key="view", label_visibility="collapsed")
-    else:
-        view = st.segmented_control("View", views, key="view",
-                                    label_visibility="collapsed") or "Season"
-season = season or all_seasons[-1]
-baseline = D.baseline_season(season, all_seasons)
-tdf = D.team_season(team_df, season)
-pdf_season = D.players_season(player_df, season)
-pos = scout = player = game_round = None
-page = None   # "squad", "clubs" or "qt": a picker's page across all its options
+def _signout():
+    who = (auth.current_user() or {}).get("email")
+    if st.button("", icon=":material/logout:", key="signout_btn",
+                 help=f"Sign out ({who})" if who else "Sign out"):
+        auth.sign_out()
 
 
-def _pick_and_band():
-    """The picker slots (game, player or club; the Player view adds "compare
-    with"; Season and Player add the games slice) and the band slot."""
-    if SCROLL:
-        return pick_slot, pick2_slot, pick3_slot, band_slot
-    with h1:
-        if view == "Season":          # the slice is Season's only picker
-            pick, band = st.columns([1.12, 3.3], vertical_alignment="center")
-            return pick, None, None, band
-        if view == "Player":
-            if st.session_state.get("player_pick") != nav.SQUAD:
-                return st.columns([0.95, 0.95, 0.85, 2.3], vertical_alignment="center")
-            pick, pick3, band = st.columns([1.12, 0.85, 2.6], vertical_alignment="center")
-            return pick, None, pick3, band
-        # The quarter-time check's label needs a wider picker.
-        pick, band = st.columns([1.3 if view == "Match" else 1.12, 3.3],
-                                vertical_alignment="center")
-    return pick, None, None, band
-
-
-def slice_picker(slot):
-    """The games slice (all, home, away, finals, wins, losses, v top 8, last 10):
-    every card on the view is worked out from those games only."""
-    if st.session_state.get("games_slice") not in D.GAME_SLICES:
-        st.session_state["games_slice"] = D.GAME_SLICES[0]
-    with slot:
-        return st.selectbox("Games", D.GAME_SLICES, key="games_slice",
-                            label_visibility="collapsed",
-                            help="Work out every card from these games only")
-
-
-pick, pick2, pick3, band = _pick_and_band()
-vs = None
-games_slice = None
-team_view, player_view = team_df, player_df   # the slice's games (all of them by default)
-
-
-def apply_slice(which):
-    """Cut the data to a games slice for this view's cards (and the band)."""
-    global team_view, player_view, tdf, pdf_season
-    team_view, player_view = D.slice_games(team_df, player_df, which, league)
-    tdf = D.team_season(team_view, season)
-    pdf_season = D.players_season(player_view, season)
-
-
-def season_band():
-    last = tdf.tail(5)
-    form = [(r.result, f"{r.round} vs {r.opponent}: {r.freo_score} to {r.opp_score}")
-            for r in last.itertuples()]
-    note = (f"{len(tdf)} games to {tdf['round'].iloc[-1]}, "
-            f"{tdf['game_dt'].iloc[-1]:%d %b}") if len(tdf) else "No games"
-    if baseline is not None:
-        note += f" · vs {baseline}"
-    updated = D.data_updated()
-    if updated is not None:
-        note += f" · data {updated:%-d %b}"
-    if games_slice not in (None, D.GAME_SLICES[0]):
-        note = f"{games_slice} only · " + note
-    with band:
-        header_band(season, D.record(tdf), form, note, last=tdf.iloc[-1] if len(tdf) else None)
-
-
-if view == "Scout" and league is not None:
-    clubs = [nav.ALL_CLUBS] + CLUBS
-    if st.session_state.get("scout_team") not in clubs:
-        last_opp = tdf["opponent"].iloc[-1] if len(tdf) else CLUBS[0]
-        st.session_state["scout_team"] = last_opp if last_opp in CLUBS else CLUBS[0]
-    with pick:
-        scout = st.selectbox("Opponent", clubs, key="scout_team", label_visibility="collapsed")
-    if scout == nav.ALL_CLUBS:
-        page = "clubs"
-        season_band()
-        focus = "every Freo game against every club, all seasons"
-    else:
-        with band:
-            lad = D.ladder(league, season)
-            games = league[(league["season"] == season) & (league["team"] == scout)].tail(5)
-            last5 = [(r.result, f"{r.api_round} v {r.opponent}: {r.score_for} to {r.score_against}")
-                     for r in games.itertuples()]
-            scout_band(scout, season, lad.loc[scout], last5)
-        focus = f"the opponent scout report for {scout}, {season} season"
-elif view == "Player":
-    names = D.player_list(pdf_season)
-    if st.session_state.get("player_pick") not in [nav.SQUAD] + names:
-        st.session_state["player_pick"] = names[0]
-    with pick:
-        player = st.selectbox("Player", [nav.SQUAD] + names, key="player_pick",
-                              label_visibility="collapsed")
-    games_slice = slice_picker(pick3)
-    apply_slice(games_slice)
-    if player == nav.SQUAD:
-        page = "squad"
-        st.session_state["player_vs"] = None
-        season_band()
-        focus = f"the whole squad (player map and year on year), {season} season"
-    else:
-        others = [n for n in names if n != player]
-        if st.session_state.get("player_vs") not in [None] + others:
-            st.session_state["player_vs"] = None
-        with pick2:
-            vs = st.selectbox("Compare with", [None] + others, key="player_vs",
-                              format_func=lambda n: "Compare with..." if n is None else n,
-                              placeholder="Compare with...", label_visibility="collapsed")
-        with band:
-            if vs:
-                photos = tuple(player_photo(D.player_details(player_df, n, season).get("player_id"),
-                                            season) for n in (player, vs))
-                compare_band(player, vs, season, D.games_together(pdf_season, player, vs),
-                             photos=photos)
-            else:
-                details = D.player_details(player_df, player, season)
-                player_band(player, season, pdf_season[pdf_season["player"] == player],
-                            details=details,
-                            photo_url=player_photo(details.get("player_id"), season))
-        focus = (f"a comparison of {player} and {vs}, {season} season" if vs else
-                 f"the player profile for {player}, {season} season")
-        if games_slice != D.GAME_SLICES[0]:
-            focus += f", {games_slice.lower()} only"
-elif view == "Match" and len(tdf):
-    choices = D.game_choices(tdf)
-    labels = [c[0] for c in choices]
-    pages = [nav.QT] + ([nav.MOM] if D.load_score_events() is not None else [])
-    if st.session_state.get(f"game_{season}") not in pages + labels:
-        st.session_state[f"game_{season}"] = labels[0]   # the latest game
-    with pick:
-        label = st.selectbox("Game", pages + labels, key=f"game_{season}",
-                             label_visibility="collapsed")
-    if label == nav.QT:
-        page = "qt"
-        game_round = nav.QT_ROUND
-        season_band()
-        focus = "the quarter-time check (how Freo have gone from a margin at a break)"
-    elif label == nav.MOM:
-        page = "mom"
-        game_round = nav.MOM_ROUND
-        season_band()
-        focus = (f"season momentum for {season}: scoring runs, the first and last 10 minutes of "
-                 "quarters, and whether momentum carries from goal to goal")
-    else:
-        pos = dict(choices)[label]
-        game = tdf.iloc[pos]
-        game_round = game["round"]
-        with band:
-            match_band(game, f"{game['venue']} · {game['game_dt']:%a %d %b %Y}")
-        focus = (f"{game['round']} v {game['opponent']} at {game['venue']}, "
-                 + ("drew" if game["result"] == "D" else
-                    f"{'won' if game['result'] == 'W' else 'lost'} by {abs(int(game['margin']))}"))
-else:
-    games_slice = slice_picker(pick)
-    apply_slice(games_slice)
-    season_band()
-    if games_slice != D.GAME_SLICES[0]:
-        focus = f"the {season} season, {games_slice.lower()} only"
-
-
-# Match, Player and Scout pages carry a ground card of SIMULATED positions and running.
-if focus and view in ("Match", "Player", "Scout") and page is None and not vs:
-    focus += ("; the page also has a ground card of SIMULATED positions and GPS running (a demo, "
-              "not real data): answer only from the real data, and if asked about positions or "
-              "running say the ground card is a demo")
-
-
-def usage_button():
+def _usage():
     """Wharf-ai usage, for the people listed in WHARF_ADMINS only."""
     if U.is_admin((auth.current_user() or {}).get("email")):
         if st.button("", icon=":material/monitoring:", key="usage_btn", help="Wharf-ai usage"):
             admin.usage_log()
 
 
-if not PHONE:
-    with h4:
-        usage_button()
-with h5:
-    # The walkthrough has its own button (it also runs once, on first sign-in).
-    if st.button("?", key="tour_btn", help="Take the app tour"):
-        tour.replay()
-        st.rerun()
-with h6:
-    who = (auth.current_user() or {}).get("email")
-    if st.button("", icon=":material/logout:", key="signout_btn",
-                 help=f"Sign out ({who})" if who else "Sign out"):
-        auth.sign_out()
-nav.write_url(season, view, game=game_round, player=player, opp=scout, vs=vs,
-              games=games_slice if games_slice != D.GAME_SLICES[0] else None)
+def _tour():
+    tour.replay()
+    st.rerun()
 
-if CHAT_TOP:
-    with chat_slot:
-        chat_panel(season, baseline, focus)
 
-with main:
-    if CHAT_TOP:
-        st.markdown('<div id="cv-dash"></div>', unsafe_allow_html=True)
-    if page == "squad":
-        V.render_squad(player_view, season, baseline, SZ)
-    elif page == "clubs":
-        V.render_clubs(team_df, all_seasons, SZ)
-    elif page == "mom":
-        V.render_momentum_season(team_df, season, all_seasons, SZ)
-    elif page == "qt":
-        V.render_quarter_time(team_df, all_seasons, SZ)
-    elif scout is not None:
-        V.render_scout(team_df, player_df, league, season, scout, SZ)
-    elif view in ("Season", "Player") and not len(tdf):
-        st.info(f"No {games_slice.lower()} in {season}. Pick another slice of games.")
-    elif player is not None and vs:
-        V.render_compare(player_view, season, player, vs, SZ)
-    elif player is not None and not (pdf_season["player"] == player).any():
-        st.info(f"{player} didn't play in {games_slice.lower()} in {season}.")
-    elif player is not None:
-        V.render_player(player_view, season, baseline, player, SZ)
-    elif pos is not None:
-        V.render_match(team_df, player_df, season, pos, SZ)
-    else:
-        V.render(team_view, player_view, season, baseline, SZ)
-    if PHONE and U.is_admin((auth.current_user() or {}).get("email")):
-        with st.container(key="m_more"):
-            st.markdown('<div class="wa-sub">More</div>', unsafe_allow_html=True)
-            usage_button()
-
-if not CHAT_TOP:
-    with side, st.container(border=True, height=PANEL_H, key="card_wharfai"):
-        chat_panel(season, baseline, focus)
+v2.run({
+    "win": (win_w, win_h), "team": team_df, "player_df": player_df,
+    "team_view": team_df, "player_view": player_df, "seasons": all_seasons,
+    "league": league, "clubs": CLUBS, "game_label": _game_label,
+    "players": lambda s: D.player_list(D.players_season(player_df, s)),
+    "photo": player_photo, "chat_panel": chat_panel, "brand_title": brand_title,
+    "usage_button": _usage, "signout_button": _signout, "tour_replay": _tour,
+})

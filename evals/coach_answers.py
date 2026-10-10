@@ -56,7 +56,7 @@ def main(season):
         f"{int(g['opp_clearances'])}, contested poss {int(g['freo_contested_poss'])}-"
         f"{int(g['opp_contested_poss'])}; margin at each break {run}")))
 
-    # 3. Who played above themselves in that game (the players table's tinted cells)
+    # 4. Who played above themselves in that game (the players table's tinted cells)
     cols = ["disposals", "contested_poss", "clearances", "inside_50s", "metres_gained",
             "score_involvements", "tackles", "pressure_acts", "goals"]
     cols = [c for c in cols if c in ps.columns]
@@ -65,21 +65,21 @@ def main(season):
              for pl in pct.index[avgs[c] >= CH.VS_SELF_MIN_AVG.get(c, 0)] if pct.at[pl, c] >= 130]
     most = Counter(pl for pl, *_ in picks).most_common(4)
     top = sorted(picks, key=lambda r: -r[3])[:5]
-    out.append((f"3. Who played above themselves in {g['round']}", (
+    out.append((f"4. Who played above themselves in {g['round']}", (
         "most tinted cells: " + ", ".join(f"{pl} ({n})" for pl, n in most) + "; biggest: "
         + ", ".join(f"{pl} {c.replace('_', ' ')} {v:.0f} ({d:+.0f}%)" for pl, c, v, d in top))))
 
-    # 4. Against the top 8
+    # 5. Against the top 8
     if lg is not None:
         tv, _ = D.slice_games(t, p, "vs top 8", lg)
         tt = D.team_season(tv, season)
         r8 = D.record(tt)
-        out.append(("4. Against the top 8 (Games: vs top 8)", (
+        out.append(("5. Against the top 8 (Games: vs top 8)", (
             f"{r8['wins']}-{r8['losses']}, average margin {r8['margin']:+.1f} (all games "
             f"{rec['margin']:+.1f}); {T.where_we_win(D.win_conditions(tt))}; "
             f"{T.drivers(D.margin_drivers(tt))}")))
 
-    # 5. The last opponent, scouted
+    # 6. The last opponent, scouted
     opp = g["opponent"]
     if lg is not None and opp in D.ladder(lg, season).index:
         o = D.ladder(lg, season).loc[opp]
@@ -93,20 +93,21 @@ def main(season):
             if len(og):
                 b = og.loc[og["disposals"].idxmax()]
                 extra = f"; their most disposals in {g['round']}: {b['player']} {b['disposals']:.0f}"
-        out.append((f"5. {opp}, scouted", (
+        out.append((f"6. {opp}, scouted", (
             f"{T._ordinal(int(o['position']))} on the ladder, {int(o['wins'])}-{int(o['losses'])} ({o['pct']:.1f}%); "
             f"{T.style(ranks, opp)}; {T.where_we_win(D.scout_win_conditions(lg, opp, season))}; "
             f"Freo v {opp}, all seasons: {h['wins']}-{h['losses']}" + extra)))
 
-    # 6. One thing that decides our games
+    # 7. One thing that decides our games
     dr = D.margin_drivers(ts)
     _, fit = D.driver_points(ts, dr.iloc[0]["stat"])
-    out.append(("6. One thing that decides our games", (
+    out.append(("7. One thing that decides our games", (
         f"{dr.iloc[0]['stat']} differential (r {dr.iloc[0]['r']:+.2f}), then "
         f"{dr.iloc[1]['stat'].lower()} (r {dr.iloc[1]['r']:+.2f}); won {fit['ahead_won']} of "
         f"{fit['ahead']} when ahead on {dr.iloc[0]['stat'].lower()}. Association, not cause.")))
+    # 9 (if time, what would most lift our chances) has no fixed answer: note what they make of it.
 
-    # 7. (if time) Is Caleb Serong in form?
+    # 8. (if time) Is Caleb Serong in form?
     me = ps[ps["player"] == "Caleb Serong"].sort_values("game_dt")
     before = p[(p["season"] == season - 1) & (p["player"] == "Caleb Serong")]
     if len(me):
@@ -114,12 +115,34 @@ def main(season):
         firsts = ", ".join(pr[pr["rank"] == 1]["stat"].str.lower()) or "none"
         change = (f", {(me['disposals'].mean() / before['disposals'].mean() - 1) * 100:+.0f}% on "
                   f"{season - 1}" if len(before) else "")
-        out.append(("7. Is Caleb Serong in form? (if time)", (
+        out.append(("8. Is Caleb Serong in form? (if time)", (
             f"{me['disposals'].mean():.1f} disposals a game{change}; last 5 "
             f"{me['disposals'].tail(5).mean():.1f}; 1st in the squad for {firsts}")))
 
+    # 3. When did the last game turn? (Last game: Momentum)
+    ev = D.game_events(g)
+    if ev is not None:
+        events, quarters = ev
+        runs = D.scoring_runs(events)
+        run = runs.iloc[0] if len(runs) and runs.iloc[0]["goals"] >= D.RUN_GOALS else None
+        res = "W" if g["margin"] > 0 else "L" if g["margin"] < 0 else "D"
+        out.append((f"3. When did {g['round']} turn? (Last game: Momentum)",
+                    T.momentum(events, run, res, int(g["margin"]), D.abbr(opp))))
+
+    # 6, second part: simulate the next game (Next opponent: Simulate, a model forecast)
+    import model as M
+    saved = M.load_forecasts()
+    if saved:
+        venue = 0 if str(g["round"]) == "GF" else 1
+        f = saved["forecasts"].get(f"{opp}|{venue}")
+        if f:
+            where = "a neutral ground" if venue == 0 else "home"
+            out.append((f"6. (chances) Freo v {opp} at {where}, simulated (MODEL, made {saved['made']})", (
+                f"Freo win {f['win']:.0%}, typical margin {f['p50']:+.0f}, 8 in 10 between "
+                f"{f['p10']:+.0f} and {f['p90']:+.0f}; " + T.sim_paths(f, D.abbr(opp)))))
+
     print(f"Expected answers, {season} (data as loaded now)\n")
-    for task, answer in out:
+    for task, answer in sorted(out, key=lambda t: int(t[0].split(".")[0])):   # in task order
         print(f"{task}\n   {answer}\n")
 
 

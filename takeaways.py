@@ -98,17 +98,6 @@ def form(vals, avgs):
     return f"Hottest: {hot}, {pct[hot] - 100:+.0f}% on own average over the last 3"
 
 
-def quarter_games(qp):
-    best = qp.loc[qp["margin"].idxmax()]
-    return f"{best['quarter']}: Freo won it in {int(best['won'])} of {int(best['games'])} games"
-
-
-def driver_detail(stat, fit):
-    if not fit["ahead"]:
-        return f"r {fit['r']:+.2f} over {fit['games']} games"
-    return f"Won {fit['ahead_won']} of {fit['ahead']} when ahead on it (r {fit['r']:+.2f})"
-
-
 def top_driver(dr):
     return dr.iloc[0]["stat"] if len(dr) else None
 
@@ -157,16 +146,6 @@ def momentum(events, run, result, margin, opp_label):
     else:
         head = word.capitalize()
     return f"{head}: {run_txt}" if run_txt else head
-
-
-def runs_season(summary):
-    """'Conceded a 3+ goal run in 15 of 27 games, won 9 of them'."""
-    if not len(summary):
-        return ""
-    hit = summary[summary["opp_runs"] > 0]
-    w = int((hit["result"] == "W").sum())
-    return (f"Conceded a {D.RUN_GOALS}+ goal run in {len(hit)} of {len(summary)} games, "
-            f"won {w} of them")
 
 
 def carry(test, label):

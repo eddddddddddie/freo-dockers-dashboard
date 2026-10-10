@@ -162,20 +162,6 @@ def running(pdf):
     return pd.DataFrame(rows)
 
 
-def opp_rows(opp):
-    """The opposition's players in their games against Freo (opp_player_games_ext.csv),
-    with the columns events() and roles() read (their counts are real, Champion
-    Data's). Their positions aren't listed anywhere, so roles() works them out
-    from their stats."""
-    o = D.load_opp_players()
-    if o is None:
-        return pd.DataFrame()
-    o = o[o["opponent"] == opp].rename(columns={
-        "uncontested_possessions": "uncontested_poss", "marks_inside50": "marks_inside_50",
-        "api_round": "round"})
-    return o.assign(round=o["round"].astype(str) + " " + o["date_local"].astype(str))
-
-
 # A standard 22: the roles a club's team totals are shared across when only
 # team totals are known (other clubs' games against other clubs).
 LINEUP = (["key_def"] * 2 + ["def"] * 4 + ["mid"] * 6 + ["ruck"] + ["mid_fwd"] * 3

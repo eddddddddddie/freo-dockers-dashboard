@@ -1,5 +1,6 @@
-"""Browser checks: the one-screen layout fits with no page scroll at the four
-tested window sizes, in every view, with no exceptions and white cards.
+"""Browser checks of the five places: every page draws with no exception and
+never scrolls sideways, Wharf-ai stays in view (beside the page, or docked to
+the bottom of a phone or portrait tablet), clicks, links and Back work.
 Run with:  pytest -m ui   (needs Playwright; uses installed Chrome if present)."""
 
 import os
@@ -12,6 +13,10 @@ import pytest
 
 pytestmark = pytest.mark.ui
 SIZES = [(1440, 790), (1920, 960), (1280, 680), (1680, 950)]
+TOUR_SEEN = "localStorage.setItem('freoCoachTourDone_v2', '1')"   # skip the tour
+PAGES = ["place=last-game&game=GF", "place=next-opponent", "place=next-opponent&club=Sydney",
+         "place=our-season", "place=players", "place=players&player=Caleb%20Serong",
+         "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw", "place=game-day"]
 
 
 @pytest.fixture(scope="module")
@@ -61,136 +66,78 @@ def browser():
         b.close()
 
 
-def open_app(browser, server, w, h):
-    pg = browser.new_page(viewport={"width": w, "height": h})
-    pg.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")  # skip the tour
-    pg.goto(server + "/?v2=0")         # the old layout (v2 tests go to their own pages)
+def sign_in(pg, url):
+    pg.goto(url)
     pg.wait_for_selector("input[type=password]", timeout=60000)
     pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
     pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
-    pg.get_by_role("button", name="Sign in").click()
-    pg.wait_for_selector(".js-plotly-plot", timeout=60000)
-    pg.wait_for_timeout(3000)
+    pg.get_by_role("button", name="Sign in").click()   # stays signed in for the links that follow
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
+    pg.wait_for_timeout(2500)
     return pg
 
 
-def fit(pg):
-    return pg.evaluate("""() => {
+def open_app(browser, server, w, h, query="", **ctx):
+    c = browser.new_context(viewport={"width": w, "height": h}, **ctx)
+    c.add_init_script(TOUR_SEEN)
+    return sign_in(c.new_page(), f"{server}/?{query}")
+
+
+def check_page(pg, server, query, w, h):
+    """Open a page, scroll to its bottom: no exception, nothing wider than the
+    window, and Wharf-ai (its panel or the dock) still in view."""
+    pg.goto(f"{server}/?season=2026&{query}")
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
+    pg.wait_for_timeout(2500)
+    f = pg.evaluate("""() => {
         const m = document.querySelector('[data-testid=stMain]');
-        const cards = [...document.querySelectorAll('[class*=st-key-card_]')];
-        return {scroll: m.scrollHeight, client: m.clientHeight,
+        m.scrollTop = m.scrollHeight;
+        const lefts = [...document.querySelectorAll('.cv-tile')].map(t => Math.round(t.getBoundingClientRect().left));
+        return {wide: document.documentElement.scrollWidth - window.innerWidth,
                 exceptions: document.querySelectorAll('[data-testid=stException]').length,
-                cards: cards.length,
-                white: cards.filter(c => getComputedStyle(c).backgroundColor === 'rgb(255, 255, 255)').length};
-    }""")
+                tileCols: new Set(lefts).size}}""")
+    pg.wait_for_timeout(400)
+    wa = pg.locator(".st-key-card_wharfai, .st-key-wa_dock").first.bounding_box()
+    assert f["exceptions"] == 0, (query, f)
+    assert f["wide"] <= 1, (query, w, f)
+    assert wa and wa["y"] < h and wa["y"] + wa["height"] > 0, (query, "Wharf-ai out of view")
+    return f
 
 
 @pytest.mark.parametrize("w,h", SIZES)
-def test_every_view_fits_one_screen(browser, server, w, h):
+def test_places_scroll_cleanly_with_wharf_ai_in_view(browser, server, w, h):
+    """Desktops: pages scroll (no one-screen rule) but never sideways, and the
+    Wharf-ai panel stays beside them, also at the bottom of the page."""
     pg = open_app(browser, server, w, h)
-    views = [v for v in ["Season", "Match", "Scout"]
-             if pg.get_by_role("radio", name=v, exact=True).count()]
-    for view in views:
-        pg.get_by_role("radio", name=view, exact=True).click()
-        pg.wait_for_timeout(3000)
-        f = fit(pg)
-        assert f["exceptions"] == 0, (view, f)
-        assert f["scroll"] <= f["client"] + 1, (view, w, h, f)
-        assert f["cards"] and f["white"] == f["cards"], (view, f)
-    # Player vs player and the pickers' whole-list pages (links; the sign-in
-    # cookie carries over): whole squad, all clubs, quarter-time check.
-    for name, query in [("compare", "view=Player&player=Caleb%20Serong&vs=Andrew%20Brayshaw"),
-                        ("squad", "view=Player&player=Whole%20squad"),
-                        ("clubs", "view=Scout&opp=All%20clubs"), ("qt", "view=Match&game=QT"),
-                        ("momentum", "view=Match&game=MOM")]:
-        pg.goto(f"{server}/?v2=0&season=2026&{query}")
-        pg.wait_for_selector(".cv-band", timeout=60000)
-        pg.wait_for_timeout(3000)
-        f = fit(pg)
-        assert f["exceptions"] == 0 and f["scroll"] <= f["client"] + 1, (name, w, h, f)
-        assert f["cards"] and f["white"] == f["cards"], (name, f)
-    pg.close()
+    for query in PAGES:
+        check_page(pg, server, query, w, h)
+    assert pg.locator(".st-key-wa_dock").count() == 0
+    pg.context.close()
 
 
 PHONES = [(375, 667), (390, 844), (412, 915)]   # iPhone SE, iPhone 15, Pixel
+TABLETS = [(820, 1100), (844, 390), (1180, 760)]
 
 
-@pytest.mark.parametrize("w,h", PHONES)
-def test_phone_layout_scrolls_one_column(browser, server, w, h):
-    """On a phone: nothing wider than the screen, Wharf-ai above the dashboard,
-    tiles two to a row."""
-    ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
-    pg = ctx.new_page()
-    pg.goto(server + "/?v2=0")   # the old layout
-    pg.wait_for_selector("input[type=password]", timeout=60000)
-    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
-    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
-    pg.get_by_role("button", name="Sign in").click()   # stays signed in for the links below
-    for view in ["Season", "Match", "Player", "Scout"]:
-        if view != "Season":
-            pg.goto(f"{server}/?v2=0&season=2026&view={view}")
-        pg.wait_for_selector(".js-plotly-plot", timeout=60000)
-        pg.wait_for_timeout(3000)
-        f = pg.evaluate("""() => {
-            const m = document.querySelector('[data-testid=stMain]');
-            const top = s => document.querySelector(s).getBoundingClientRect().top;
-            const lefts = [...document.querySelectorAll('.cv-tile')].map(t => Math.round(t.getBoundingClientRect().left));
-            return {docW: document.documentElement.scrollWidth, mainW: m.scrollWidth,
-                    exceptions: document.querySelectorAll('[data-testid=stException]').length,
-                    chatAbove: top('.st-key-card_wharfai') < top('.cv-tiles'),
-                    columns: new Set(lefts).size};
-        }""")
-        assert f["exceptions"] == 0, (view, f)
-        assert f["docW"] <= w and f["mainW"] <= w, (view, w, f)
-        assert f["chatAbove"] and f["columns"] == 2, (view, f)
-    ctx.close()
-
-
-TABLETS = [(820, 1100, "stack"), (844, 390, "stack"), (1180, 760, "split")]
-
-
-@pytest.mark.parametrize("w,h,mode", TABLETS)
-def test_tablet_layouts(browser, server, w, h, mode):
-    """Tablets and landscape phones: the page scrolls with nothing wider than the
-    screen, cards two to a row, tiles three to a row. stack: Wharf-ai above the
-    dashboard; split: beside it, and still in view after scrolling down."""
-    ctx = browser.new_context(viewport={"width": w, "height": h}, has_touch=True)
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
-    pg = ctx.new_page()
-    pg.goto(server + "/?v2=0")   # the old layout
-    pg.wait_for_selector("input[type=password]", timeout=60000)
-    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
-    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
-    pg.get_by_role("button", name="Sign in").click()
-    for view in ["Season", "Match", "Player", "Scout"]:
-        if view != "Season":
-            pg.goto(f"{server}/?v2=0&season=2026&view={view}")
-        pg.wait_for_selector(".js-plotly-plot", timeout=60000)
-        pg.wait_for_timeout(3000)
-        f = pg.evaluate("""() => {
-            const m = document.querySelector('[data-testid=stMain]');
-            const r = s => document.querySelector(s).getBoundingClientRect();
-            const tiles = [...document.querySelectorAll('.cv-tile')].map(t => Math.round(t.getBoundingClientRect().left));
-            const cards = [...document.querySelectorAll('[class*=st-key-card_]')]
-                .filter(c => !c.className.includes('card_wharfai')).map(c => Math.round(c.getBoundingClientRect().left));
-            const out = {docW: document.documentElement.scrollWidth, mainW: m.scrollWidth,
-                exceptions: document.querySelectorAll('[data-testid=stException]').length,
-                tileCols: new Set(tiles).size, cardCols: new Set(cards).size,
-                chatAbove: r('.st-key-card_wharfai').bottom <= r('.cv-tiles').top + 1,
-                chatBeside: r('.st-key-card_wharfai').left >= r('.cv-tiles').right};
-            m.scrollTo(0, m.scrollHeight);
-            return out; }""")
-        pg.wait_for_timeout(500)
-        chat_top = pg.evaluate("document.querySelector('.st-key-card_wharfai').getBoundingClientRect().top")
-        assert f["exceptions"] == 0, (view, f)
-        assert f["docW"] <= w and f["mainW"] <= w, (view, w, f)
-        assert f["tileCols"] == 3 and f["cardCols"] == 2, (view, f)
-        if mode == "stack":
-            assert f["chatAbove"], (view, f)
-        else:
-            assert f["chatBeside"] and 0 <= chat_top <= 20, (view, f, chat_top)  # pinned in view
-    ctx.close()
+@pytest.mark.parametrize("w,h", PHONES + TABLETS)
+def test_phones_and_tablets(browser, server, w, h):
+    """Phones and tablets: nothing wider than the screen and Wharf-ai in view.
+    Under 1000px wide (or 600 tall) it docks to the bottom; tiles run two to a
+    row on a phone, three on a tablet."""
+    phone = w < 700
+    pg = open_app(browser, server, w, h, is_mobile=phone, has_touch=True)
+    for query in PAGES[:1] + PAGES[3:5] + PAGES[6:7]:
+        f = check_page(pg, server, query, w, h)
+        if query.startswith("place=last-game"):
+            assert f["tileCols"] == (2 if phone else 3 if w < 1250 else 6), (w, f)
+    docked = pg.locator(".st-key-wa_dock").count() == 1
+    assert docked == (w < 1000 or h < 600), (w, h)
+    if docked:
+        dock = pg.locator(".st-key-wa_dock").bounding_box()
+        assert dock["y"] + dock["height"] <= h + 1 and dock["y"] > h / 2   # along the bottom
+        pg.get_by_role("button", name="Ask Wharf-ai about this page").click()
+        pg.wait_for_selector(".st-key-wa_dock_open", timeout=30000)
+    pg.context.close()
 
 
 def _click_cell(pg, card, n):
@@ -204,109 +151,43 @@ def _click_cell(pg, card, n):
 
 
 def test_clicks_links_and_back_button(browser, server):
-    pg = open_app(browser, server, 1440, 790)
-    band = lambda: pg.locator(".cv-band .ttl").inner_text().split("\n")[0]  # noqa: E731
-    _click_cell(pg, "strip", 5)                       # first row, 6th game
-    assert "view=Match" in pg.evaluate("location.search") and " v " in band()
-    game = band()
-    pg.get_by_role("radio", name="Player", exact=True).click()
-    pg.wait_for_timeout(3500)
-    assert "view=Player" in pg.evaluate("location.search")
+    """A game in Our season's overlay opens Last game for it; Back returns; a
+    link to a game opens it (and an old ?view= link still works)."""
+    pg = open_app(browser, server, 1440, 790, "season=2026&place=our-season")
+    band = lambda: pg.locator(".cv-band.v2 .ttl").first.inner_text().split("\n")[0]  # noqa: E731
+    _click_cell(pg, "v2_strip", 5)
+    assert "place=last-game" in pg.evaluate("location.search") and " v " in band()
     pg.go_back()
     pg.wait_for_timeout(4000)
-    assert band() == game, "browser Back should return to the match"
-    pg.close()
-    pg2 = browser.new_page(viewport={"width": 1440, "height": 790})
-    pg2.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
-    pg2.goto(server + "/?v2=0&season=2025&view=Match&game=EF")
-    pg2.wait_for_selector("input[type=password]", timeout=60000)
-    pg2.get_by_label("Username").fill(os.environ["APP_USERNAME"])
-    pg2.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
-    pg2.get_by_role("button", name="Sign in").click()
-    pg2.wait_for_selector(".js-plotly-plot", timeout=60000)
-    pg2.wait_for_timeout(3000)
-    assert pg2.locator(".cv-band .ttl").inner_text().startswith("EF v"), "deep link opens the game"
-    pg2.close()
-
-
-def test_driver_drill_down_opens_and_goes_back(browser, server):
-    """Clicking a stat in "What drives our margin" swaps the bars for that stat's
-    scatter (one point per game); the back arrow returns to the bars."""
-    pg = open_app(browser, server, 1440, 790)
-    _click_cell(pg, "drivers", 0)                     # the top driver's row
-    assert pg.locator(".st-key-driver_back").count() == 1
-    n = pg.locator(".st-key-card_drivers .js-plotly-plot g.scatterlayer g.trace").nth(1) \
-        .locator("path.point").count()
-    assert n >= 20, n                                 # a point for every game
-    pg.locator(".st-key-driver_back button").first.click()   # Streamlit may briefly keep a stale copy
-    pg.wait_for_timeout(3500)
-    assert pg.locator(".st-key-driver_back").count() == 0
-    pg.close()
+    assert "place=our-season" in pg.evaluate("location.search")
+    pg.goto(server + "/?season=2025&place=last-game&game=EF")
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
+    pg.wait_for_timeout(3000)
+    assert band().startswith("EF v"), band()
+    pg.goto(server + "/?season=2025&view=Match&game=R25")
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
+    pg.wait_for_timeout(3000)
+    assert band().startswith("R25 v"), band()
+    pg.context.close()
 
 
 def test_stay_signed_in_and_sign_out(browser, server):
     ctx = browser.new_context(viewport={"width": 1440, "height": 790})
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
+    ctx.add_init_script(TOUR_SEEN)
     pg = ctx.new_page()
     pg.goto(server)
     pg.wait_for_selector("input[type=password]", timeout=60000)
     pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
     pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
     pg.get_by_role("button", name="Sign in").click()   # "keep me signed in" is ticked by default
-    pg.wait_for_selector(".js-plotly-plot", timeout=60000)
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
     pg.wait_for_timeout(2000)
     pg.reload()
-    pg.wait_for_selector(".js-plotly-plot", timeout=60000)
+    pg.wait_for_selector(".cv-band.v2", timeout=60000)
     assert pg.locator("input[type=password]").count() == 0, "a reload should not ask again"
     pg.locator(".st-key-signout_btn button").first.click()
     pg.wait_for_selector("input[type=password]", timeout=60000)
     pg.reload()
     pg.wait_for_selector("input[type=password]", timeout=60000)
     assert not [c for c in ctx.cookies() if c["name"] == "freo_coach_session"]
-    ctx.close()
-
-
-V2_PAGES = ["place=last-game&game=GF", "place=next-opponent", "place=next-opponent&club=Sydney",
-            "place=our-season", "place=players", "place=players&player=Caleb%20Serong",
-            "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw", "place=game-day"]
-
-
-@pytest.mark.parametrize("w,h", SIZES)
-def test_v2_places_scroll_cleanly_with_wharf_ai_in_view(browser, server, w, h):
-    """v2 pages scroll (no one-screen rule) but never sideways, raise nothing, and
-    keep Wharf-ai in view beside them, also after scrolling to the bottom."""
-    pg = open_app(browser, server, w, h)
-    for query in V2_PAGES:
-        pg.goto(f"{server}/?v2=1&season=2026&{query}")
-        pg.wait_for_selector(".cv-band.v2", timeout=60000)
-        pg.wait_for_timeout(2500)
-        f = pg.evaluate("""() => {
-            const m = document.querySelector('[data-testid=stMain]');
-            m.scrollTop = m.scrollHeight;
-            return {wide: document.documentElement.scrollWidth - window.innerWidth,
-                    exceptions: document.querySelectorAll('[data-testid=stException]').length}}""")
-        pg.wait_for_timeout(400)
-        box = pg.locator(".st-key-card_wharfai").first.bounding_box()
-        assert f["exceptions"] == 0, (query, f)
-        assert f["wide"] <= 1, (query, w, f)
-        assert box and box["y"] < h and box["y"] + box["height"] > 0, (query, "Wharf-ai out of view")
-    pg.close()
-
-
-def test_v2_phone_docks_wharf_ai(browser, server):
-    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
-    pg = ctx.new_page()
-    pg.goto(server + "/?v2=1&season=2026&place=our-season")
-    pg.wait_for_selector("input[type=password]", timeout=60000)
-    pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
-    pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
-    pg.get_by_role("button", name="Sign in").click()
-    pg.wait_for_selector(".cv-band.v2", timeout=60000)
-    pg.wait_for_timeout(2500)
-    dock = pg.locator(".st-key-wa_dock").bounding_box()
-    assert dock and dock["y"] + dock["height"] <= 844 + 1 and dock["y"] > 600   # along the bottom
-    assert pg.evaluate("document.documentElement.scrollWidth") <= 391
-    pg.get_by_role("button", name="Ask Wharf-ai about this page").click()
-    pg.wait_for_selector(".st-key-wa_dock_open", timeout=30000)
     ctx.close()

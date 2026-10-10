@@ -61,14 +61,6 @@ def test_differential_change_is_absolute_not_percent(team):
     assert tile["unit"] == "" and tile["change"] == pytest.approx(tile["value"] - tile["base"])
 
 
-def test_running_margin_at_q4_is_final_margin(team):
-    for season in D.seasons(team):
-        tdf = D.team_season(team, season)
-        rm = D.running_margin(tdf)
-        for res in rm.index:
-            assert rm.loc[res, "Q4"] == pytest.approx(tdf[tdf["result"] == res]["margin"].mean())
-
-
 def test_match_tiles_compare_one_game_with_season(team):
     tdf = D.team_season(team, 2026)
     pos = len(tdf) - 1
@@ -134,14 +126,9 @@ def test_opposition_players_if_present(team):
     assert (matched["goals_players"] == matched["opp_goals"]).all()
 
 
-def test_quarter_strip_and_driver_points(team):
-    """The Games view of Quarters and the drivers drill-down, against plain pandas."""
+def test_driver_points(team):
+    """The drivers drill-down, against plain pandas."""
     t = D.team_season(team, 2026)
-    rows, z, hover, labels = D.quarter_strip(t)
-    assert rows == ["Q1", "Q2", "Q3", "Q4"] and len(labels) == len(t) and len(z[0]) == len(t)
-    q3 = [qtr_points(f)[2] - qtr_points(f)[1] - (qtr_points(o)[2] - qtr_points(o)[1])
-          for f, o in zip(t["freo_qtrs"], t["opp_qtrs"])]
-    assert all((v > 0) == (s > 0) and (v < 0) == (s < 0) for v, s in zip(z[2], q3))
     pts, fit = D.driver_points(t, "Metres gained")
     diff = t["freo_metres_gained"] - t["opp_metres_gained"]
     assert fit["r"] == pytest.approx(diff.corr(t["margin"]), abs=1e-9)

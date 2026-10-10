@@ -11,7 +11,7 @@ import data as D
 import insights as I
 import usage as U
 
-BAND = '<div class="cv-band'  # the dashboard's header band element (not the CSS rule)
+BAND = '<div class="cv-band'  # the page's header band element (not the CSS rule)
 
 
 def login(at, user, pw):
@@ -28,7 +28,6 @@ def app():
     at.secrets["APP_USERNAME"] = os.environ["APP_USERNAME"]
     at.secrets["APP_PASSWORD"] = os.environ["APP_PASSWORD"]
     at.secrets["ANTHROPIC_API_KEY"] = ""
-    at.query_params["v2"] = "0"        # these tests cover the old layout (tests/test_v2.py: v2)
     return at.run()
 
 
@@ -47,99 +46,6 @@ def test_right_password_opens_the_dashboard(app):
     at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
     assert not at.exception, at.exception
     assert any(BAND in m.value for m in at.markdown)
-
-
-def test_match_and_scout_views_render(app):
-    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    views = at.button_group(key="view")
-    for view in views.options:
-        at = views.set_value(view).run()
-        assert not at.exception, (view, at.exception)
-        views = at.button_group(key="view")
-
-
-def test_phone_layout(app):
-    """Below layout.PHONE_W the app draws one column: a view dropdown, Wharf-ai
-    above the dashboard, and a list of recent games that open in Match."""
-    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    at.session_state["window_size"] = (390, 844)
-    at = at.run()
-    assert not at.exception, at.exception
-    games = [b for b in at.button if (b.key or "").startswith("rg_2026_")]
-    assert len(games) == 8 and games[0].label.startswith("**")   # newest first, 8 shown
-    for view in ["Match", "Player", "Scout", "Season"]:
-        at = at.selectbox(key="view").set_value(view).run()
-        assert not at.exception, (view, at.exception)
-    at = at.button(key=games[0].key).click().run()
-    assert at.session_state["view"] == "Match"
-
-
-def test_player_comparison_view(app):
-    """Picking "compare with" swaps the Player view for the comparison, and a
-    move to another player without one clears it."""
-    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    at = at.button_group(key="view").set_value("Player").run()
-    a = at.selectbox(key="player_pick").value
-    b = [n for n in at.selectbox(key="player_pick").options[1:] if n != a][0]   # [0] is the whole squad
-    at = at.selectbox(key="player_vs").set_value(b).run()
-    assert not at.exception, at.exception
-    assert any('class="cv-band player cmp"' in m.value for m in at.markdown)
-    assert at.query_params.get("vs") == [b] or at.query_params.get("vs") == b
-    at.session_state["pending_nav"] = {"view": "Player", "player": b}
-    at = at.run()
-    assert at.session_state["player_vs"] is None and at.session_state["player_pick"] == b
-
-
-def test_whole_squad_all_clubs_and_quarter_time_pages(app):
-    """Each picker's page across all its options draws, keeps its place in the
-    address, and the deep dives menu and usage log are gone for everyone else."""
-    import nav
-    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    assert not [s for s in at.selectbox if s.key == "deep_dive"]
-    assert not [b for b in at.button if b.key == "usage_btn"]   # password sign-in: not an admin
-    for view, key, value, param in [("Player", "player_pick", nav.SQUAD, ("player", nav.SQUAD)),
-                                    ("Scout", "scout_team", nav.ALL_CLUBS, ("opp", nav.ALL_CLUBS)),
-                                    ("Match", "game_2026", nav.QT, ("game", nav.QT_ROUND))]:
-        at = at.button_group(key="view").set_value(view).run()
-        at = at.selectbox(key=key).set_value(value).run()
-        assert not at.exception, (view, at.exception)
-        assert any(BAND in m.value for m in at.markdown), view
-        got = at.query_params.get(param[0])
-        assert got in (param[1], [param[1]]), (view, got)
-    at = at.number_input(key="qt_margin").set_value(-12).run()   # behind by 2 goals at half time
-    assert not at.exception, at.exception
-
-
-def test_games_slice_cuts_season_and_player_views(app):
-    """The games picker on Season (and Player) recuts every card, names the slice
-    in the band, and keeps it in the address."""
-    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    at = at.selectbox(key="games_slice").set_value("Away games").run()
-    assert not at.exception, at.exception
-    band = next(m.value for m in at.markdown if BAND in m.value)
-    assert "Away games only" in band
-    assert at.query_params.get("games") in ("Away games", ["Away games"])
-    at = at.button_group(key="view").set_value("Player").run()
-    assert not at.exception and at.selectbox(key="games_slice").value == "Away games"
-    at = at.selectbox(key="games_slice").set_value("Finals").run()
-    assert not at.exception, at.exception
-
-
-def test_ground_cards_on_match_player_and_scout(app):
-    """Match, Player and Scout each carry a ground card (SIMULATED, and labelled
-    so) with no switch to find it; every mode draws without an error."""
-    at = login(app, os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"])
-    assert not [t for t in at.toggle if t.key == "ground_mode"]
-    for view, key in (("Match", "gmatch_mode"), ("Player", "gplayer_mode"), ("Scout", "gscout_mode")):
-        at = at.button_group(key="view").set_value(view).run()
-        assert not at.exception, (view, at.exception)
-        assert any("SIMULATED" in m.value for m in at.markdown), view
-        if key == "gscout_mode":            # Scout: events only, so no switch
-            assert not [b for b in at.button_group if b.key == key], view
-            continue
-        for mode in ("Events", "Running"):
-            at = at.button_group(key=key).set_value(mode).run()
-            assert not at.exception, (view, mode, at.exception)
 
 
 def test_layout_modes():

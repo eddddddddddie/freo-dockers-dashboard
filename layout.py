@@ -1,8 +1,7 @@
-"""Sizes the one-screen layout to the browser window.
+"""The browser window's size, and the layout it suits.
 
 A tiny custom component (components/viewport) reports the window's width and
-height; every fixed pixel height in the layout is derived from that, so the
-view fills a laptop, a desktop monitor or a TV without scrolling. Until the
+height (and the address after Back/Forward, see nav._back_forward). Until the
 first reading arrives (the first run), the 1440x790 design size is used.
 """
 
@@ -60,42 +59,3 @@ def mode(width, height):
     if width >= SPLIT_W and height >= DESKTOP_H and width > height:
         return "split"
     return "stack"
-
-
-def is_phone(width):
-    return width < PHONE_W
-
-
-def scroll_sizes(mode_, height, width):
-    """Sizes for the scrolling layouts (phone, stack, split): charts get a fixed,
-    readable height. With Wharf-ai at the top, its chat scrolls in about half
-    the screen; at the side (split) the panel is as tall as the window."""
-    sz = {"phone": mode_ == "phone", "mode": mode_, "width": width, "form_rows": 10,
-          "mid": 250 if mode_ == "phone" else 270, "bot": 300 if mode_ == "phone" else 320,
-          "panel": None, "history": max(300, int(height * 0.55))}
-    if mode_ == "split":
-        sz["panel"] = height - 44          # leaves room for the page's bottom padding
-        sz["history"] = height - 44 - 150   # header, chat box and padding
-    return sz
-
-
-def sizes(height, width=1440):
-    """Pixel sizes for the current window. Extra height is shared between the
-    two chart rows; the chat panel grows with the window. (Card titles and
-    tile values ellipsise rather than wrap, so width doesn't change heights.)"""
-    h = max(MIN_H, min(MAX_H, height))
-    extra = h - DESIGN_H - BAR_H
-    mid = int(241 + 0.45 * extra)
-    bot = int(265 + 0.55 * extra)
-    return {
-        "phone": False,
-        "mode": "desktop",
-        "mid": mid,
-        "bot": bot,
-        # Level with the cards: the window less the bar and 9px at the bottom.
-        "panel": int(722 + extra + 53),
-        "history": int(570 + extra + 53),
-        # Player form rows that fit the bottom card at 12px labels, after the
-        # card's takeaway line (about 18px a row).
-        "form_rows": max(7, min(24, int((bot - 18 - 68) / 18))),
-    }

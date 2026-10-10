@@ -67,35 +67,6 @@ def _bold(labels, focus):
     return [f"<b>{l}</b>" if l in focus else l for l in labels]
 
 
-def win_conditions_bars(wc, height, names=("Freo won it", "Opp won it"), colors=None,
-                        focus=None):
-    """Win rate when a side wins vs loses the count on each stat. focus: the stat
-    the takeaway names (the biggest swing)."""
-    colors = colors or (COLORS["freo"], COLORS["opp"])
-    alpha = _alpha(wc["stat"], focus)
-    fig = go.Figure()
-    for key, name, color in [("ahead", names[0], colors[0]), ("behind", names[1], colors[1])]:
-        rate = wc[f"{key}_winrate"]
-        n = wc[f"{key}_games"]
-        fig.add_trace(go.Bar(
-            y=wc["stat"], x=rate, name=name, orientation="h",
-            marker=dict(color=color, cornerradius=3, opacity=alpha),
-            text=[f"{r:.0f}%" if r == r and r is not None else "" for r in rate],
-            textposition="outside", textfont=dict(size=10, color=_ink(alpha)),
-            customdata=n,
-            hovertemplate="%{y}: " + name + "<br>Won <b>%{x:.0f}%</b> of "
-                          "%{customdata} games<extra></extra>",
-        ))
-    fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(barmode="group", bargap=0.25, bargroupgap=0.08, showlegend=False,
-                      margin=dict(l=4, r=4, t=4, b=4))
-    fig.update_xaxes(range=[0, 118], showticklabels=False, showgrid=False)
-    fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=11),
-                     tickmode="array", tickvals=list(wc["stat"]),
-                     ticktext=_bold(list(wc["stat"]), focus if focus is not None else []))
-    return fig
-
-
 def _click_layer(fig, xs, ys, hover, size=26):
     """Invisible markers over heatmap cells. Streamlit only reports clicks on
     point marks, not heatmap cells, so these carry the click (and the hover
@@ -314,105 +285,6 @@ def win_dumbbell(wc, height, names=("Freo won it", "Opp won it"), colors=None, f
         for key in ("behind", "ahead"):   # a short name centred over each dot (rates: the takeaway)
             fig.add_annotation(x=r[f"{key}_winrate"], y=r["stat"], showarrow=False, yanchor="bottom",
                                yshift=5, text=tags[key], font=dict(size=10, color=COLORS["ink"]))
-    return fig
-
-
-def driver_multiples(panels, height, cols=2, focus=None):
-    """What drives our margin as small multiples (after Tufte): one tiny scatter
-    per stat, every game's differential (across, its own scale) against the final
-    margin (up, the same scale in every panel), strongest relationship first, each
-    titled with its stat and r. No ticks, just a faint zero line, so the shape is
-    what reads. focus: the takeaway's stat, in purple; the rest in grey. Clicking a
-    panel's dot opens that stat (curve_number is the panel's position in panels).
-    panels: [(stat, pts, fit)] from data.driver_points."""
-    from plotly.subplots import make_subplots
-    n = len(panels)
-    rows = -(-n // cols)
-    titles = [f"<b>{st}</b> {fit['r']:+.2f}" if st == focus else f"{st} {fit['r']:+.2f}"
-              for st, _, fit in panels]
-    fig = make_subplots(rows=rows, cols=cols, shared_yaxes=True, horizontal_spacing=0.08,
-                        vertical_spacing=min(0.22, 24 / max(height, 1) * rows / max(rows - 1, 1) * 0.9),
-                        subplot_titles=titles)
-    margins = [m for _, pts, _ in panels for m in pts["margin"]]
-    lo, hi = min(margins), max(margins)
-    pad = (hi - lo) * 0.08
-    for i, (stat, pts, fit) in enumerate(panels):
-        r, c = i // cols + 1, i % cols + 1
-        strong = focus is None or stat == focus
-        fig.add_trace(go.Scatter(
-            x=pts["diff"], y=pts["margin"], mode="markers", showlegend=False,
-            marker=dict(size=4, color=COLORS["freo"] if strong else COLORS["muted"],
-                        opacity=0.85 if strong else 0.55),
-            customdata=pts[["label", "opponent"]].values,
-            hovertemplate="<b>%{customdata[0]}</b> v %{customdata[1]}<br>" + stat
-                          + " diff %{x:+,.0f} · margin %{y:+d}<br>Click for every game<extra></extra>"),
-            row=r, col=c)
-        fig.add_hline(y=0, line=dict(color=COLORS["grid"], width=1), row=r, col=c)
-    fig = style_fig(fig, "", unified=False, height=height)
-    fig.update_layout(margin=dict(l=4, r=4, t=18, b=2))
-    fig.update_xaxes(showticklabels=False, fixedrange=True)
-    fig.update_yaxes(showticklabels=False, fixedrange=True, range=[lo - pad, hi + pad])
-    for ann in fig.layout.annotations:   # the panel titles
-        ann.font = dict(size=10, color=COLORS["ink"])
-        ann.yshift = -2
-    return fig
-
-
-def driver_scatter(pts, fit, stat, height):
-    """One margin driver up close: every game's differential (across) against the
-    final margin (up), green win / red loss (and above / below the zero line),
-    a least-squares line, r labelled. Clicking a game opens it."""
-    colors = [{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["neutral"]) for r in pts["result"]]
-    fig = go.Figure()
-    lo, hi = float(pts["diff"].min()), float(pts["diff"].max())
-    fig.add_trace(go.Scatter(x=[lo, hi], y=[fit["intercept"] + fit["slope"] * lo,
-                                            fit["intercept"] + fit["slope"] * hi],
-                             mode="lines", hoverinfo="skip", showlegend=False,
-                             line=dict(color=COLORS["muted"], width=1.5, dash="dash")))
-    fig.add_trace(go.Scatter(
-        x=pts["diff"], y=pts["margin"], mode="markers", showlegend=False,
-        marker=dict(size=9, color=colors, line=dict(color="#FFFFFF", width=1.5)),
-        customdata=pts[["label", "opponent", "result"]].values,
-        hovertemplate="<b>%{customdata[0]}</b> v %{customdata[1]} (%{customdata[2]})<br>"
-                      + stat + " diff %{x:+,.0f} · margin %{y:+d}<br>Click to open this game"
-                      "<extra></extra>"))
-    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig.add_annotation(x=0, xref="paper", y=1, yref="paper", xanchor="left", yanchor="top",
-                       text=f"r {fit['r']:+.2f} · {fit['games']} games", showarrow=False,
-                       font=dict(size=11, color=COLORS["ink"]))
-    fig = style_fig(fig, "Final margin", unified=False, height=height)
-    fig.update_layout(margin=dict(l=4, r=8, t=8, b=4))
-    fig.update_xaxes(title=dict(text=f"{stat} differential", font=dict(color=COLORS["muted"], size=11)),
-                     zeroline=False)
-    return fig
-
-
-def running_margin_lines(rm, height):
-    """Average margin at each quarter break in wins and in losses."""
-    fig = go.Figure()
-    qs = ["Q1", "Q2", "Q3", "Q4"]
-    for res, name, color, pos in [("W", "Wins", COLORS["win"], "top center"),
-                                  ("L", "Losses", COLORS["loss"], "bottom center")]:
-        if res not in rm.index:
-            continue
-        y = rm.loc[res, qs].values
-        n = int(rm.loc[res, "games"])
-        fig.add_trace(go.Scatter(
-            x=qs, y=y, name=name, mode="lines+markers+text",
-            line=dict(color=color, width=2), marker=dict(size=8),
-            text=[f"{v:+.1f}" for v in y], textposition=pos,
-            textfont=dict(size=10, color=COLORS["ink"]),
-            hovertemplate=f"{name} ({n} games)<br>%{{x}} break: <b>%{{y:+.1f}}</b><extra></extra>",
-        ))
-    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig = style_fig(fig, "Avg margin", unified=False, height=height)
-    fig.update_layout(showlegend=False, margin=dict(l=4, r=56, t=14, b=4))
-    lo, hi = float(rm[qs].min().min()), float(rm[qs].max().max())
-    pad = (hi - lo) * 0.18 or 5
-    fig.update_yaxes(range=[min(lo, 0) - pad, max(hi, 0) + pad])
-    _end_labels(fig, "Q4", [(float(rm.loc[r, "Q4"]), lbl) for r, lbl in (("W", "wins"), ("L", "losses"))
-                            if r in rm.index], height, min(lo, 0) - pad, max(hi, 0) + pad)
     return fig
 
 
@@ -822,45 +694,6 @@ def season_momentum(worms, avg, height):
     for y, text, col in ends:        # the average lines named at their ends, in place of a key
         fig.add_annotation(x=end, y=y, row=1, col=1, text=text, showarrow=False, xanchor="left", xshift=4,
                            font=dict(size=10, color=col))
-    return fig
-
-
-def run_bars(summary, height, opp_color=None):
-    """Each game's biggest scoring run: Freo's up, the opposition's down (points),
-    dotted lines at 3 goals, the result letter above each game. Invisible point
-    markers carry the click (Streamlit doesn't report clicks on bars)."""
-    opp_color = opp_color or COLORS["opp"]
-    x = (summary["round"] + " " + summary["opponent"].map(D.abbr)).tolist()
-    fig = go.Figure()
-    for col, best, sign, color, name in (("freo_best_pts", "freo_best", 1, COLORS["freo"], "Freo"),
-                                         ("opp_best_pts", "opp_best", -1, opp_color, "Opposition")):
-        fig.add_trace(go.Bar(
-            x=x, y=sign * summary[col], marker=dict(color=color, cornerradius=2), name=name,
-            customdata=summary[[best]].values, hoverinfo="skip"))
-    hover = [f"{lbl}: {r} by {abs(m)}" if r != "D" else f"{lbl}: drew"
-             for lbl, r, m in zip(x, summary["result"], summary["margin"])]
-    hover = [f"{h}<br>Freo's best run {fb}, theirs {ob}<br>Click to open the game"
-             for h, fb, ob in zip(hover, summary["freo_best"], summary["opp_best"])]
-    top = float(max(summary["freo_best_pts"].max(), summary["opp_best_pts"].max(), 18))
-    fig.add_trace(go.Scatter(x=x, y=[0] * len(x), mode="markers", customdata=hover,
-                             marker=dict(size=24, opacity=0.001), showlegend=False,
-                             hovertemplate="%{customdata}<extra></extra>"))
-    fig.add_trace(go.Scatter(
-        x=x, y=[top * 1.12] * len(x), mode="text", text=summary["result"].tolist(), hoverinfo="skip",
-        textfont=dict(size=10, color=[{"W": COLORS["win"], "L": COLORS["loss"]}.get(r, COLORS["muted"])
-                                      for r in summary["result"]]), showlegend=False))
-    for yv in (18, -18):
-        fig.add_hline(y=yv, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1))
-    fig = style_fig(fig, "Points in the run", unified=False, height=height)
-    fig.update_layout(barmode="relative", showlegend=False, bargap=0.3, margin=dict(l=4, r=40, t=8, b=4))
-    fig.update_yaxes(range=[-top * 1.2, top * 1.25])
-    # Which way is whose, and the 3 goal lines, named at the right edge.
-    for yv, text, color in ((top * 0.7, "Freo", COLORS["freo"]), (-top * 0.7, "Opp", opp_color),
-                            (18, "3 goals", COLORS["muted"]), (-18, "3 goals", COLORS["muted"])):
-        fig.add_annotation(x=1, xref="paper", y=yv, text=text, showarrow=False, xanchor="left",
-                           font=dict(size=10, color=color))
-    _round_ticks(fig, x)
     return fig
 
 

@@ -1,4 +1,4 @@
-"""Coach View v2 (?v2=1): every place and its pages draw without an error, moves
+"""Coach View v2: every place and its pages draw without an error, moves
 follow the one click rule, and Wharf-ai is on every page (headless, AppTest)."""
 
 import os
@@ -11,14 +11,14 @@ import v2
 BAND = '<div class="cv-band v2'
 
 
-def _app(query, size=(1440, 790), extra={"v2": "1"}):
+def _app(query, size=(1440, 790)):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     at = AppTest.from_file(os.path.join(root, "app.py"), default_timeout=120)
     at.secrets["APP_USERNAME"] = os.environ["APP_USERNAME"]
     at.secrets["APP_PASSWORD"] = os.environ["APP_PASSWORD"]
     at.secrets["ANTHROPIC_API_KEY"] = ""
     at.session_state["window_size"] = size
-    for k, v in {**(extra or {}), **query}.items():
+    for k, v in query.items():
         at.query_params[k] = v
     at = at.run()
     at.text_input[0].input(os.environ["APP_USERNAME"])
@@ -50,29 +50,28 @@ def test_every_place_draws_with_wharf_ai(query):
     assert _wharf_ai_shown(at), query
 
 
-def test_v2_is_the_default_and_v2_0_keeps_the_old_layout():
-    at = _app({"season": "2026"}, extra=None)
+def test_old_view_links_open_the_right_place():
+    at = _app({"season": "2026", "view": "Match", "game": "GF"})
     assert not at.exception
-    assert any(BAND in m.value for m in at.markdown)              # v2 with no flag
-    assert "v2" not in at.query_params
+    assert at.session_state["v2_place"] == "Last game"
+    assert at.query_params["place"] == ["last-game"] and at.query_params["game"] == ["GF"]
+    at = _app({"season": "2026", "view": "Scout", "opp": "Sydney"})
+    assert at.session_state["v2_place"] == "Next opponent" and at.session_state["v2_club"] == "Sydney"
 
 
-def test_v2_0_shows_the_old_layout():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    at = AppTest.from_file(os.path.join(root, "app.py"), default_timeout=120)
-    at.secrets["APP_USERNAME"] = os.environ["APP_USERNAME"]
-    at.secrets["APP_PASSWORD"] = os.environ["APP_PASSWORD"]
-    at.secrets["ANTHROPIC_API_KEY"] = ""
-    at.query_params["v2"] = "0"
-    at = at.run()
-    at.text_input[0].input(os.environ["APP_USERNAME"])
-    at.text_input[1].input(os.environ["APP_PASSWORD"])
-    at.button[0].click()
-    at = at.run()
-    assert not at.exception
-    assert not any(BAND in m.value for m in at.markdown)
-    assert at.query_params["v2"] == ["0"]                          # kept in the address
-    assert [b for b in at.button_group if b.key == "view"]          # the old view switch
+def test_ground_maps_are_simulated_and_switch_modes():
+    at = _app({"season": "2026", "place": "last-game", "game": "GF"})
+    assert any("SIMULATED" in m.value for m in at.markdown)
+    for mode in ("Events", "Running"):
+        at = at.button_group(key="gmatch_mode").set_value(mode).run()
+        assert not at.exception, (mode, at.exception)
+
+
+def test_game_day_check_and_no_usage_log_for_others():
+    at = _app({"season": "2026", "place": "game-day"})
+    assert not [b for b in at.button if b.key == "usage_btn"]     # password sign-in: not an admin
+    at = at.number_input(key="qt_margin").set_value(-12).run()    # behind by 2 goals at half time
+    assert not at.exception, at.exception
 
 
 def test_places_switch_and_the_address_follows():

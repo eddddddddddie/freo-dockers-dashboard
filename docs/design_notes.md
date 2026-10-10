@@ -73,7 +73,10 @@ when a feature changes, but don't rely on it being exhaustive.
   `tests/test_sim.py` checks counts, repeatability and that the real data and Wharf-ai are
   untouched.
 
-## Dashboard layout
+## Dashboard layout (the old four views: history, deleted 2026-10-11)
+This section describes the one-screen Season, Match, Player and Scout views, kept for the
+measurements and decisions behind them. The app now draws the five places (see Coach View v2).
+
 The sign-in screen (`auth._splash`, `theme.login_hero`) follows the club site's home page: the
 whole page in the club purple (a maroon glow top right, a large faint anchor bottom right), a thin
 "Coach View" strip, the headline "The numbers behind *Freo*" in the serif (our own line, not the
@@ -429,7 +432,7 @@ claw marks for Richmond, Captain Carlton's mask, and so on), passed to the band 
   strip and the two player tables (colour fills the cells) keep a key in the card title.
 
 
-## Coach View v2 (built 2026-10-08, behind ?v2=1)
+## Coach View v2 (built 2026-10-08 behind ?v2=1, the default from 2026-10-10, the only layout from 2026-10-11)
 Follows the UX audit (https://claude.ai/artifact/1RoZy8WmzVGieFngzF8amz; 46 items: 28 keep,
 14 merge, 3 lab, 1 cut). Coaches approved the six places before the build.
 - Address: `?v2=1&season=2026&place=last-game&game=GF` (plus `player=`, `vs=`, `club=`,
@@ -511,13 +514,28 @@ pages they belong to (Lab removed; five places):
   early Q2, -0.4). Counts is the game strip with its Biggest run row.
 
 ### Switch-over (2026-10-10)
-v2 is the default; `?v2=0` still opens the old views for the session (kept in their address).
-The tour was rewritten for v2 (11 steps on Last game, others shown where their cards exist:
-Simulate, Their last five games, Every game at once), and its seen-key moved to
-`freoCoachTourDone_v2`, so every returning visitor is offered it once. Still to do: delete the
-old views (`views.render*`, the old top bar and pickers in `app.py`, `nav` view handling, the
-old one-screen CSS and their tests), and update docs/coach_sessions.md and evals/coach_answers.py,
-which describe the old views.
+v2 became the default; `?v2=0` kept the old views for a day. The tour was rewritten for v2
+(11 steps on Last game, others shown where their cards exist: Simulate, What would change it,
+Their last five games, Every game at once), and its seen-key moved to `freoCoachTourDone_v2`,
+so every returning visitor is offered it once.
+
+### Old views deleted (2026-10-11)
+- Gone: `views.render*` (Season, Match, Player, compare, Scout, whole squad, all clubs, season
+  momentum), the old top bar, pickers and bands in `app.py`, `nav`'s address handling (`v2`
+  writes the address), the old band and tile HTML in `theme.py` (header, match, scout, player
+  and compare bands, tile rows, leaders, opponents and head-to-head tables), their CSS, the
+  one-screen size table (`layout.sizes`, `scroll_sizes`), charts and takeaways only they used,
+  `data.opponent_grid`, `quarter_strip`, `running_margin`, `season_role_leaders`, and the
+  Every club landing page on Next opponent.
+- Kept in `views.py`: the cards v2 reuses (match players table, player game log, quarter-time
+  check, ground cards), now always content height. Old `?view=` links still open the matching
+  place (`v2.apply`).
+- Checked: screenshots of four pages at 1440x790, 1180x760, 820x1100 and 390x844 before and after
+  match (page heights equal at every size, the ground card pixel for pixel).
+- Tests: the old layout's AppTest and browser tests are replaced by v2 ones (old links, ground
+  map modes, the quarter-time check, phones and tablets with the dock, clicks, links and Back).
+- docs/coach_sessions.md and evals/coach_answers.py now use the five places, with two new tasks:
+  when the grand final turned (Momentum) and the simulator / what-if.
 
 ### Monte Carlo upgrade (2026-10-10)
 - Margin through the game: `model.simulate(paths=True)` splits each quarter's simulated shots

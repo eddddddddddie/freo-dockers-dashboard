@@ -266,20 +266,6 @@ def role_leader_counts(pdf_season, role_col):
     return s
 
 
-def season_role_leaders(pdf_season):
-    """The player who led each role in the most games this season."""
-    out = []
-    for label, col in ROLES:
-        counts = role_leader_counts(pdf_season, col)
-        if len(counts):
-            out.append((label, counts.index[0], int(counts.iloc[0])))
-        else:
-            out.append((label, "-", 0))
-    return out
-
-
-
-
 # ---- Coach View helpers ----------------------------------------------------
 TEAM_ABBR = {
     "Adelaide": "ADE", "Brisbane Lions": "BRL", "Carlton": "CAR",
@@ -1003,23 +989,6 @@ def margin_drivers(tdf):
     return out.reindex(out["r"].abs().sort_values(ascending=False).index).reset_index(drop=True)
 
 
-def quarter_strip(tdf):
-    """The quarters game by game, for the game-strip style heat strip: rows Q1-Q4,
-    one column per game, each cell Freo's margin in that quarter (that quarter
-    only, not running), scaled to the 90th percentile gap. Returns (rows, z,
-    hover, labels), as game_strip does."""
-    qs = ["Q1", "Q2", "Q3", "Q4"]
-    f = pd.DataFrame(tdf["freo_qtrs"].map(_qtr_points).tolist(), columns=qs, index=tdf.index)
-    o = pd.DataFrame(tdf["opp_qtrs"].map(_qtr_points).tolist(), columns=qs, index=tdf.index)
-    d = f - o
-    top = d.abs().stack().quantile(0.9) or 1
-    labels = game_labels(tdf)
-    hover = [[f"<b>{lbl}</b> v {opp} ({res})<br>{q}: Freo {fp} to {op} ({dd:+d})"
-              for lbl, opp, res, fp, op, dd in zip(labels, tdf["opponent"], tdf["result"],
-                                                   f[q], o[q], d[q])] for q in qs]
-    return qs, [(d[q] / top).clip(-1, 1).round(3).tolist() for q in qs], hover, labels
-
-
 def driver_points(tdf, stat):
     """One differential (a margin_drivers stat label) against the final margin,
     game by game, with the correlation and a least-squares line."""
@@ -1034,17 +1003,6 @@ def driver_points(tdf, stat):
     return pts, {"r": ok["diff"].corr(ok["margin"]), "slope": slope, "intercept": icept,
                  "games": len(ok), "ahead": len(ahead),
                  "ahead_won": int((ahead["result"] == "W").sum())}
-
-
-def running_margin(tdf):
-    """Average margin at each quarter break, in wins and in losses."""
-    f = pd.DataFrame(tdf["freo_qtrs"].map(_qtr_points).tolist(), columns=["Q1", "Q2", "Q3", "Q4"])
-    o = pd.DataFrame(tdf["opp_qtrs"].map(_qtr_points).tolist(), columns=["Q1", "Q2", "Q3", "Q4"])
-    cum = (f - o).cumsum(axis=1)
-    cum["result"] = tdf["result"].values
-    out = cum.groupby("result").mean()
-    out["games"] = cum.groupby("result").size()
-    return out
 
 
 # ---- Deep dives ------------------------------------------------------------
@@ -1066,18 +1024,6 @@ def year_on_year(player_df, s0, s1, col, n=15, min_games=8):
     both = both.sort_values("after", ascending=False).head(n)
     both["change"] = both["after"] - both["before"]
     return both.sort_values("change", ascending=False)
-
-
-def opponent_grid(team_df):
-    """Every game against each opponent, both seasons, toughest first (lowest
-    average margin). Returns [(opponent, record, avg margin, {season: [games]})]."""
-    out = []
-    for opp, g in team_df.sort_values("game_dt").groupby("opponent"):
-        w, lo = int((g["result"] == "W").sum()), int((g["result"] == "L").sum())
-        games = {int(s): gs.to_dict("records") for s, gs in g.groupby("season")}
-        out.append({"opponent": opp, "wins": w, "losses": lo, "draws": len(g) - w - lo,
-                    "avg_margin": g["margin"].mean(), "games": games})
-    return sorted(out, key=lambda r: r["avg_margin"])
 
 
 # ---- League data and the opponent scout report ---------------------------------
