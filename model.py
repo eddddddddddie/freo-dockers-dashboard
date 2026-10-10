@@ -132,6 +132,7 @@ class MatchModel:
         return self
 
     spread = 1.0       # predictions are stretched by this about the mean (fitted on a later season)
+    unc = 0.0          # the model's own uncertainty (see simulate), tuned on a later season
 
     def predict(self, X):
         X = X[self.cols]
@@ -171,22 +172,59 @@ def quarter_lengths(events=None):
         "quarter_secs"].mean().reindex(range(1, 5)).values / 60
 
 
-def simulate(lam, acc, k, shares, qlen, n=10000, seed=0, acc_sd=0.0, kq=None):
-    """n games between side 0 and side 1 (totals only: the order of scores
-    doesn't change who wins). lam, acc: (2,) expected scoring shots and accuracy;
-    shares: (2, 4) each side's quarter split (None: even); kq: quarter swings
-    (each side's rate in each quarter varies by a Gamma(kq) factor; None: none).
-    Returns points, goals and shots (n, 2) and the accuracy used (n, 2)."""
+def simulate(lam, acc, k, shares, qlen, n=10000, seed=0, acc_sd=0.0, kq=None, unc=0.0, paths=False):
+    """n games between side 0 and side 1. lam, acc: (2,) expected scoring shots
+    and accuracy; shares: (2, 4) each side's quarter split (None: even); kq:
+    quarter swings (each side's rate in each quarter varies by a Gamma(kq)
+    factor; None: none); unc: the model's own uncertainty (each side's expected
+    shots, in each simulated game, moved by a log-normal factor with this sd,
+    before the game is played). Returns points, goals and shots (n, 2) and the
+    accuracy used (n, 2); with paths=True also the margin (side 0 minus side 1)
+    at the end of each of PATH_BINS equal slices of every quarter, (n, 4 * PATH_BINS).
+    Scores in the same slice are counted together: the order of scores within
+    a slice doesn't change the margin at its end."""
     rng = np.random.default_rng(seed)
     lam, acc = np.asarray(lam, float), np.asarray(acc, float)
     sh = np.full((2, 4), 0.25) if shares is None else np.asarray(shares, float)
     g = rng.gamma(k, 1 / k, size=(n, 2, 1))
     gq = rng.gamma(kq, 1 / kq, size=(n, 2, 4)) if kq else 1.0
+    f = np.exp(rng.normal(0, unc, size=(n, 2, 1)) - unc ** 2 / 2) if unc else 1.0
     p = np.clip(acc + rng.normal(0, acc_sd, size=(n, 2)), 0.25, 0.8)
-    shots = rng.poisson(lam[None, :, None] * sh[None] * g * gq).sum(axis=2)
-    goals = rng.binomial(shots, p)
-    points = goals * 6 + (shots - goals)
-    return points, goals, shots, p
+    shots_q = rng.poisson(lam[None, :, None] * sh[None] * g * gq * f)
+    if not paths:
+        shots = shots_q.sum(axis=2)
+        goals = rng.binomial(shots, p)
+        return goals * 6 + (shots - goals), goals, shots, p
+    # A Poisson count split evenly at random across the slices is a Poisson
+    # count in each: the same game, now with the margin through it.
+    per = rng.multinomial(shots_q, np.full(PATH_BINS, 1 / PATH_BINS))        # (n, 2, 4, bins)
+    gl = rng.binomial(per, p[:, :, None, None])
+    pts = (gl * 5 + per).reshape(n, 2, 4 * PATH_BINS)
+    path = np.cumsum(pts[:, 0] - pts[:, 1], axis=1)
+    shots, goals = per.sum(axis=(2, 3)), gl.sum(axis=(2, 3))
+    return goals * 6 + (shots - goals), goals, shots, p, path
+
+
+PATH_BINS = 30         # slices of each quarter for the margin through a game (as data.QUARTER_UNITS)
+BAND_PCTS = (10, 25, 50, 75, 90)
+
+
+def path_summary(path, margin):
+    """From simulated margin paths: the margin bands at every slice (each
+    percentile in BAND_PCTS, with 0 at the first bounce), and how games go
+    after each break: the chance side 0 leads at each break, and of games
+    one side leads at three-quarter time, how many it goes on to win."""
+    bands = np.vstack([np.zeros((1, len(BAND_PCTS))),
+                       np.percentile(path, BAND_PCTS, axis=0).T])          # (4*bins + 1, 5)
+    breaks = path[:, [PATH_BINS * q - 1 for q in (1, 2, 3)]]
+    q3 = breaks[:, 2]
+    led = q3 != 0
+    held = np.sign(q3[led]) == np.sign(margin[led])
+    return {"bands": np.round(bands, 1).tolist(),
+            "lead": [float((b > 0).mean()) for b in breaks.T],
+            "q3_leader_wins": float(held.mean()) if led.any() else None,
+            "q3_behind_wins": float((margin[q3 < 0] > 0).mean()) if (q3 < 0).any() else None,
+            "q3_ahead_loses": float((margin[q3 > 0] < 0).mean()) if (q3 > 0).any() else None}
 
 
 def one_game(lam, acc, k, shares, qlen, seed, kq=None, stick=0.0):
@@ -242,7 +280,7 @@ def fit(seasons_train, season_tune=None, lg=None, shape=True):
     lg, X, ok = training_frame(lg)
     tr = ok & lg["season"].isin(seasons_train).values
     m = MatchModel().fit(X[tr], lg.loc[tr, "scoring_shots"].values, lg.loc[tr, "accuracy"].values)
-    m.kq, m.stick = None, 0.0
+    m.kq, m.stick, m.unc = None, 0.0, 0.0
     if season_tune is None:
         return m, lg, X, ok
     tu = ok & (lg["season"] == season_tune).values
@@ -255,7 +293,34 @@ def fit(seasons_train, season_tune=None, lg=None, shape=True):
                             tune_acc=lg.loc[tu, "accuracy"].values)
     full.spread = max(1.0, spread)
     full.kq, full.stick = (_fit_shape(m, lg, X, home) if shape else (None, 0.0))
+    # The model's own uncertainty: how much to blur each side's expected shots
+    # before a game is played. Chosen on the tuning season by Brier score, with
+    # the model fitted without it (0 is allowed: blur only if it forecasts better).
+    m.spread, m.kq = full.spread, full.kq
+    away = _away_rows(lg, home)
+    lh, ah = m.predict(X[home])
+    la, aa = m.predict(X.iloc[away])
+    won = np.where(actual > 0, 1.0, np.where(actual < 0, 0.0, 0.5))
+    full.unc_brier = {}
+    for unc in UNC_GRID:
+        w = _win_chances(m, lh, la, ah, aa, unc, n=3000)
+        full.unc_brier[unc] = float(np.mean((w - won) ** 2))
+    full.unc = min(UNC_GRID, key=lambda u: (round(full.unc_brier[u], 4), u))
     return full, lg, X, ok
+
+
+UNC_GRID = [0.0, 0.04, 0.08, 0.12, 0.16]
+
+
+def _win_chances(m, lh, la, ah, aa, unc, n=4000):
+    """Each game's chance of a win for side 0 (a draw counts half), simulated."""
+    out = []
+    for i in range(len(lh)):
+        pts, *_ = simulate([lh[i], la[i]], [ah[i], aa[i]], m.k, None, None, n=n, seed=i,
+                           acc_sd=m.acc_sd, kq=m.kq, unc=unc)
+        mg = pts[:, 0] - pts[:, 1]
+        out.append((mg > 0).mean() + 0.5 * (mg == 0).mean())
+    return np.array(out)
 
 
 def _pred_margin(m, lg, X, home_rows):
@@ -306,9 +371,11 @@ def _fit_shape(m, lg, X, home_rows, sims=8):
     return best
 
 
-def matchup(model, lg, X, club, opp, home, shares, n=10000, seed=0):
+def matchup(model, lg, X, club, opp, home, shares, n=10000, seed=0, shifts=None, paths=False):
     """Forecast club v opp today (from each club's latest form): expected shots
-    and accuracy for both, and the simulated outcomes."""
+    and accuracy for both, and the simulated outcomes. shifts: {metric: change}
+    to club's own form averages first (a what-if); paths: also the margin
+    through the games (path_summary)."""
     # Form after their latest game: roll the average forward one more game.
     after = {}
     for t in (club, opp):
@@ -319,6 +386,8 @@ def matchup(model, lg, X, club, opp, home, shares, n=10000, seed=0):
             if f"opp_{m}" in g:
                 row[f"a_{m}"] = g[f"opp_{m}"].astype(float).ewm(halflife=HALF_LIFE).mean().iloc[-1]
         after[t] = pd.Series(row)
+    for metric, change in (shifts or {}).items():
+        after[club][f"f_{metric}"] += change
     rows = []
     for a, b, h in ((club, opp, home), (opp, club, -home if home else 0)):
         x = pd.concat([after[a].add_prefix("us_"), after[b].add_prefix("them_")])
@@ -327,13 +396,68 @@ def matchup(model, lg, X, club, opp, home, shares, n=10000, seed=0):
     Xm = pd.DataFrame(rows)[model.cols]
     lam, acc = model.predict(Xm)
     qs = [shares.get(club, shares["league"]), shares.get(opp, shares["league"])]
-    points, goals, shots, p = simulate(lam, acc, model.k, qs, quarter_lengths(), n=n, seed=seed,
-                                       acc_sd=model.acc_sd, kq=model.kq)
+    out = simulate(lam, acc, model.k, qs, quarter_lengths(), n=n, seed=seed, acc_sd=model.acc_sd,
+                   kq=model.kq, unc=model.unc, paths=paths)
+    points = out[0]
     margin = points[:, 0] - points[:, 1]
-    return {"lam": lam, "acc": acc, "shares": qs, "margin": margin, "points": points,
-            "win": float((margin > 0).mean()), "draw": float((margin == 0).mean()),
+    res = {"lam": lam, "acc": acc, "shares": qs, "margin": margin, "points": points, **outcome(margin)}
+    if paths:
+        res.update(path_summary(out[4], margin))
+    return res
+
+
+def outcome(margin):
+    """Win and draw chances and the 10th, 50th and 90th percentile margins."""
+    return {"win": float((margin > 0).mean()), "draw": float((margin == 0).mean()),
             "p10": float(np.percentile(margin, 10)), "p50": float(np.median(margin)),
             "p90": float(np.percentile(margin, 90))}
+
+
+# ---- what if: Freo's form moved on one stat ------------------------------------------
+# Stats the model reads the same way whichever way they're turned (more is better
+# for the side, on both its shots and accuracy, or near zero on one). Pressure
+# acts and clangers are left out: the model's weights on them are mixed, a sign
+# of stats that rise for reasons other than playing well (see CLAUDE.md).
+LEVERS = {
+    "inside50s": {"label": "Inside 50s", "step": 1, "max": 8},
+    "contested_possessions": {"label": "Contested possessions", "step": 2, "max": 12},
+    "centre_clearances": {"label": "Centre clearances", "step": 1, "max": 3},
+    "tackles": {"label": "Tackles", "step": 1, "max": 8},
+}
+
+
+def lever_effects(m):
+    """For one more of each lever stat in Freo's form average: the change in each
+    side's expected scoring shots and accuracy (side 0 Freo, side 1 them). The
+    model is linear in its inputs, so this holds for any opponent and venue
+    (until a prediction reaches its floor or ceiling)."""
+    out = {}
+    for metric in LEVERS:
+        us, them = f"us_f_{metric}", f"them_f_{metric}"
+        d = {}
+        for name, r, scale in (("dlam", m.shots, 1.0), ("dacc", m.acc, 0.01)):
+            i, j = m.cols.index(us), m.cols.index(them)
+            d[name] = [float(m.spread * r.b[i] / r.sd[i] * scale), float(m.spread * r.b[j] / r.sd[j] * scale)]
+        out[metric] = d
+    return out
+
+
+def what_if(f, saved, changes, n=10000, seed=0):
+    """A forecast (from model_forecasts.json) with Freo's form moved by changes
+    ({metric: change}), simulated again: the outcome and binned margins. The
+    same random draws as the forecast (seed, paths), so with no change it gives
+    the forecast exactly and any change is the change's alone."""
+    lam, acc = np.array(f["lam"], float), np.array(f["acc"], float)
+    for metric, change in changes.items():
+        e = saved["levers"][metric]
+        lam = lam + change * np.array(e["dlam"])
+        acc = acc + change * np.array(e["dacc"])
+    lam, acc = np.clip(lam, 8, None), np.clip(acc, 0.3, 0.75)
+    pts, *_ = simulate(lam, acc, saved["k"], f["shares"], None, n=n, seed=seed, acc_sd=saved["acc_sd"],
+                       kq=saved["kq"], unc=saved.get("unc", 0.0), paths=True)
+    margin = pts[:, 0] - pts[:, 1]
+    counts, _ = np.histogram(np.clip(margin, HIST_EDGES[0], HIST_EDGES[-1] - 0.01), bins=HIST_EDGES)
+    return {"lam": lam, "acc": acc, "counts": counts.tolist(), **outcome(margin)}
 
 
 def evaluate(train=(2024,), tune=2025, test=2026, n=4000):
@@ -356,13 +480,7 @@ def evaluate(train=(2024,), tune=2025, test=2026, n=4000):
     actual = games["margin"].values.astype(float)
     shares = quarter_shares(D.load_league_events().query("season < @test"))
     qlen = quarter_lengths()
-    wins = []
-    for i in range(len(games)):
-        pts, *_ = simulate([lam_h[i], lam_a[i]], [acc_h[i], acc_a[i]], model.k, None, qlen, n=n,
-                           seed=i, acc_sd=model.acc_sd, kq=model.kq)
-        m = pts[:, 0] - pts[:, 1]
-        wins.append((m > 0).mean() + 0.5 * (m == 0).mean())
-    wins = np.array(wins)
+    wins = _win_chances(model, lam_h, lam_a, acc_h, acc_a, model.unc, n=n)
     won = np.where(actual > 0, 1.0, np.where(actual < 0, 0.0, 0.5))
     trn = lg[ok & lg["season"].isin(list(train) + [tune]).values & lg["is_home"].astype(bool).values]
     home_adv = float(trn["margin"].mean())
@@ -383,7 +501,8 @@ def evaluate(train=(2024,), tune=2025, test=2026, n=4000):
 
     res = {
         "games": int(len(games)), "lam_shots": model.lam_shots, "lam_acc": model.lam_acc, "k": model.k,
-        "spread": model.spread, "kq": model.kq, "stick": model.stick,
+        "spread": model.spread, "kq": model.kq, "stick": model.stick, "unc": model.unc,
+        "unc_brier": {str(u): b for u, b in model.unc_brier.items()},
         "model": {"mae": float(np.mean(np.abs(pred - actual))), "tips": tips(wins), "brier": brier(wins)},
         "form": {"mae": float(np.mean(np.abs(form_pred - actual))), "tips": tips(form_win),
                  "brier": brier(form_win)},
@@ -483,6 +602,7 @@ def app_model():
     m.spread = ev["spread"] if ev else 1.0
     m.kq = ev["kq"] if ev else None
     m.stick = ev["stick"] if ev else 0.0
+    m.unc = ev.get("unc", 0.0) if ev else 0.0
     return m, lg, X
 
 
@@ -490,7 +610,7 @@ def forecast(m, lg, X, club, opp, venue, runs_sims=400):
     """club v opp: venue 1 = club at home, -1 = away, 0 = neutral. Adds each
     side's chance of kicking at least one run of 3+ goals unanswered."""
     shares = quarter_shares()
-    out = matchup(m, lg, X, club, opp, venue, shares)
+    out = matchup(m, lg, X, club, opp, venue, shares, paths=True)
     qlen = quarter_lengths()
     runs = np.zeros(2)
     for s in range(runs_sims):
@@ -519,7 +639,11 @@ def save_forecasts(path=FORECASTS_JSON, club="Fremantle"):
     from datetime import date
     m, lg, X = app_model()
     out = {"made": date.today().isoformat(), "club": club, "k": m.k, "kq": m.kq, "stick": m.stick,
-           "edges": HIST_EDGES.tolist(), "forecasts": {}}
+           "acc_sd": m.acc_sd, "unc": m.unc, "edges": HIST_EDGES.tolist(), "path_bins": PATH_BINS,
+           "band_pcts": list(BAND_PCTS), "levers": {k: {**LEVERS[k], **v} for k, v in lever_effects(m).items()},
+           "freo_form": {k: float(lg[lg["team"] == club].sort_values("game_dt")[k].astype(float)
+                                  .ewm(halflife=HALF_LIFE).mean().iloc[-1]) for k in LEVERS},
+           "forecasts": {}}
     for opp in sorted(t for t in lg["team"].unique() if t != club):
         for venue in (1, -1, 0):
             f = forecast(m, lg, X, club, opp, venue)
@@ -529,7 +653,8 @@ def save_forecasts(path=FORECASTS_JSON, club="Fremantle"):
                 "lam": f["lam"].tolist(), "acc": f["acc"].tolist(),
                 "shares": [list(map(float, q)) for q in f["shares"]], "qlen": list(map(float, f["qlen"])),
                 "win": f["win"], "draw": f["draw"], "p10": f["p10"], "p50": f["p50"], "p90": f["p90"],
-                "run_chance": f["run_chance"].tolist(), "counts": counts.tolist(), "n": int(len(f["margin"]))}
+                "run_chance": f["run_chance"].tolist(), "counts": counts.tolist(), "n": int(len(f["margin"])),
+                **{k: f[k] for k in ("bands", "lead", "q3_leader_wins", "q3_behind_wins", "q3_ahead_loses")}}
     with open(path, "w") as fh:
         json.dump(out, fh)
     return out

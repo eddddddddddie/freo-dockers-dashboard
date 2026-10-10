@@ -123,6 +123,9 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - The match model (`model.py`) is a forecast, never data: it is labelled MODEL / SIMULATED in
   the app, Wharf-ai's tools don't see it, and the page note says forecasts come from a model.
   Form inputs use only games before the one predicted (tests/test_model.py checks this).
+  Settings (penalties, spread, quarter swings, its own uncertainty `unc`) are chosen on the
+  tuning season, never the test season. The what-if sliders (`model.what_if`) say association,
+  not cause, and reuse the forecast's random draws so a change shows only the lever's effect.
 - Pressure acts rise when Freo don't have the ball (Freo win more often when the opposition wins
   the pressure count), so the pressure tile has no good/bad colour.
 - Tile changes: differentials and accuracy change in absolute units (a % change of a value that
@@ -155,8 +158,8 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - One click rule: any game opens Last game for it, any player their profile in Players. Move
   with `v2.go(place=...)`. Cards reused from `views.py` call `nav.go(view=...)`; `v2.apply`
   translates those (Match -> Last game, Player -> Players, Scout -> Next opponent).
-- Picker first options are real strings (`EVERY_CLUB`, `SQUAD`, `NOBODY`), not None: a None
-  value shows Streamlit's "Choose an option" placeholder.
+- Picker first options are real strings (`SQUAD`, `NOBODY`), not None: a None value shows
+  Streamlit's "Choose an option" placeholder. Next opponent opens on the first club (Adelaide).
 - Phones get a two-line top bar (seasons and icons, then the place picker): the old phone CSS
   sizes the first top-bar column to its content.
 - Tests: `tests/test_v2.py` (AppTest, every place) and the `v2` tests in `tests/test_ui.py`. The

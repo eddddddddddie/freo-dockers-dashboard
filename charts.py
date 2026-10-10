@@ -610,16 +610,18 @@ def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None
 
 
 def margin_histogram(edges, counts, median, height, us="Freo", them="Opp", us_color=None,
-                     them_color=None):
+                     them_color=None, base=None):
     """Simulated final margins (us minus them), already binned (edges, counts):
     our wins in our colour, theirs in theirs, the median marked. Empty bins at
     either end are trimmed."""
     import numpy as np
     us_color, them_color = us_color or COLORS["freo"], them_color or COLORS["opp"]
     edges, counts = np.asarray(edges, float), np.asarray(counts, float)
-    nz = np.nonzero(counts)[0]
+    base = None if base is None else np.asarray(base, float)
+    nz = np.nonzero(counts if base is None else counts + base)[0]
     if len(nz):
         counts, edges = counts[nz[0]:nz[-1] + 1], edges[nz[0]:nz[-1] + 2]
+        base = None if base is None else base[nz[0]:nz[-1] + 1]
     mids = (edges[:-1] + edges[1:]) / 2
     share = counts / max(counts.sum(), 1) * 100
     fig = go.Figure(go.Bar(
@@ -627,6 +629,10 @@ def margin_histogram(edges, counts, median, height, us="Freo", them="Opp", us_co
                                                 cornerradius=2),
         customdata=np.stack([edges[:-1], edges[1:]], axis=1),
         hovertemplate="margin %{customdata[0]:+.0f} to %{customdata[1]:+.0f}: %{y:.1f}% of games<extra></extra>"))
+    if base is not None:          # the forecast before the what-if, as an outline
+        fig.add_trace(go.Scatter(x=edges, y=np.append(base, base[-1]) / max(base.sum(), 1) * 100, mode="lines",
+                                 line=dict(color=COLORS["ink"], width=1.2, shape="hv"), showlegend=False,
+                                 hovertemplate="before: %{y:.1f}% of games<extra></extra>"))
     med = float(median)
     fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1))
     fig.add_vline(x=med, line=dict(color=COLORS["ink"], width=1, dash="dash"))
@@ -639,6 +645,65 @@ def margin_histogram(edges, counts, median, height, us="Freo", them="Opp", us_co
     fig = style_fig(fig, "% of games", unified=False, height=height)
     fig.update_layout(bargap=0, margin=dict(l=4, r=6, t=18, b=4))
     fig.update_xaxes(title=dict(text=f"final margin ({us} minus {them})", font=dict(size=10)))
+    return fig
+
+
+def _rgba(hex_colour, alpha):
+    h = hex_colour.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def margin_cloud(bands, height, us="Freo", them="Opp", example=None):
+    """Thousands of simulated games on one clock (every quarter the same length):
+    the margin (us minus them) that 8 in 10 games sit inside, the middle half, and
+    the typical margin, at every point of the game. bands: rows of the 10th, 25th,
+    50th, 75th and 90th percentiles at each of 4 * 30 slices plus the first
+    bounce. example: (x, y) of one simulated game, drawn as a step line on top."""
+    import numpy as np
+    import data as D
+    b = np.asarray(bands, float)
+    end = 4 * D.QUARTER_UNITS
+    x = np.linspace(0, end, len(b))
+    fig = go.Figure()
+    for lo, hi, alpha, name in ((0, 4, 0.28, "8 in 10 games"), (1, 3, 0.5, "half of games")):
+        fig.add_trace(go.Scatter(x=x, y=b[:, lo], mode="lines", line=dict(width=0), hoverinfo="skip",
+                                 showlegend=False))
+        fig.add_trace(go.Scatter(x=x, y=b[:, hi], mode="lines", line=dict(width=0), fill="tonexty",
+                                 fillcolor=_rgba(RAMP[1], alpha), hoverinfo="skip", showlegend=False))
+    q = [f"Q{int(v // D.QUARTER_UNITS) + 1}" if v < end else "Final siren" for v in x]
+    fig.add_trace(go.Scatter(
+        x=x, y=b[:, 2], mode="lines", line=dict(color=COLORS["freo"], width=2.5), showlegend=False,
+        customdata=np.column_stack([b[:, 0], b[:, 4], b[:, 1], b[:, 3], q]),
+        hovertemplate="%{customdata[4]}: typical margin %{y:+.0f}<br>half of games %{customdata[2]:+.0f} to "
+                      "%{customdata[3]:+.0f}<br>8 in 10 %{customdata[0]:+.0f} to %{customdata[1]:+.0f}"
+                      "<extra></extra>"))
+    if example is not None:
+        ex, ey = example
+        fig.add_trace(go.Scatter(x=ex, y=ey, mode="lines", line=dict(color=COLORS["ink"], width=1.2, shape="hv"),
+                                 opacity=0.8, showlegend=False,
+                                 hovertemplate="the example game: %{y:+d}<extra></extra>"))
+    for qq in range(1, 4):
+        fig.add_vline(x=qq * D.QUARTER_UNITS, line=dict(color=COLORS["grid"], width=1))
+    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
+    fig = style_fig(fig, f"Margin ({us} minus {them})", unified=False, height=height)
+    fig.update_layout(showlegend=False, margin=dict(l=4, r=92, t=8, b=4))
+    fig.update_xaxes(range=[0, end], tickmode="array", tickvals=[15, 45, 75, 105],
+                     ticktext=["Q1", "Q2", "Q3", "Q4"])
+    lo = min(float(b[:, 0].min()), float(min(example[1])) if example is not None else 0)
+    hi = max(float(b[:, 4].max()), float(max(example[1])) if example is not None else 0)
+    fig.update_yaxes(range=[lo - 6, hi + 6])
+    labels = [(b[-1, 4], "8 in 10 games", COLORS["muted"]), (b[-1, 3], "half of games", COLORS["muted"]),
+              (b[-1, 2], f"typical {b[-1, 2]:+.0f}", COLORS["freo"])]
+    if example is not None:
+        labels.append((example[1][-1], "example game", COLORS["ink"]))
+    labels.sort(key=lambda t: t[0])
+    ys = [float(t[0]) for t in labels]
+    gap = (hi - lo + 12) * 0.075        # keep end labels apart
+    for i in range(1, len(ys)):
+        ys[i] = max(ys[i], ys[i - 1] + gap)
+    for y, (_, text, col) in zip(ys, labels):
+        fig.add_annotation(x=end, y=y, text=text, showarrow=False, xanchor="left", xshift=4,
+                           font=dict(size=10, color=col))
     return fig
 
 

@@ -412,3 +412,43 @@ def clubs(grid):
     rec = lambda r: record_text(r["wins"], r["losses"], r["draws"])  # noqa: E731
     return (f"Toughest: {lo['opponent']} ({rec(lo)}, {lo['avg_margin']:+.1f}) · "
             f"best: {hi['opponent']} ({rec(hi)}, {hi['avg_margin']:+.1f})")
+
+
+def sim_paths(f, them):
+    """'Freo lead at three-quarter time in 59% of games; whoever leads then wins
+    85%' (a forecast's path_summary)."""
+    lead = f.get("lead")
+    if not lead:
+        return ""
+    text = f"Freo lead at three-quarter time in {lead[2]:.0%} of games"
+    if f.get("q3_leader_wins") is not None:
+        text += f"; whoever leads then wins {f['q3_leader_wins']:.0%}"
+    if f.get("q3_behind_wins") is not None:
+        text += f", Freo from behind {f['q3_behind_wins']:.0%}"
+    return text
+
+
+def calibration(ev):
+    """How the model's strongest calls came out in its test season: 'When it
+    made the home side a 70%+ favourite, they won 96% of those 51 games (it
+    said 81%). '"""
+    top = next((c for c in ev.get("calibration", []) if c["forecast"].startswith("70%")), None)
+    if not top or top["games"] < 10:
+        return ""
+    return (f"When it made the home side a 70%+ favourite, they won {top['won']:.0%} of those "
+            f"{top['games']} games (it said {top['said']:.0%}). ")
+
+
+def what_if(base, f, moved, levers, them, best=None):
+    """'+3 centre clearances a game: Freo's win chance 60% to 66%, margin +8 to
+    +12'; with nothing moved, the stat that moves it most (best: (metric,
+    change, forecast))."""
+    if not moved:
+        if not best:
+            return f"Freo win {base['win']:.0%} as things stand: move a stat to play the games again"
+        m, c, b = best
+        return (f"Freo win {base['win']:.0%} as things stand; of these stats, {levers[m]['label'].lower()} "
+                f"moves it most ({c:+d} a game: {b['win']:.0%})")
+    what = ", ".join(f"{c:+d} {levers[m]['label'].lower()}" for m, c in moved)
+    return (f"{what} a game: Freo's win chance {base['win']:.0%} to {f['win']:.0%}, "
+            f"typical margin {base['p50']:+.0f} to {f['p50']:+.0f}")

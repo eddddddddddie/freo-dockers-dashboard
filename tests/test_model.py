@@ -70,3 +70,45 @@ def test_saved_forecasts_cover_every_club_and_match_a_live_run(fitted):
     f = saved["forecasts"]["Sydney|1"]
     assert f["win"] == pytest.approx(live["win"]) and f["p50"] == pytest.approx(live["p50"])
     assert sum(f["counts"]) == f["n"]
+
+
+def test_margin_paths_end_on_the_final_margin_and_bands_hold_their_share():
+    out = M.simulate([25, 22], [0.53, 0.5], 50, [[.2, .25, .25, .3]] * 2, None, n=4000, kq=15, unc=0.1,
+                     paths=True)
+    pts, goals, shots, _, path = out
+    assert (pts == goals * 6 + (shots - goals)).all()
+    assert (path[:, -1] == pts[:, 0] - pts[:, 1]).all()
+    assert path.shape == (4000, 4 * M.PATH_BINS)
+    s = M.path_summary(path, path[:, -1])
+    bands = np.array(s["bands"])
+    assert (bands[0] == 0).all() and (np.diff(bands, axis=1) >= 0).all()     # 10th <= 25th <= ... <= 90th
+    inside = ((path[:, -1] >= bands[-1, 0]) & (path[:, -1] <= bands[-1, 4])).mean()
+    assert 0.78 <= inside <= 0.85
+    assert 0.5 < s["q3_leader_wins"] < 1
+
+
+def test_uncertainty_is_chosen_on_the_tuning_season():
+    ev = M.load_eval()
+    if ev is None or "unc" not in ev:
+        pytest.skip("model_eval.json not made")
+    briers = {float(u): b for u, b in ev["unc_brier"].items()}
+    assert set(briers) == set(M.UNC_GRID)
+    assert ev["unc"] == min(briers, key=lambda u: (round(briers[u], 4), u))
+
+
+def test_what_if_with_no_change_is_the_forecast_and_levers_match_a_live_run(fitted):
+    saved = M.load_forecasts()
+    if saved is None or "levers" not in saved:
+        pytest.skip("model_forecasts.json not made")
+    f = saved["forecasts"]["Adelaide|1"]
+    same = M.what_if(f, saved, {})
+    assert same["counts"] == f["counts"] and same["win"] == f["win"]
+    m, lg, X = fitted
+    shares = M.quarter_shares()
+    base = M.matchup(m, lg, X, "Fremantle", "Adelaide", 1, shares, n=200)
+    moved = M.matchup(m, lg, X, "Fremantle", "Adelaide", 1, shares, n=200, shifts={"centre_clearances": 3})
+    e = saved["levers"]["centre_clearances"]
+    assert moved["lam"] - base["lam"] == pytest.approx(3 * np.array(e["dlam"]), abs=1e-6)
+    assert moved["acc"] - base["acc"] == pytest.approx(3 * np.array(e["dacc"]), abs=1e-6)
+    up = M.what_if(f, saved, {"centre_clearances": 3})
+    assert up["win"] > f["win"]

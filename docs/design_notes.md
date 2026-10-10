@@ -437,10 +437,9 @@ Follows the UX audit (https://claude.ai/artifact/1RoZy8WmzVGieFngzF8amz; 46 item
 - Last game (default): picker of games; band with the score as the lead and the result pill;
   6 match tiles; Momentum (lead card) beside Tale of the tape; then the game leaders (Freo's as
   pills that open the player, the opposition's as a line) above the players table, now full width.
-- Next opponent: lands on Every club (a table of every club, record, average margin and each
-  season's games; a row opens the club). A club: band in club colours, scout tiles, Style vs
-  league, How they win, Their quarters, Their form, Against Fremantle (rows open the game);
-  "Every club" goes back.
+- Next opponent: opens on the first club in the list (Adelaide) since 2026-10-10; the Every
+  club table is gone. A club: band in club colours, scout tiles, Style vs league, How they win,
+  Their quarters, Their form, Against Fremantle (rows open the game).
 - Our season: games slice picker; band; season tiles; Game by game (the game strip, with a
   Biggest run row: each side's biggest unanswered run, from `data.game_strip(runs=True)`); What
   wins us games (`data.what_wins`: the Where we win dumbbell with each count's r with the margin
@@ -519,3 +518,27 @@ Simulate, Their last five games, Every game at once), and its seen-key moved to
 old views (`views.render*`, the old top bar and pickers in `app.py`, `nav` view handling, the
 old one-screen CSS and their tests), and update docs/coach_sessions.md and evals/coach_answers.py,
 which describe the old views.
+
+### Monte Carlo upgrade (2026-10-10)
+- Margin through the game: `model.simulate(paths=True)` splits each quarter's simulated shots
+  across 30 slices (a Poisson count split at random is Poisson in each slice, so it is the same
+  game) and returns the margin at the end of every slice; the final slice is exactly the final
+  margin. `model.path_summary` keeps the 10th/25th/50th/75th/90th percentiles at every slice and
+  the chance Freo lead at each break, and how often the three-quarter-time leader wins
+  (Adelaide at home: Freo lead at 3QT in 59%, the leader wins 85%, Freo from behind 19%).
+  `charts.margin_cloud` draws the bands with the example game on top. Saved in the forecasts
+  file (now about 240 KB).
+- The model's own uncertainty: `unc` blurs each side's expected shots by a log-normal factor
+  before each simulated game. Chosen on 2025 by Brier score with the 2024-only fit, from
+  0, 0.04, ..., 0.16 (0 allowed): 0.12 won (Brier 0.2125 at 0 to 0.2090). On the 2026 test it
+  changed almost nothing: Brier 0.1817 (0.1814 without), tips 70.6% (70.2%), margin error 26.1.
+  The model was never overconfident on 2026: at the top it undersells favourites (said 81%,
+  won 96%); the card's caption now says so.
+- What if: four sliders (inside 50s, contested possessions, centre clearances, tackles) move
+  Freo's form average and play the 10,000 games again (`model.what_if`). The model is linear,
+  so each lever's effect on both sides' expected shots and accuracy is saved once
+  (`model.lever_effects`, in the forecasts file) and the app needs no model fit. It uses the
+  forecast's own random draws, so with nothing moved it gives the forecast exactly and any change
+  is the lever's alone (about 0.1 s). Effects are small and honest: at the top of each slider
+  Freo's win chance against Adelaide moves 2 to 4 points, because a stat moves with the others
+  held still. Pressure acts and clangers are left out (the model's weights on them are mixed).

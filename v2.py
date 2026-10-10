@@ -32,7 +32,7 @@ import marks
 
 PLACES = ["Last game", "Next opponent", "Our season", "Players", "Game day"]
 # The first option of the club, player and compare pickers (a real option, so it shows).
-EVERY_CLUB, SQUAD, NOBODY = "Every club", "The squad", "Compare with..."
+SQUAD, NOBODY = "The squad", "Compare with..."
 SLUGS = {p: p.lower().replace(" ", "-") for p in PLACES}
 FROM_SLUG = {v: k for k, v in SLUGS.items()}
 OLD_VIEWS = {"Match": "Last game", "Scout": "Next opponent", "Season": "Our season",
@@ -94,7 +94,7 @@ def _apply(state, ctx, from_url=False):
         st.session_state["v2_vs"] = state.get("vs") if state.get("vs") in players else NOBODY
     club = state.get("club", state.get("opp"))
     if "club" in state or "opp" in state or from_url:
-        st.session_state["v2_club"] = club if club in ctx["clubs"] else EVERY_CLUB
+        st.session_state["v2_club"] = club if club in ctx["clubs"] else (ctx["clubs"] or [None])[0]
     if state.get("games") in D.GAME_SLICES:
         st.session_state["games_slice"] = state["games"]
     elif from_url:
@@ -315,8 +315,6 @@ def next_opponent(ctx, season, club):
     if lg is None:
         st.info("Next opponent needs the league file (league_scraper.py).")
         return None
-    if club is None:
-        return club_index(ctx)
     colours = club_colours(club)
     lad = D.ladder(lg, season)
     games = lg[(lg["season"] == season) & (lg["team"] == club)]
@@ -369,6 +367,9 @@ def next_opponent(ctx, season, club):
     def sim_card():
         sim_card_body(club, short, tint)
 
+    def what_if_card():
+        what_if_body(club, short, tint)
+
     def style_card():
         avg, ranks = D.team_ranks(lg, season)
         with finding("v2_style", "Style vs league", T.style(ranks, club), "rank of 18 on each stat",
@@ -417,7 +418,7 @@ def next_opponent(ctx, season, club):
             _table_pick(show, f"v2h2h_{club}", lambda i: go(
                 place="Last game", season=int(rows["season"].iloc[i]), game=rows["round"].iloc[i]))
 
-    grid([([1], [sim_card]), ([1], [last5_card]), ([1.1, 1], [heat_card, style_card]),
+    grid([([1], [sim_card]), ([1], [what_if_card]), ([1], [last5_card]), ([1.1, 1], [heat_card, style_card]),
           ([1.1, 1], [win_card, quarters_card]), ([1, 1.1], [form_card, h2h_card])])
     return (f"the opponent scout report for {club}, {season} season" + GROUND_NOTE
             + f"; it also shows a model FORECAST of Freo v {club} (simulated games from a model, not "
@@ -488,65 +489,106 @@ def sim_card_body(club, short, tint):
             {"label": "A 3+ goal run", "value": f"{f['run_chance'][0]:.0%}",
              "note": f"Freo's chance; {short} {f['run_chance'][1]:.0%}"},
         ])
-        c1, c2 = (st.container(), st.container()) if DOCK else st.columns([1, 1.5])
+        n = st.session_state.get("v2_sim_seed", 0)
+        saved = _saved_forecasts()
+        k, kq, stick = ((saved["k"], saved["kq"], saved["stick"]) if saved else
+                        (lambda m: (m.k, m.kq, m.stick))(_match_model()[0]))
+        import zlib     # each club and venue gets its own example games
+        seed = zlib.crc32(f"{club}|{venue}".encode()) % 1_000_000 + n
+        e = M.one_game(f["lam"], f["acc"], k, f["shares"], f["qlen"], seed=seed, kq=kq, stick=stick)
+        example = None
+        if e is not None:
+            events, quarters = e
+            x = D._norm_time(events["t"], events["quarter"], quarters)
+            mg = int(events["margin"].iloc[-1])
+            example = ([0.0] + list(x) + [4.0 * D.QUARTER_UNITS], [0] + events["margin"].astype(int).tolist() + [mg])
+        c1, c2 = (st.container(), st.container()) if DOCK else st.columns([1.5, 1])
         with c1:
+            if f.get("bands"):
+                st.markdown(f'<div class="card-take">{html.escape(T.sim_paths(f, short))}</div>',
+                            unsafe_allow_html=True)
+                _plot(CH.margin_cloud(f["bands"], CHART_H, us="Freo", them=short, example=example))
+        with c2:
+            st.markdown('<div class="card-take">How the 10,000 games finished</div>', unsafe_allow_html=True)
             _plot(CH.margin_histogram(f["edges"], f["counts"], f["p50"], CHART_H, us="Freo", them=short,
                                       them_color=tint))
-        with c2:
-            n = st.session_state.get("v2_sim_seed", 0)
-            saved = _saved_forecasts()
-            k, kq, stick = ((saved["k"], saved["kq"], saved["stick"]) if saved else
-                            (lambda m: (m.k, m.kq, m.stick))(_match_model()[0]))
-            import zlib     # each club and venue gets its own example games
-            seed = zlib.crc32(f"{club}|{venue}".encode()) % 1_000_000 + n
-            e = M.one_game(f["lam"], f["acc"], k, f["shares"], f["qlen"], seed=seed, kq=kq, stick=stick)
-            if e is not None:
-                events, quarters = e
-                runs = D.scoring_runs(events)
-                run = runs.iloc[0] if len(runs) and runs.iloc[0]["goals"] >= D.RUN_GOALS else None
-                mg = int(events["margin"].iloc[-1])
-                res = "W" if mg > 0 else "L" if mg < 0 else "D"
-                st.markdown(f'<div class="card-take">One simulated game: '
-                            f'{html.escape(T.momentum(events, run, res, mg, short))}</div>',
-                            unsafe_allow_html=True)
-                _plot(CH.momentum_chart(events, quarters, D.momentum(events, quarters), run, CHART_H,
-                                        opp=short, opp_color=tint, tag="SIMULATED"))
-            if st.button("Simulate another game", key="v2_sim_again", icon=":material/refresh:",
-                         type="tertiary"):
-                st.session_state["v2_sim_seed"] = n + 1
-                st.rerun()
+        if e is not None:
+            runs = D.scoring_runs(events)
+            run = runs.iloc[0] if len(runs) and runs.iloc[0]["goals"] >= D.RUN_GOALS else None
+            res = "W" if mg > 0 else "L" if mg < 0 else "D"
+            st.markdown(f'<div class="card-take">One of them, score by score (the black line above): '
+                        f'{html.escape(T.momentum(events, run, res, mg, short))}</div>',
+                        unsafe_allow_html=True)
+            _plot(CH.momentum_chart(events, quarters, D.momentum(events, quarters), run, CHART_H,
+                                    opp=short, opp_color=tint, tag="SIMULATED"))
+        if st.button("Simulate another game", key="v2_sim_again", icon=":material/refresh:",
+                     type="tertiary"):
+            st.session_state["v2_sim_seed"] = n + 1
+            st.rerun()
         if ev:
             st.caption(f"How good is it? Tested on all {ev['games']} games of {ev['test']}, each predicted "
                        f"from form before it was played: it tipped {ev['model']['tips']:.0%} "
                        f"(recent form alone {ev['form']['tips']:.0%}, home ground alone "
                        f"{ev['home']['tips']:.0%}), with an average margin error of "
-                       f"{ev['model']['mae']:.0f} points. It knows nothing of injuries, selection, "
-                       "weather or tactics.")
+                       f"{ev['model']['mae']:.0f} points. {T.calibration(ev)}It knows nothing of "
+                       "injuries, selection, weather or tactics.")
 
 
-def club_index(ctx):
-    """Every club Freo have played, all seasons, toughest first; a row opens the club."""
-    grid_rows = D.opponent_grid(ctx["team"])
-    band("Every club", "every Freo game, all seasons · pick a club for its scout report",
-         lead=(str(len(grid_rows)), "Clubs"))
-    seasons = ctx["seasons"]
+@st.cache_data(show_spinner=False, max_entries=500)
+def _what_if(club, venue, changes):
+    """The saved forecast with Freo's form moved (changes: ((metric, change), ...)),
+    simulated 4,000 times (a fraction of a second)."""
+    import model as M
+    return M.what_if(_forecast(club, venue), _saved_forecasts(), dict(changes))
 
-    def card():
-        with finding("v2_clubs", "Every club", T.clubs(grid_rows), "toughest first · click a club",
-                     question="Which opponents have we struggled against, and why?"):
-            import pandas as pd
-            table = pd.DataFrame([{
-                "Club": r["opponent"],
-                "Record": record_text(r["wins"], r["losses"], r["draws"]),
-                "Avg margin": round(r["avg_margin"], 1),
-                **{str(s): "  ".join(f"{g['round']} {g['margin']:+d}" for g in r["games"].get(s, []))
-                   for s in seasons}} for r in grid_rows])
-            _table_pick(table, "v2clubs", lambda i: go(place="Next opponent", club=table["Club"].iloc[i]),
-                        height=38 + 28 * len(table),
-                        config={"Avg margin": st.column_config.NumberColumn(format="%+.1f")})
 
-    grid([([1], [card])])
-    return "every Freo game against every club, all seasons"
+def what_if_body(club, short, tint):
+    """What would change the forecast: sliders move Freo's recent average on a few
+    stats and the games are simulated again. The model learned which stats go with
+    scoring, not what causes it, and one stat moves with the others held still."""
+    saved = _saved_forecasts()
+    if not saved or "levers" not in saved:
+        return
+    import model as M
+    venue = VENUES[st.session_state.get("v2_sim_venue") or "At home"]
+    levers = saved["levers"]
+    changes = tuple((m, int(st.session_state.get(f"v2_wi_{m}", 0) or 0)) for m in levers)
+    moved = tuple((m, c) for m, c in changes if c)
+    base = _forecast(club, venue)
+    f = _what_if(club, venue, moved) if moved else {**base, "counts": base["counts"]}
+    best = None
+    if not moved:         # the stat that moves the forecast most, at the top of its slider
+        tries = [(m, e["max"], _what_if(club, venue, ((m, e["max"]),))) for m, e in levers.items()]
+        best = max(tries, key=lambda t: t[2]["win"])
+    head = T.what_if(base, f, moved, levers, short, best)
+    with finding("v2_whatif", "What would change it", head,
+                 "move Freo's recent average on a stat and play the 10,000 games again: MODEL",
+                 question=f"Against {club}, which stats would most change our chances, and is that "
+                          "what decides our games?"):
+        cols = st.columns(2 if DOCK else 4)
+        for i, (metric, e) in enumerate(levers.items()):
+            avg = saved["freo_form"].get(metric)
+            cols[i % len(cols)].slider(
+                e["label"], -e["max"], e["max"], 0, e["step"], key=f"v2_wi_{metric}", format="%+d",
+                help=f"A game, against Freo's recent average of {avg:.0f}" if avg is not None else None)
+        lose, lose0 = 1 - f["win"] - f["draw"], 1 - base["win"] - base["draw"]
+        g, b = f["lam"] * f["acc"], f["lam"] - f["lam"] * f["acc"]
+        tiles([
+            {"label": "Freo win chance", "value": f"{f['win']:.0%}",
+             "note": f"was {base['win']:.0%}; {short} {lose:.0%} (was {lose0:.0%})" if moved
+             else f"{short} {lose:.0%}, draw {f['draw']:.0%}"},
+            {"label": "Likely margin", "value": "Level" if round(f["p50"]) == 0 else f"{f['p50']:+.0f}",
+             "note": f"was {base['p50']:+.0f}" if moved else f"8 in 10: {f['p10']:+.0f} to {f['p90']:+.0f}"},
+            {"label": "Expected score", "value": f"{g[0]:.0f}.{b[0]:.0f} v {g[1]:.0f}.{b[1]:.0f}",
+             "note": f"{f['lam'][0] * (1 + 5 * f['acc'][0]):.0f} v {f['lam'][1] * (1 + 5 * f['acc'][1]):.0f} points"},
+        ])
+        if moved:
+            _plot(CH.margin_histogram(base["edges"], f["counts"], f["p50"], CHART_H, us="Freo", them=short,
+                                      them_color=tint, base=base["counts"]))
+        st.caption("The model learned which stats have gone with scoring across the league, not what "
+                   "causes it: each slider moves one stat with every other held still, so a stat that "
+                   "rises with others (more inside 50s usually means more shots) moves less on its own. "
+                   "Pressure acts and clangers aren't here: they rise for reasons other than playing well.")
 
 
 def our_season(ctx, season, baseline, tdf, pdf, games_slice):
@@ -935,14 +977,13 @@ def _place(ctx, place, season, baseline, picks):
         return last_game(ctx, season, tdf, D.players_season(ctx["player_df"], season), pos)
     if place == "Next opponent":
         clubs = ctx["clubs"]
+        if not clubs:
+            st.info("Next opponent needs the league file (league_scraper.py).")
+            return None
         if st.session_state.get("v2_club") not in clubs:
-            st.session_state["v2_club"] = EVERY_CLUB
-        c, b, _ = st.columns([1.2, 0.8, 2.2], vertical_alignment="center")
-        club = c.selectbox("Club", [EVERY_CLUB] + clubs, key="v2_club", label_visibility="collapsed")
-        club = None if club == EVERY_CLUB else club
-        if club is not None and b.button("Every club", key="v2_all_clubs", icon=":material/arrow_back:",
-                                         type="tertiary"):
-            go(club=None)
+            st.session_state["v2_club"] = clubs[0]
+        c, _ = st.columns([1.2, 3])
+        club = c.selectbox("Club", clubs, key="v2_club", label_visibility="collapsed")
         picks["club"] = club
         return next_opponent(ctx, season, club)
     if place == "Game day":
@@ -984,7 +1025,7 @@ def _place(ctx, place, season, baseline, picks):
     return None
     club = st.session_state.get("v2_club")
     return lab(ctx, season, tdf, D.players_season(ctx["player_df"], season),
-               None if pick in (None, SQUAD) else pick, None if club in (None, EVERY_CLUB) else club)
+               None if pick in (None, SQUAD) else pick, club)
 
 
 def dock(ctx, season, baseline, focus):
