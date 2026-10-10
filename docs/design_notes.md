@@ -510,3 +510,12 @@ pages they belong to (Lab removed; five places):
   it), bold average lines for wins and losses, and the season's average momentum underneath;
   the takeaway names the strongest and weakest third of a quarter (2026: the middle of Q3, +2.0;
   early Q2, -0.4). Counts is the game strip with its Biggest run row.
+
+### Switch-over (2026-10-10)
+v2 is the default; `?v2=0` still opens the old views for the session (kept in their address).
+The tour was rewritten for v2 (11 steps on Last game, others shown where their cards exist:
+Simulate, Their last five games, Every game at once), and its seen-key moved to
+`freoCoachTourDone_v2`, so every returning visitor is offered it once. Still to do: delete the
+old views (`views.render*`, the old top bar and pickers in `app.py`, `nav` view handling, the
+old one-screen CSS and their tests), and update docs/coach_sessions.md and evals/coach_answers.py,
+which describe the old views.

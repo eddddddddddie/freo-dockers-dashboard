@@ -523,8 +523,8 @@ def _game_label(season, rnd):
     return None
 
 
-# v2 (?v2=1): six places around a coach's week (v2.py). It reads queued moves
-# itself, so it runs before the old views' navigation does.
+# v2 (the default; ?v2=0 for the old views): five places around a coach's week
+# (v2.py). It reads queued moves itself, so it runs before the old navigation does.
 if v2.enabled():
     V2_DOCK = CHAT_TOP = win_w < 1000 or win_h < 600
     PANEL_H = win_h - 60

@@ -28,6 +28,7 @@ def app():
     at.secrets["APP_USERNAME"] = os.environ["APP_USERNAME"]
     at.secrets["APP_PASSWORD"] = os.environ["APP_PASSWORD"]
     at.secrets["ANTHROPIC_API_KEY"] = ""
+    at.query_params["v2"] = "0"        # these tests cover the old layout (tests/test_v2.py: v2)
     return at.run()
 
 

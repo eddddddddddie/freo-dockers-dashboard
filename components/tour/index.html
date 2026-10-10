@@ -10,7 +10,7 @@
 // tour runs whenever Python passes a new `force` value (the ? button). Sends
 // nothing back, so it never reruns the app.
 (function () {
-  var DONE_KEY = "freoCoachTourDone_v1";
+  var DONE_KEY = "freoCoachTourDone_v2";   // v2's tour: everyone is offered it once
   var LIB = "https://cdn.jsdelivr.net/npm/driver.js@1.8.0/dist/";
   var P = window.parent, doc = P.document;
 
@@ -20,46 +20,47 @@
 
   var STEPS = [
     {title: "Welcome to the Coach View",
-     text: "The whole season on one screen, plus Wharf-ai, an analyst you can question. This quick tour shows where everything is. Use the arrow keys or the buttons; Esc skips it."},
-    {el: ".cv-band", title: "Season at a glance",
-     text: "Record, win rate, average margin and the last five results. Hover a result for the score."},
+     text: "Five places around a coach's week, with Wharf-ai, an analyst you can question, always beside the page. This quick tour shows the page you are on. Use the arrow keys or the buttons; Esc skips it."},
+    {el: ".st-key-v2_place", title: "Five places",
+     text: "Last game (the review), Next opponent (the briefing and a simulated match), Our season (the trends), Players (squad, profiles and comparisons) and Game day (the quarter-time check). The web address keeps your place, so you can bookmark or send any page."},
     {el: ".st-key-season", title: "Pick a season",
-     text: "Switch seasons. Every number on the page follows, compared with the season before."},
-    {el: ".st-key-view", title: "Four views",
-     text: "Season, Match (one game against the season average), Player (one player's season) and Scout (any club against the league). The picker next to the band also has a page across them all: Whole squad in Player, All clubs in Scout, and a Quarter-time check in Match. The web address keeps your place, so you can bookmark or send a view."},
+     text: "Every number on every page follows the season, compared with the one before."},
+    {el: ".cv-band", title: "The band",
+     text: "The page's headline: the score, the record, the ladder spot or the player, with the last five results where they help."},
     {el: ".cv-tiles", title: "Key numbers",
-     text: "Season value, change on last season (green is good, red is not, grey has no good or bad) and a trend line with a point per game. Hover the line for each game."},
-    {el: ".st-key-card_strip", title: "Game strip",
-     text: "One column per game. Purple means Freo won that count, cyan means the opposition did. Click any game to open it in Match view."},
-    {el: ".st-key-card_wherewin", title: "Where we win",
-     text: "Win rate when Freo win the count on each stat, against when the opposition does."},
-    {el: ".st-key-card_quarters", title: "Quarters",
-     text: "Points per quarter, or switch to W v L for the average margin at each break in wins and losses."},
-    {el: ".st-key-card_form", title: "Who's up, who's down",
-     text: "Each top player's last three games against his own season average: the ring is the season, the dot the last three (purple up, grey down), biggest risers first. Pick the stat at the top right, and click a player for their profile."},
-    {el: ".st-key-card_drivers", title: "What drives our margin",
-     text: "One small chart per stat: each dot is a game, the difference in that count across and the final margin up. A tight rising line means that count goes with winning; a loose cloud means it doesn't. Strongest first; click one for every game. It shows association, not cause."},
-    {el: ".st-key-card_wharfai", title: "Ask Wharf-ai",
-     text: "Ask anything about the data, or tap a suggestion. Every number it gives is calculated from the data, it draws charts when they help, and it suggests follow-up questions."},
+     text: "Each value with its comparison: green is good, red is not, grey has no good or bad. Hover a trend line for each game."},
+    {el: ".st-key-card_v2_momentum", title: "Momentum",
+     text: "The margin after every score, and under it who had been scoring lately (each score fades by half every 4 minutes). The game's biggest run is shaded."},
+    {el: ".st-key-card_v2_sim", title: "Simulate the match",
+     text: "Freo against this club, played 10,000 times by a model of both clubs' recent form: win chance by venue, likely margins and one example game. It is a forecast, labelled so, with how well it tested."},
+    {el: ".st-key-card_v2_last5", title: "Their last five games",
+     text: "Each of the club's recent games from their side: the margin after every score and who was on top when. Fast starts and strong finishes show at a glance."},
+    {el: ".st-key-card_v2_strip", title: "Every game at once",
+     text: "Every game's margin on one clock, wins purple and losses grey, the averages in bold, and the season's average momentum underneath. Click a game to open it; switch to Counts for the game strip."},
+    {el: ".st-key-card_gmatch, .st-key-card_v2_opp_ground, .st-key-card_v2_season_ground, .st-key-card_gplayer", title: "On the ground (simulated)",
+     text: "Heat maps, where goals, marks and possessions happened, and GPS running. The counts are real; the places and running are simulated, a demo of what tracking data would show, and tagged SIMULATED."},
+    {el: "[class*=st-key-ask_v2_]", title: "Ask about any card",
+     text: "Each card's Ask button sends its question to Wharf-ai."},
+    {el: ".st-key-card_players", title: "One click rule",
+     text: "Any game opens it in Last game; any player opens their profile in Players. Click a row here to try it."},
+    {el: ".st-key-card_wharfai, .st-key-wa_dock", title: "Wharf-ai",
+     text: "Ask anything about the data, or tap a suggestion. Every number it gives is calculated from the data, it draws charts when they help, and it suggests what to ask next."},
     {el: ".st-key-tour_btn", title: "That's it",
-     text: "Replay this tour any time with this ? button."}
+     text: "Replay this tour on any page with this ? button."}
   ];
 
-  // The phone layout: one scrolling column, touch instead of hover and click.
+  // Phones: one scrolling column, Wharf-ai docked at the bottom.
   var PHONE_STEPS = [
     {title: "Welcome to the Coach View",
-     text: "The season in one scrolling page, with Wharf-ai, an analyst you can question, at the top. This quick tour shows where everything is."},
-    {el: ".cv-band", title: "At a glance",
-     text: "Record, average margin and the last five results."},
+     text: "Five places around a coach's week, with Wharf-ai, an analyst you can question, docked at the bottom. This quick tour shows the page you are on."},
+    {el: ".st-key-v2_place", title: "Five places",
+     text: "Last game, Next opponent, Our season, Players and Game day. Pick one here."},
     {el: ".st-key-season", title: "Pick a season", text: "Switch seasons; every number follows."},
-    {el: ".st-key-view", title: "Four views",
-     text: "Season, Match (one game), Player (one player's season) and Scout (any club against the league)."},
-    {el: ".st-key-card_wharfai", title: "Ask Wharf-ai",
-     text: "Tap a suggestion or type a question. Every number it gives is calculated from the data."},
+    {el: ".cv-band", title: "At a glance", text: "The page's headline numbers."},
     {el: ".cv-tiles", title: "Key numbers",
-     text: "Season value, change on last season (green is good, red is not) and a trend line per game."},
-    {el: ".st-key-card_recent", title: "Recent games",
-     text: "Tap a game to open it in Match view. The cards below cover where we win, what drives the margin, quarters and players."},
+     text: "Each value with its comparison: green is good, red is not."},
+    {el: ".st-key-wa_dock", title: "Wharf-ai",
+     text: "Tap to ask about the page you are on. Every number it gives is calculated from the data."},
     {el: ".st-key-tour_btn", title: "That's it", text: "Replay this tour any time with this ? button."}
   ];
 
@@ -97,7 +98,7 @@
     var steps = (P.__freoTourPhone ? PHONE_STEPS : STEPS).filter(function (s) { return !s.el || doc.querySelector(s.el); })
       .map(function (s) {
         var step = {popover: {title: s.title, description: s.text}};
-        if (s.el) step.element = s.el;
+        if (s.el) step.element = doc.querySelector(s.el);   // the first match on this page
         return step;
       });
     var d = P.driver.js.driver({

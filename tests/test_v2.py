@@ -11,14 +11,14 @@ import v2
 BAND = '<div class="cv-band v2'
 
 
-def _app(query, size=(1440, 790)):
+def _app(query, size=(1440, 790), extra={"v2": "1"}):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     at = AppTest.from_file(os.path.join(root, "app.py"), default_timeout=120)
     at.secrets["APP_USERNAME"] = os.environ["APP_USERNAME"]
     at.secrets["APP_PASSWORD"] = os.environ["APP_PASSWORD"]
     at.secrets["ANTHROPIC_API_KEY"] = ""
     at.session_state["window_size"] = size
-    for k, v in {"v2": "1", **query}.items():
+    for k, v in {**(extra or {}), **query}.items():
         at.query_params[k] = v
     at = at.run()
     at.text_input[0].input(os.environ["APP_USERNAME"])
@@ -50,12 +50,20 @@ def test_every_place_draws_with_wharf_ai(query):
     assert _wharf_ai_shown(at), query
 
 
-def test_old_views_are_untouched_without_the_flag():
+def test_v2_is_the_default_and_v2_0_keeps_the_old_layout():
+    at = _app({"season": "2026"}, extra=None)
+    assert not at.exception
+    assert any(BAND in m.value for m in at.markdown)              # v2 with no flag
+    assert "v2" not in at.query_params
+
+
+def test_v2_0_shows_the_old_layout():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     at = AppTest.from_file(os.path.join(root, "app.py"), default_timeout=120)
     at.secrets["APP_USERNAME"] = os.environ["APP_USERNAME"]
     at.secrets["APP_PASSWORD"] = os.environ["APP_PASSWORD"]
     at.secrets["ANTHROPIC_API_KEY"] = ""
+    at.query_params["v2"] = "0"
     at = at.run()
     at.text_input[0].input(os.environ["APP_USERNAME"])
     at.text_input[1].input(os.environ["APP_PASSWORD"])
@@ -63,6 +71,7 @@ def test_old_views_are_untouched_without_the_flag():
     at = at.run()
     assert not at.exception
     assert not any(BAND in m.value for m in at.markdown)
+    assert at.query_params["v2"] == ["0"]                          # kept in the address
     assert [b for b in at.button_group if b.key == "view"]          # the old view switch
 
 

@@ -63,8 +63,8 @@ def browser():
 
 def open_app(browser, server, w, h):
     pg = browser.new_page(viewport={"width": w, "height": h})
-    pg.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")  # skip the tour
-    pg.goto(server)
+    pg.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")  # skip the tour
+    pg.goto(server + "/?v2=0")         # the old layout (v2 tests go to their own pages)
     pg.wait_for_selector("input[type=password]", timeout=60000)
     pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
     pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
@@ -103,7 +103,7 @@ def test_every_view_fits_one_screen(browser, server, w, h):
                         ("squad", "view=Player&player=Whole%20squad"),
                         ("clubs", "view=Scout&opp=All%20clubs"), ("qt", "view=Match&game=QT"),
                         ("momentum", "view=Match&game=MOM")]:
-        pg.goto(f"{server}/?season=2026&{query}")
+        pg.goto(f"{server}/?v2=0&season=2026&{query}")
         pg.wait_for_selector(".cv-band", timeout=60000)
         pg.wait_for_timeout(3000)
         f = fit(pg)
@@ -120,16 +120,16 @@ def test_phone_layout_scrolls_one_column(browser, server, w, h):
     """On a phone: nothing wider than the screen, Wharf-ai above the dashboard,
     tiles two to a row."""
     ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
     pg = ctx.new_page()
-    pg.goto(server)
+    pg.goto(server + "/?v2=0")   # the old layout
     pg.wait_for_selector("input[type=password]", timeout=60000)
     pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
     pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
     pg.get_by_role("button", name="Sign in").click()   # stays signed in for the links below
     for view in ["Season", "Match", "Player", "Scout"]:
         if view != "Season":
-            pg.goto(f"{server}/?season=2026&view={view}")
+            pg.goto(f"{server}/?v2=0&season=2026&view={view}")
         pg.wait_for_selector(".js-plotly-plot", timeout=60000)
         pg.wait_for_timeout(3000)
         f = pg.evaluate("""() => {
@@ -156,16 +156,16 @@ def test_tablet_layouts(browser, server, w, h, mode):
     screen, cards two to a row, tiles three to a row. stack: Wharf-ai above the
     dashboard; split: beside it, and still in view after scrolling down."""
     ctx = browser.new_context(viewport={"width": w, "height": h}, has_touch=True)
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
     pg = ctx.new_page()
-    pg.goto(server)
+    pg.goto(server + "/?v2=0")   # the old layout
     pg.wait_for_selector("input[type=password]", timeout=60000)
     pg.get_by_label("Username").fill(os.environ["APP_USERNAME"])
     pg.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
     pg.get_by_role("button", name="Sign in").click()
     for view in ["Season", "Match", "Player", "Scout"]:
         if view != "Season":
-            pg.goto(f"{server}/?season=2026&view={view}")
+            pg.goto(f"{server}/?v2=0&season=2026&view={view}")
         pg.wait_for_selector(".js-plotly-plot", timeout=60000)
         pg.wait_for_timeout(3000)
         f = pg.evaluate("""() => {
@@ -217,8 +217,8 @@ def test_clicks_links_and_back_button(browser, server):
     assert band() == game, "browser Back should return to the match"
     pg.close()
     pg2 = browser.new_page(viewport={"width": 1440, "height": 790})
-    pg2.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
-    pg2.goto(server + "/?season=2025&view=Match&game=EF")
+    pg2.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
+    pg2.goto(server + "/?v2=0&season=2025&view=Match&game=EF")
     pg2.wait_for_selector("input[type=password]", timeout=60000)
     pg2.get_by_label("Username").fill(os.environ["APP_USERNAME"])
     pg2.get_by_role("textbox", name="Password").fill(os.environ["APP_PASSWORD"])
@@ -246,7 +246,7 @@ def test_driver_drill_down_opens_and_goes_back(browser, server):
 
 def test_stay_signed_in_and_sign_out(browser, server):
     ctx = browser.new_context(viewport={"width": 1440, "height": 790})
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
     pg = ctx.new_page()
     pg.goto(server)
     pg.wait_for_selector("input[type=password]", timeout=60000)
@@ -295,7 +295,7 @@ def test_v2_places_scroll_cleanly_with_wharf_ai_in_view(browser, server, w, h):
 
 def test_v2_phone_docks_wharf_ai(browser, server):
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
-    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1')")
+    ctx.add_init_script("localStorage.setItem('freoCoachTourDone_v1', '1'); localStorage.setItem('freoCoachTourDone_v2', '1')")
     pg = ctx.new_page()
     pg.goto(server + "/?v2=1&season=2026&place=our-season")
     pg.wait_for_selector("input[type=password]", timeout=60000)

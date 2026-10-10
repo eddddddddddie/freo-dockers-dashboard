@@ -1,4 +1,4 @@
-"""Coach View v2 (behind ?v2=1): five places around a coach's week.
+"""Coach View v2 (the default; ?v2=0 shows the old layout): five places around a coach's week.
 
 Last game, Next opponent, Our season, Players and Game day, with the simulated
 ground maps (heat maps, event spots, GPS running) and momentum charts on the
@@ -10,7 +10,7 @@ One of everything: one band (`band`), one tile row (`tiles`), one card header
 (`finding`: a label, the takeaway as the headline, how to read it, and an "Ask
 Wharf-ai" button), and one click rule (any game opens Last game for that game,
 any player opens their profile in Players). The address holds the place and
-picks: ?v2=1&season=2026&place=last-game&game=GF (player=, vs=, club=, games=).
+picks: ?season=2026&place=last-game&game=GF (player=, vs=, club=, games=).
 
 Cards reused from views.py navigate with nav.go(view=...); `apply` translates
 those moves to places, so their clicks follow the same rule.
@@ -55,11 +55,12 @@ DOCK = False           # set by run(): Wharf-ai docked to the bottom (phones, po
 
 
 def enabled():
-    """?v2=1 turns v2 on for the session, ?v2=0 off."""
+    """v2 is the default; ?v2=0 shows the old layout for the session (kept in its
+    address), ?v2=1 comes back."""
     q = st.query_params.get("v2")
     if q in ("1", "0"):
         st.session_state["v2"] = q == "1"
-    return bool(st.session_state.get("v2"))
+    return bool(st.session_state.get("v2", True))
 
 
 # ---- navigation ---------------------------------------------------------------
@@ -115,7 +116,7 @@ def apply(ctx):
 
 
 def write_url(season, place, **picks):
-    state = {"v2": "1", "season": str(season), "place": SLUGS[place]}
+    state = {"season": str(season), "place": SLUGS[place]}
     state.update({k: str(v) for k, v in picks.items() if v})
     if dict(st.query_params) != state:
         st.query_params.from_dict(state)

@@ -76,7 +76,7 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Data: `data.py` loads and merges every CSV (cached) and computes all derived tables, tiles and
   records. Views, takeaways, insights and Wharf-ai's tools all read from it, so stat logic belongs
   here, not in views or charts.
-- v2 (`?v2=1`): `v2.py` draws the six places, reusing cards from `views.py` where they fit.
+- v2 (the default): `v2.py` draws the five places, reusing cards from `views.py` where they fit.
 - Presentation: `charts.py` (Plotly figures), `theme.py` (CSS, colours, HTML blocks), `layout.py`
   (window size to card heights and layout mode), `nav.py` (address bar state, `nav.go`),
   `takeaways.py` (card one-liners and chart focus), `marks.py` (band drawings), `sim.py`
@@ -140,7 +140,7 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   Names flip from "Last, First". Opposition player rows are discarded (totals only).
 - It warns (doesn't stop) when kicks + handballs != disposals or a game has no Freo table.
 
-## Coach View v2 (`?v2=1`, being built; the old views stay the default until switch-over)
+## Coach View v2 (the default since 2026-10-10; `?v2=0` shows the old views until they are deleted)
 - `v2.py`: five places around a coach's week: Last game, Next opponent, Our season, Players,
   Game day. The momentum charts and the simulated ground cards are folded into them (Lab is gone):
   Next opponent shows the club's last 5 games as momentum small multiples
@@ -159,7 +159,12 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   value shows Streamlit's "Choose an option" placeholder.
 - Phones get a two-line top bar (seasons and icons, then the place picker): the old phone CSS
   sizes the first top-bar column to its content.
-- Tests: `tests/test_v2.py` (AppTest, every place) and the `v2` tests in `tests/test_ui.py`.
+- Tests: `tests/test_v2.py` (AppTest, every place) and the `v2` tests in `tests/test_ui.py`. The
+  old layout's tests ask for it with `?v2=0` (test_app's fixture, test_ui's `open_app` and old
+  view URLs); `nav.write_url` keeps `v2=0` in its address while it is open.
+- The tour (`components/tour`) describes v2: one step list for every place, each step skipped
+  when its element isn't on the page (a step may list several selectors; the first match is
+  used). Its "seen" key is `freoCoachTourDone_v2`; tests set both v1 and v2 keys.
 
 ## Layout and Streamlit gotchas
 - Layout modes (`layout.mode`): desktop (1280x600 or more) is one screen with no page scroll;
