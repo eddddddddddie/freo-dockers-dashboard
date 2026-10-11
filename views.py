@@ -14,7 +14,7 @@ import data as D
 import charts as CH
 import nav
 import takeaways as T
-from theme import COLORS, RAMP, card_title
+from theme import COLORS, RAMP, card_title, fit_mode, is_dark
 
 
 # Player stats offered on the form card: label -> column.
@@ -77,6 +77,7 @@ def _plot(fig, key=None):
     """Draw a chart. With a key, clicks on its points come back as an event.
     On a touch screen, dragging a chart would zoom it instead of scrolling."""
     fig.update_layout(dragmode=False)
+    fig = fit_mode(fig)
     if key is None:
         st.plotly_chart(fig, width="stretch", config=PLOT_CONFIG)
         return None
@@ -100,6 +101,8 @@ TABLE_STATS = [("Disp", "disposals", "Disposals", True), ("CP", "contested_poss"
                ("M", "marks", "Marks", False), ("G", "goals", "Goals", False)]
 STANDOUT = 30   # % above or below a player's own season average that gets a cell tinted
 TINT_UP, TINT_DOWN = "#EDE5F7", "#F0F0F0"   # the standout cell tints (and their keys)
+TINTS = ((TINT_UP, COLORS["brand"]), (TINT_DOWN, "#6B6B6B"))        # (background, text)
+TINTS_DARK = (("#3B2A5C", "#E4DAF7"), ("#2A2732", "#8C8796"))
 
 
 def _match_players(pdf, game, season, pos):
@@ -116,9 +119,10 @@ def _match_players(pdf, game, season, pos):
         cols = [c for _, c, _ in stats]
         rp = "rating_points" if "rating_points" in pdf.columns and not PHONE else None
         vals, pct, avgs = D.match_players(pdf, game, cols + ([rp] if rp else []))
+        (up_bg, up_ink), (down_bg, down_ink) = TINTS_DARK if is_dark() else TINTS
         card_title("Players this game", "the number and a bar against the team's best · sort by a "
                    "header, " + ("tap" if PHONE else "click") + " a row for the player",
-                   keys=[(f"{STANDOUT}%+ above own avg", TINT_UP), (f"{STANDOUT}%+ below", TINT_DOWN)],
+                   keys=[(f"{STANDOUT}%+ above own avg", up_bg), (f"{STANDOUT}%+ below", down_bg)],
                    takeaway=T.vs_self(vals, pct, avgs, [(n, c) for _, c, n in stats]))
         df = vals[cols + ([rp] if rp else [])].reset_index().rename(columns={"index": "Player"})
         df.columns = ["Player"] + cols + (["RP"] if rp else [])
@@ -130,8 +134,8 @@ def _match_players(pdf, game, season, pos):
                 ok = (avgs[c] >= CH.VS_SELF_MIN_AVG.get(c, 0)).values
                 up = (pct[c].values >= 100 + STANDOUT) & ok
                 down = (pct[c].values <= 100 - STANDOUT) & ok
-                out.loc[up, c] = f"background-color:{TINT_UP}; color:{COLORS['brand']}; font-weight:700"
-                out.loc[down, c] = f"background-color:{TINT_DOWN}; color:#6B6B6B"
+                out.loc[up, c] = f"background-color:{up_bg}; color:{up_ink}; font-weight:700"
+                out.loc[down, c] = f"background-color:{down_bg}; color:{down_ink}"
             return out
 
         # Narrow columns: on a desktop the table shares its row with the ground card.

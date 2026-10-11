@@ -7,5 +7,12 @@ secondaryBackgroundColor = "#FFFFFF"
 textColor = "#1A1A1A"
 font = "sans serif"
 
+# Dark mode (the moon button; theme.inject_mode switches Streamlit to it).
+[theme.dark]
+primaryColor = "#B7A8D8"
+backgroundColor = "#121016"
+secondaryBackgroundColor = "#1E1A26"
+textColor = "#ECEAF0"
+
 [server]
 headless = true

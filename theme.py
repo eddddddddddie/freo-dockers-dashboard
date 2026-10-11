@@ -46,6 +46,111 @@ HEAT = ["#FFF3B0", "#FED976", "#FD9D43", "#F2602F", "#D42325", "#8E0F24"]
 DIVERGE = [COLORS["opp"], "#81C4D1", "#EDEDEF", "#B8A6DD", COLORS["freo"]]
 SERIES = [COLORS["freo"], COLORS["opp"], COLORS["series3"], COLORS["series4"]]
 
+# Dark mode: each light colour's own dark step (validated against the dark card
+# #1E1A26, not flipped). The series are lifted into the dark lightness band, ink
+# and rules go light on dark, and the purple ramp runs dark to light so "more"
+# still stands out. Win, loss and the heat scale keep their colours.
+DARK_CANVAS, DARK_CARD = "#121016", "#1E1A26"
+DARK = {
+    COLORS["freo"]: "#8560CC", COLORS["opp"]: "#17A6BB", COLORS["series3"]: "#E0608E",
+    COLORS["series4"]: "#5B8DE8", COLORS["ink"]: "#ECEAF0", COLORS["muted"]: "#A9A4B3",
+    COLORS["neutral"]: "#6E6A76", COLORS["grid"]: "#3A3545", "#C4C4C4": "#4A4556",
+    "#FBFBF8": "#26222F", "#FFFFFF": DARK_CARD,
+    "#81C4D1": "#1B7B8A", "#EDEDEF": "#3A3545", "#B8A6DD": "#6A4FA0",
+    **dict(zip(RAMP, ["#3B2A5C", "#5A3F8C", "#7C5BB8", "#A285DB", "#CBB8F0"])),
+}
+# The page's CSS tokens in dark mode (inject_css sets the light ones).
+DARK_CSS = (f":root {{ --canvas:{DARK_CANVAS}; --card:{DARK_CARD}; --ink:#ECEAF0; --muted:#A9A4B3; "
+            "--line:#3A3545; --rule:#2C2836; --tint:#2A2435; --accent:#B7A8D8; "
+            "--freo:#8560CC; --opp:#17A6BB; }")
+
+
+def is_dark():
+    """This viewer's choice (the moon button in the top bar), per session."""
+    return bool(st.session_state.get("dark"))
+
+
+def _rgb(hex_colour):
+    h = hex_colour.lstrip("#")
+    return f"{int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},"
+
+
+_DARK_RGBA = {_rgb(k): _rgb(v) for k, v in DARK.items()}
+
+
+def _to_dark(value):
+    """One figure value in dark colours: hex strings by the DARK map, rgba() by
+    its colour, lists and dicts all the way down. White text stays white (it sits
+    on a coloured mark), and a label on its own background keeps its ink."""
+    if isinstance(value, str):
+        if value.startswith("#") and len(value) == 7:
+            return DARK.get(value.upper(), value)
+        if value.startswith("rgba("):
+            for k, v in _DARK_RGBA.items():
+                if value.startswith("rgba(" + k):
+                    return value.replace(k, v, 1)
+        return value
+    if isinstance(value, list):
+        return [_to_dark(v) for v in value]
+    if isinstance(value, dict):
+        bg = value.get("bgcolor")
+        own_bg = isinstance(bg, str) and bg.startswith("#") and bg.upper() not in DARK
+        out = {}
+        for k, v in value.items():
+            if own_bg and k == "font":
+                out[k] = v
+            elif k in ("font", "textfont") and isinstance(v, dict):
+                out[k] = {fk: (_to_dark(fv) if fk == "color" and str(fv).upper() != "#FFFFFF" else fv)
+                          for fk, fv in v.items()}
+            else:
+                out[k] = _to_dark(v)
+        return out
+    return value
+
+
+def fit_mode(fig):
+    """The figure as drawn for this viewer: unchanged in light mode, recoloured
+    in dark mode (charts are built in the light colours)."""
+    if not is_dark():
+        return fig
+    import plotly.graph_objects as go
+    return go.Figure(_to_dark(fig.to_plotly_json()))
+
+
+def inject_mode():
+    """Dark mode, if chosen: the page's CSS tokens, and Streamlit's own widgets
+    (selects, tables, sliders) switched to the [theme.dark] colours in
+    config.toml. Streamlit picks light or dark from the browser's
+    prefers-color-scheme, so this answers that question with the viewer's choice
+    and asks Streamlit to look again (it re-checks after printing). Light is
+    answered the same way, so a dark system setting never half-darkens the app."""
+    dark = is_dark()
+    if dark:
+        st.markdown(f"<style>{DARK_CSS}</style>", unsafe_allow_html=True)
+    with st.container(key="mode_js"):
+        st.html(_MODE_JS.replace("__DARK__", "true" if dark else "false"),
+                unsafe_allow_javascript=True)
+
+
+_MODE_JS = """<script>
+(function () {
+  var P = window.parent || window;
+  if (!P.__freoMatchMedia) P.__freoMatchMedia = P.matchMedia.bind(P);
+  P.__freoDark = __DARK__;
+  P.matchMedia = function (q) {
+    if (String(q).indexOf("prefers-color-scheme") < 0) return P.__freoMatchMedia(q);
+    var on = String(q).indexOf("dark") >= 0 ? P.__freoDark : !P.__freoDark, noop = function () {};
+    return {matches: on, media: q, onchange: null, addEventListener: noop,
+            removeEventListener: noop, addListener: noop, removeListener: noop,
+            dispatchEvent: function () { return false; }};
+  };
+  if (P.__freoShownDark !== P.__freoDark) {
+    P.__freoShownDark = P.__freoDark;
+    P.dispatchEvent(new Event("afterprint"));
+  }
+})();
+</script>"""
+
 def result_colour(result):
     """Win green, loss red, a draw grey (every chip also carries its letter)."""
     return {"W": COLORS["win"], "L": COLORS["loss"]}.get(result, COLORS["neutral"])
@@ -124,7 +229,8 @@ def inject_css():
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap');
           :root { --brand:#331C54; --brand-2:#4A2A78; --maroon:#8B0042; --ink:#1A1A1A;
                   --muted:#525252; --line:#E6E6E6; --canvas:#F7F7F7;
-                  --freo:#61359C; --opp:#008CA2; }
+                  --freo:#61359C; --opp:#008CA2;
+                  --card:#FFFFFF; --tint:#F4F1F8; --rule:#EFEFEF; --accent:#331C54; }
           html, body, .stApp, .stApp button, .stApp input, .stApp textarea, .stApp select,
           .stApp [data-testid="stMarkdownContainer"], .stApp [data-baseweb] {
             font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -175,7 +281,7 @@ def inject_css():
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
           div[class*="st-key-card_"],
           div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:#FFFFFF; border:none !important; border-radius:4px; box-shadow:none;
+            background:var(--card); border:none !important; border-radius:4px; box-shadow:none;
           }   /* white on the light page is boundary enough: no border, no shadow */
           div[class*="st-key-card_"] { gap:2px; }
           div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
@@ -185,7 +291,7 @@ def inject_css():
           }
           .card-title span { color:var(--muted); font-weight:400; font-size:.75rem; letter-spacing:0; }
           .card-title .key { color:var(--muted); margin-left:8px; white-space:nowrap; font-size:.75rem; font-weight:500; }
-          .card-take, .card-title .take { display:block; font-size:.8rem; font-weight:600; color:var(--brand);
+          .card-take, .card-title .take { display:block; font-size:.8rem; font-weight:600; color:var(--accent);
             line-height:1.35; margin:0 0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
             letter-spacing:0; }
           .card-title .key i { display:inline-block; width:9px; height:9px; border-radius:2px;
@@ -223,7 +329,7 @@ def inject_css():
 
           /* Headline tiles */
           .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:8px; }
-          .cv-tile { background:#fff; border:none; border-radius:4px;
+          .cv-tile { background:var(--card); border:none; border-radius:4px;
             padding:6px 8px 4px; min-width:0; box-shadow:none; }
           .cv-tile .lbl { font-size:.75rem; font-weight:700; color:var(--muted); white-space:nowrap; overflow:hidden;
             text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.04em; }
@@ -253,15 +359,16 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .wa-sub) { margin-bottom:0 !important; }
           .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
           .op-grid th { text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.07em;
-            color:var(--brand); padding:4px 6px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
-          .op-grid td { padding:4px 6px; border-bottom:1px solid #EFEFEF; vertical-align:middle; }
+            color:var(--accent); padding:4px 6px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--card); }
+          .op-grid td { padding:4px 6px; border-bottom:1px solid var(--rule); vertical-align:middle; }
           .op-name { font-weight:600; white-space:nowrap; }
           .op-num { font-weight:700; color:var(--ink); white-space:nowrap; }
 
           /* Window-size reporter: no visible footprint */
           div[data-testid="stElementContainer"]:has(iframe[title*="viewport"]),
           div[data-testid="stElementContainer"]:has(iframe[title*="cookie"]),
-          div[data-testid="stElementContainer"]:has(iframe[title*="tour"]) {
+          div[data-testid="stElementContainer"]:has(iframe[title*="tour"]),
+          [data-testid="stLayoutWrapper"]:has(> .st-key-mode_js), .st-key-mode_js {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
 
           /* Shown while the app waits for the window size on its first run */
@@ -366,7 +473,7 @@ def inject_css():
           .tp-lbl { font-size:.75rem; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .tp-bar { position:relative; height:9px; border-radius:5px; background:var(--opp); overflow:visible; }
           .tp-bar i { position:absolute; left:0; top:0; bottom:0; background:var(--freo); border-radius:5px 0 0 5px;
-            border-right:2px solid #fff; }
+            border-right:2px solid var(--card); }
           .tp-bar em { position:absolute; top:-3px; width:2px; height:15px; background:var(--ink); margin-left:-1px; }
 
           /* Scout report */
@@ -382,10 +489,10 @@ def inject_css():
           .wa-head .dot { width:30px; height:30px; border-radius:50%; border:1.5px solid #fff; }
           .wa-head b { font-size:1rem; font-weight:800; letter-spacing:-.2px; }
           .wa-head span { display:block; font-size:.75rem; color:rgba(255,255,255,.72); }
-          .wa-insight { background:#F4F1F8; border-left:4px solid var(--brand); border-radius:8px;
+          .wa-insight { background:var(--tint); border-left:4px solid var(--brand); border-radius:8px;
             padding:9px 11px; font-size:.82rem; line-height:1.4; color:var(--ink); }
           .wa-insight .tag { font-size:.75rem; font-weight:700; letter-spacing:.08em;
-            text-transform:uppercase; color:var(--brand); margin-bottom:3px; }
+            text-transform:uppercase; color:var(--accent); margin-bottom:3px; }
           .wa-insight b { color:var(--ink); }
           .wa-rot { display:grid; }
           .wa-rot-item { grid-area:1 / 1; opacity:0; }
@@ -404,20 +511,20 @@ def inject_css():
           [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li { font-size:.84rem; }
 
           div[data-testid="stButton"] button { min-height:30px; border-radius:8px; padding:4px 10px;
-            justify-content:flex-start; text-align:left; background:#fff; border:1px solid var(--line); }
-          div[data-testid="stButton"] button:hover { border-color:var(--brand); color:var(--brand); }
+            justify-content:flex-start; text-align:left; background:var(--card); border:1px solid var(--line); }
+          div[data-testid="stButton"] button:hover { border-color:var(--accent); color:var(--accent); }
           div[data-testid="stButton"] button p { font-size:.78rem; font-weight:500; text-align:left; }
           div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
           div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
-          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:34px; height:34px; min-height:34px;
-            padding:0; border-radius:50%; justify-content:center; border:1.5px solid var(--brand);
-            color:var(--brand); }
-          .st-key-signout_btn button:hover, .st-key-usage_btn button:hover { background:var(--brand); color:#fff; }
+          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button, .st-key-mode_btn button { width:34px; height:34px; min-height:34px;
+            padding:0; border-radius:50%; justify-content:center; border:1.5px solid var(--accent);
+            color:var(--accent); }
+          .st-key-signout_btn button:hover, .st-key-usage_btn button:hover, .st-key-mode_btn button:hover { background:var(--brand); color:#fff; }
           .st-key-tour_btn button p { font-size:1rem; font-weight:800; text-align:center; }
           .st-key-tour_btn button:hover { background:var(--brand); color:#fff; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
           .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
-          .wa-wait { font-size:.8rem; font-weight:600; color:var(--brand); margin:2px 0 4px; }
+          .wa-wait { font-size:.8rem; font-weight:600; color:var(--accent); margin:2px 0 4px; }
           .wa-wait .wa-doing { color:var(--muted); font-weight:500; }
           /* Spinning footy: fixed size, so the line doesn't shift as it turns. */
           .wa-ball { display:inline-block; width:1.15em; height:1.15em; vertical-align:-.25em;
@@ -475,7 +582,7 @@ def inject_phone_css():
           .st-key-topbar div[data-testid="stColumn"]:nth-child(2) { flex:1 1 0 !important; }
           .st-key-season div[data-testid="stButtonGroup"] button { padding:4px 8px; }
           .st-key-topbar div[data-testid="stColumn"]:nth-child(n+3) { flex:0 0 40px !important; }
-          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:40px; height:40px; min-height:40px; }
+          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button, .st-key-mode_btn button { width:40px; height:40px; min-height:40px; }
           div[data-testid="stButtonGroup"] button { min-height:40px; padding:4px 10px; }
           div[data-testid="stButtonGroup"] button p { font-size:.85rem; }
           div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:40px; font-size:.9rem; }
@@ -520,7 +627,7 @@ def inject_tablet_css():
           div[data-testid="stButton"] button { min-height:38px; }
           div[data-testid="stButtonGroup"] button { min-height:36px; }
           div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:36px; }
-          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:38px; height:38px; min-height:38px; }
+          .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button, .st-key-mode_btn button { width:38px; height:38px; min-height:38px; }
           div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }
         </style>
@@ -535,7 +642,7 @@ def card_title(text, note="", keys=None, takeaway=""):
     one line, shown under the title."""
     note_html = f" <span>{html.escape(note)}</span>" if note else ""
     key_html = "".join(
-        f'<span class="key"><i style="background:{c}"></i>{html.escape(l)}</span>'
+        f'<span class="key"><i style="background:{_to_dark(c) if is_dark() else c}"></i>{html.escape(l)}</span>'
         for l, c in (keys or []))
     take_html = f'<b class="take" title="{html.escape(takeaway)}">{html.escape(takeaway)}</b>' \
         if takeaway else ""
@@ -601,7 +708,7 @@ def _sparkline(values, labels, highlight=None):
     return (f'<svg viewBox="0 0 {w} {h}" preserveAspectRatio="none">'
             f'<polyline points="{line}" fill="none" stroke="{COLORS["spark"]}" '
             f'stroke-width="1.5" vector-effect="non-scaling-stroke"/>'
-            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="2.5" fill="{COLORS["freo"]}"/>'
+            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="2.5" style="fill:var(--freo)"/>'
             f'{dots}</svg>')
 
 

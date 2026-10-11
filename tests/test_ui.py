@@ -191,3 +191,20 @@ def test_stay_signed_in_and_sign_out(browser, server):
     pg.wait_for_selector("input[type=password]", timeout=60000)
     assert not [c for c in ctx.cookies() if c["name"] == "freo_coach_session"]
     ctx.close()
+
+
+def test_dark_mode_switches_streamlit_too(browser, server):
+    """The moon button darkens our page and Streamlit's own widgets; a dark
+    system setting alone doesn't (the app opens light until asked)."""
+    pg = open_app(browser, server, 1440, 790, color_scheme="dark")
+    look = ("() => [getComputedStyle(document.querySelector('.stApp')).backgroundColor,"
+            " getComputedStyle(document.querySelector('[class*=st-key-card_]')).backgroundColor]")
+    assert pg.evaluate(look) == ["rgb(247, 247, 247)", "rgb(255, 255, 255)"]
+    pg.locator(".st-key-mode_btn button:visible").first.click()
+    pg.wait_for_function("getComputedStyle(document.querySelector('.stApp')).backgroundColor"
+                         " === 'rgb(18, 16, 22)'", timeout=20000)
+    assert pg.evaluate(look)[1] == "rgb(30, 26, 38)"
+    pg.wait_for_function("location.search.includes('theme=dark')", timeout=20000)
+    for query in PAGES:
+        check_page(pg, server, query + "&theme=dark", 1440, 790)
+    pg.context.close()

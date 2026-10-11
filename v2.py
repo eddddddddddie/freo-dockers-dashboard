@@ -27,7 +27,7 @@ import data as D
 import nav
 import takeaways as T
 import views as V
-from theme import (COLORS, _avatar, _ordinal, _sparkline, card_title, club_colours, compare_table,
+from theme import (COLORS, is_dark, _avatar, _ordinal, _sparkline, card_title, club_colours, compare_table,
                    record_text, result_colour, tape)
 import marks
 
@@ -106,6 +106,18 @@ def apply(ctx):
     elif not st.session_state.get("_v2_url_loaded"):
         _apply(dict(st.query_params), ctx, from_url=True)
     st.session_state["_v2_url_loaded"] = True
+
+
+def _flip_mode():
+    st.session_state["dark"] = not is_dark()
+
+
+def mode_button():
+    """Light or dark, top right (theme.inject_mode does the switching). A
+    callback, so the run it starts already draws the new mode."""
+    dark = is_dark()
+    st.button("", icon=":material/light_mode:" if dark else ":material/dark_mode:", key="mode_btn",
+              help="Light mode" if dark else "Dark mode", on_click=_flip_mode)
 
 
 def write_url(season, place, **picks):
@@ -763,8 +775,8 @@ def compare(ctx, season, pdf, a, b):
         r = r.iloc[0]
         rank = lambda k: _ordinal(int(r[k])) if r[k] == r[k] and r[k] else "-"   # noqa: E731
         items.append({"label": label,
-                      "value": (f'<span style="color:{CH.PAIR[0]}">{r["avg_a"]:.1f}</span>'
-                                f'<small> v </small><span style="color:{CH.PAIR[1]}">{r["avg_b"]:.1f}</span>'),
+                      "value": (f'<span style="color:var(--freo)">{r["avg_a"]:.1f}</span>'   # CH.PAIR,
+                                f'<small> v </small><span style="color:var(--opp)">{r["avg_b"]:.1f}</span>'),
                       "note": f"{a.split()[-1]} {rank('rank_a')} · {b.split()[-1]} {rank('rank_b')} in squad"})
     tiles(items)
     trend_stats = {k: v for k, v in V.PLAYER_TREND_STATS.items() if v in pdf.columns}
@@ -894,12 +906,12 @@ def run(ctx):
 
     with st.container(key="topbar"):
         if compact:   # two lines: the seasons and icons, then the place across the width
-            h2, _sp, h5, h6 = st.columns([1.1, 1.3, 0.3, 0.3], vertical_alignment="center")
+            h2, _sp, hm, h5, h6 = st.columns([1.1, 1.0, 0.3, 0.3, 0.3], vertical_alignment="center")
             h3 = st.container()
         else:
             sw = 0.55 * len(seasons)
-            hb, h2, h3, _g, h4, h5, h6 = st.columns([2.5, sw, 4.6, max(0.2, 3.2 - sw), 0.3, 0.3, 0.3],
-                                                    vertical_alignment="center")
+            hb, h2, h3, _g, h4, hm, h5, h6 = st.columns(
+                [2.5, sw, 4.6, max(0.2, 2.9 - sw), 0.3, 0.3, 0.3, 0.3], vertical_alignment="center")
             with hb:
                 ctx["brand_title"]()
             with h4:
@@ -915,6 +927,8 @@ def run(ctx):
         else:         # tablets put the links on their own line (compact), desktops in the bar
             place = st.segmented_control("Place", PLACES, key="v2_place",
                                          label_visibility="collapsed") or PLACES[0]
+    with hm:
+        mode_button()
     with h5:
         if st.button("?", key="tour_btn", help="Take the app tour"):
             ctx["tour_replay"]()
@@ -929,6 +943,8 @@ def run(ctx):
     picks = {}
     with main:
         focus = _place(ctx, place, season, baseline, picks)
+    if is_dark():
+        picks["theme"] = "dark"
     write_url(season, place, **picks)
     if DOCK:
         dock(ctx, season, baseline, focus)
@@ -1041,7 +1057,7 @@ def inject_css(dock_mode, win_h):
           @media (max-width: 1250px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }} }}
           @media (max-width: 699px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }} }}
           .cv-tiles.v2 .fr {{ font-size:.75rem; color:var(--muted); }}
-          .st-key-v2_leaders {{ background:#fff; border-radius:4px; padding:10px 14px 6px; }}
+          .st-key-v2_leaders {{ background:var(--card); border-radius:4px; padding:10px 14px 6px; }}
           .v2-line {{ font-size:.85rem; color:var(--muted); margin:2px 0 4px; }}
           .v2-line b {{ color:var(--ink); }}
           .cv-tiles.v2 .val small {{ font-size:.7em; color:var(--muted); font-weight:600; }}
@@ -1051,13 +1067,13 @@ def inject_css(dock_mode, win_h):
             position:sticky; top:8px; align-self:flex-start; }}
           /* Docked Wharf-ai: a bar along the bottom, opening over the page. */
           .st-key-wa_dock, .st-key-wa_dock_open {{ position:fixed; left:0; right:0; bottom:0; z-index:60;
-            background:#fff; padding:10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+            background:var(--card); padding:10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
             box-shadow:0 -6px 18px rgba(26,26,26,.14); }}
           .st-key-wa_dock button {{ background:var(--brand) !important; color:#fff !important;
             border:none !important; min-height:44px; }}
           .st-key-wa_dock button p {{ color:#fff !important; font-weight:700; }}
           .st-key-wa_dock_open {{ top:12vh; overflow-y:auto; border-radius:12px 12px 0 0; }}
-          .st-key-wa_dock_open .st-key-card_wharfai {{ background:#fff; }}
+          .st-key-wa_dock_open .st-key-card_wharfai {{ background:var(--card); }}
         </style>
         """,
         unsafe_allow_html=True)
