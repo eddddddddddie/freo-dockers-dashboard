@@ -358,7 +358,7 @@ def compare_last(logs, names, col, label, n=5):
     return f"Last {n}: " + ", ".join(parts) + f" {label.lower()} a game" if parts else ""
 
 
-# ---- Whole squad, all clubs, quarter-time check -------------------------------
+# ---- Whole squad ----------------------------------------------------------------
 def squad_map(pa, xcol, ycol, xlab, ylab):
     """'Most contested poss: Serong 13.2 · most metres gained: Young 498.1'."""
     if not len(pa):

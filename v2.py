@@ -1,6 +1,6 @@
-"""Coach View v2: five places around a coach's week.
+"""Freo In Numbers: four places around a coach's week.
 
-Last game, Next opponent, Our season, Players and Game day, with the simulated
+Last game, Next opponent, Our season and Players, with the simulated
 ground maps (heat maps, event spots, GPS running) and momentum charts on the
 pages they belong to, and Wharf-ai always visible: beside the page on a desktop or landscape
 tablet, docked to the bottom of the screen on a phone or portrait tablet. Pages
@@ -31,7 +31,7 @@ from theme import (COLORS, _avatar, _ordinal, _sparkline, card_title, club_colou
                    record_text, result_colour, tape)
 import marks
 
-PLACES = ["Last game", "Next opponent", "Our season", "Players", "Game day"]
+PLACES = ["Last game", "Next opponent", "Our season", "Players"]
 # The first option of the club, player and compare pickers (a real option, so it shows).
 SQUAD, NOBODY = "The squad", "Compare with..."
 SLUGS = {p: p.lower().replace(" ", "-") for p in PLACES}
@@ -52,6 +52,8 @@ def short_round(api_round):
 CHART_H = 300          # a card's chart height; pages scroll, so this never has to shrink
 TALL_H = 380
 DOCK = False           # set by run(): Wharf-ai docked to the bottom (phones, portrait tablets)
+PHONE = False          # set by run(): under 700px wide
+BAND_SLOT = None       # where the next band goes: the left of the band and pickers row (head)
 
 
 # ---- navigation ---------------------------------------------------------------
@@ -132,8 +134,26 @@ def band(title, sub="", lead=None, facts=(), form=None, avatars="", style="", cl
         chips = "".join(f'<i title="{html.escape(t)}" style="background:{result_colour(r)}">{r}</i>'
                         for r, t in form)
         parts.append(f'<div class="cv-stat" title="Last 5 results"><div class="cv-form">{chips}</div></div>')
-    st.markdown(f'<div class="cv-band v2 {cls}" style="{style}">{"".join(parts)}</div>',
-                unsafe_allow_html=True)
+    global BAND_SLOT
+    slot, BAND_SLOT = BAND_SLOT or st.container(), None
+    with slot:
+        st.markdown(f'<div class="cv-band v2 {cls}" style="{style}">{"".join(parts)}</div>',
+                    unsafe_allow_html=True)
+
+
+def head(*widths):
+    """The band and the page's pickers on one row, so no row holds a picker alone:
+    the band on the left (drawn later by band()), then one column per picker.
+    On a phone the pickers sit above the band. Returns the picker columns."""
+    global BAND_SLOT
+    if PHONE:
+        cols = st.columns(len(widths))
+        BAND_SLOT = st.container()
+        return cols
+    band_w = 4.4 - sum(widths)
+    band_col, *cols = st.columns([band_w, *widths], vertical_alignment="center")
+    BAND_SLOT = band_col
+    return cols
 
 
 def tiles(items):
@@ -877,13 +897,6 @@ def squad(ctx, season, baseline, pdf, games_slice):
     return f"the whole squad (player map and year on year), {season} season"
 
 
-def game_day(ctx, season):
-    band("Game day", "how Freo have gone from a margin at a break, every season",
-         lead=(str(len(ctx["team"])), "Games to compare"))
-    V.render_quarter_time(ctx["team"], ctx["seasons"])
-    return "the quarter-time check (how Freo have gone from a margin at a break)"
-
-
 def _plot(fig, key=None):
     return V._plot(fig, key=key)
 
@@ -891,10 +904,10 @@ def _plot(fig, key=None):
 # ---- the shell -----------------------------------------------------------------
 def run(ctx):
     """Draw v2. ctx: the app's data, helpers and the Wharf-ai panel."""
-    global DOCK
+    global DOCK, PHONE
     win_w, win_h = ctx["win"]
     DOCK = win_w < 1000 or win_h < 600
-    phone = win_w < 700
+    phone = PHONE = win_w < 700
     compact = win_w < 1000            # two-line top bar: one line can't hold the six places
     V.set_layout("phone" if phone else "split")      # reused cards: content heights, touch charts
     inject_css(DOCK, win_h)
@@ -907,7 +920,7 @@ def run(ctx):
             h3 = st.container()
         else:
             sw = 0.55 * len(seasons)
-            hb, h2, h3, _g, h4, h5, h6 = st.columns([1.7, sw, 6.2, max(0.2, 2.4 - sw), 0.3, 0.3, 0.3],
+            hb, h2, h3, _g, h4, h5, h6 = st.columns([2.5, sw, 4.6, max(0.2, 3.2 - sw), 0.3, 0.3, 0.3],
                                                     vertical_alignment="center")
             with hb:
                 ctx["brand_title"]()
@@ -959,7 +972,7 @@ def _place(ctx, place, season, baseline, picks):
         key = f"v2_game_{season}"
         if st.session_state.get(key) not in labels:
             st.session_state[key] = labels[0]
-        c, _ = st.columns([1.2, 3])
+        c, = head(1.15)
         label = c.selectbox("Game", labels, key=key, label_visibility="collapsed")
         pos = dict(choices)[label]
         picks["game"] = tdf["round"].iloc[pos]
@@ -971,17 +984,15 @@ def _place(ctx, place, season, baseline, picks):
             return None
         if st.session_state.get("v2_club") not in clubs:
             st.session_state["v2_club"] = clubs[0]
-        c, _ = st.columns([1.2, 3])
+        c, = head(1.0)
         club = c.selectbox("Club", clubs, key="v2_club", label_visibility="collapsed")
         picks["club"] = club
         return next_opponent(ctx, season, club)
-    if place == "Game day":
-        return game_day(ctx, season)
     # Our season and Players can be cut to a slice of games.
     if st.session_state.get("games_slice") not in D.GAME_SLICES:
         st.session_state["games_slice"] = D.GAME_SLICES[0]
     if place == "Our season":
-        c, _ = st.columns([1.2, 3])
+        c, = head(1.0)
         games_slice = c.selectbox("Games", D.GAME_SLICES, key="games_slice", label_visibility="collapsed",
                                   help="Work out every card from these games only")
         ctx["team_view"], ctx["player_view"] = D.slice_games(team, ctx["player_df"], games_slice, ctx["league"])
@@ -993,7 +1004,7 @@ def _place(ctx, place, season, baseline, picks):
         if st.session_state.get("v2_player") not in names:
             st.session_state["v2_player"] = SQUAD
         player = st.session_state.get("v2_player")
-        cols = st.columns([1.2, 1.2, 1, 1.6] if player != SQUAD else [1.2, 1, 3], vertical_alignment="center")
+        cols = head(1.0, 1.0, 0.9) if player != SQUAD else head(1.0, 0.9)
         player = cols[0].selectbox("Player", [SQUAD] + names, key="v2_player", label_visibility="collapsed")
         player = None if player == SQUAD else player
         vs = None
@@ -1043,6 +1054,9 @@ def inject_css(dock_mode, win_h):
           .card-title, .card-take, .card-title .take, .cv-band .ttl, .cv-band .ttl small {{ white-space:normal !important; }}
           .cv-band.v2 {{ height:auto; min-height:56px; flex-wrap:wrap; row-gap:6px; margin:6px 0 4px; }}
           .cv-band.v2 .cv-stat span {{ display:block; }}
+          .cv-band.v2 .cv-stat .cv-res {{ display:inline-block; line-height:1.35; margin-bottom:4px; }}
+          /* Phones: the title (beside any photos) takes the first line, the numbers wrap under it. */
+          @media (max-width: 699px) {{ .cv-band.v2 .ttl {{ flex:1 1 calc(100% - 120px) !important; min-width:0; }} }}
           /* Tiles fill whole rows: 6, then 3, then 2 a row as the window narrows. */
           .cv-tiles.v2 {{ grid-template-columns:repeat(6, minmax(0, 1fr)) !important; margin:6px 0; }}
           @media (max-width: 1250px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }} }}

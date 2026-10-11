@@ -16,7 +16,7 @@ SIZES = [(1440, 790), (1920, 960), (1280, 680), (1680, 950)]
 TOUR_SEEN = "localStorage.setItem('freoCoachTourDone_v2', '1')"   # skip the tour
 PAGES = ["place=last-game&game=GF", "place=next-opponent", "place=next-opponent&club=Sydney",
          "place=our-season", "place=players", "place=players&player=Caleb%20Serong",
-         "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw", "place=game-day"]
+         "place=players&player=Caleb%20Serong&vs=Andrew%20Brayshaw"]
 
 
 @pytest.fixture(scope="module")

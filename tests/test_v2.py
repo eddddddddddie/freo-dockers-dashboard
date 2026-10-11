@@ -1,4 +1,4 @@
-"""Coach View v2: every place and its pages draw without an error, moves
+"""The pages: every place and its pages draw without an error, moves
 follow the one click rule, and Wharf-ai is on every page (headless, AppTest)."""
 
 import os
@@ -41,7 +41,6 @@ def _wharf_ai_shown(at):
     {"place": "players"},
     {"place": "players", "player": "Caleb Serong"},
     {"place": "players", "player": "Caleb Serong", "vs": "Andrew Brayshaw"},
-    {"place": "game-day"},
 ])
 def test_every_place_draws_with_wharf_ai(query):
     at = _app({"season": "2026", **query})
@@ -67,12 +66,11 @@ def test_ground_maps_are_simulated_and_switch_modes():
         assert not at.exception, (mode, at.exception)
 
 
-def test_game_day_check_and_no_usage_log_for_others():
+def test_no_usage_log_for_others_and_game_day_is_gone():
     at = _app({"season": "2026", "place": "game-day"})
+    assert not at.exception
     assert not [b for b in at.button if b.key == "usage_btn"]     # password sign-in: not an admin
-    at = at.number_input(key="qt_margin").set_value(-12).run()    # behind by 2 goals at half time
-    assert not at.exception, at.exception
-
+    assert at.session_state["v2_place"] == "Last game"            # an old Game day link lands here
 
 def test_places_switch_and_the_address_follows():
     at = _app({"season": "2026", "place": "last-game"})

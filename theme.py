@@ -1,4 +1,4 @@
-"""Colours, Plotly styling, CSS and HTML components for the Coach View.
+"""Colours, Plotly styling, CSS and HTML components for Freo In Numbers.
 
 Styled after the club website's look (flat deep purple #331C54 header and
 navigation, #F7F7F7 page, white cards with a soft shadow, bold Inter headings
@@ -150,7 +150,7 @@ def inject_css():
           .block-container div[data-testid="stElementContainer"]:has(> .stMarkdown [data-testid="stMarkdownContainer"] > style:only-child) {
             position:absolute; width:0; height:0; overflow:hidden; }
           .cv-brand { font-family:"Source Serif 4", Georgia, "Times New Roman", serif; font-weight:600;
-            font-size:1.5rem; line-height:1; color:#fff; letter-spacing:-.5px; white-space:nowrap;
+            font-size:1.95rem; line-height:1; color:#fff; letter-spacing:-.5px; white-space:nowrap;
             overflow:hidden; text-overflow:ellipsis; }
           .cv-brand i { font-style:italic; }
           .st-key-topbar [data-testid="stButtonGroup"] > div { gap:2px; }
@@ -250,7 +250,6 @@ def inject_css():
           div[data-testid="stMarkdownContainer"]:has(> .wa-rot),
           div[data-testid="stMarkdownContainer"]:has(> .card-title),
           div[data-testid="stMarkdownContainer"]:has(> .tp),
-          div[data-testid="stMarkdownContainer"]:has(> .qt-box),
           div[data-testid="stMarkdownContainer"]:has(> .wa-sub) { margin-bottom:0 !important; }
           .op-grid { width:100%; border-collapse:collapse; font-size:.8rem; }
           .op-grid th { text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.07em;
@@ -376,10 +375,6 @@ def inject_css():
           .cv-tile .fr { font-size:.75rem; color:var(--muted); margin-top:3px; }
 
           /* Quarter-time check */
-          .qt-big { font-size:2.6rem; font-weight:800; letter-spacing:-1px; color:var(--ink); line-height:1; margin-top:6px; }
-          .qt-sub { color:var(--muted); font-size:.85rem; margin:4px 0 10px; }
-          .qt-line { font-size:.9rem; color:var(--ink); margin:3px 0; }
-          .qt-line b { color:var(--brand); }
 
           /* Wharf-ai panel */
           .wa-head { background:var(--brand);
@@ -568,7 +563,7 @@ def login_hero():
                     for i, w in enumerate(words))
     title += f'<span style="animation-delay:{0.08 + 0.09 * len(words):.2f}s"><i>Freo</i></span>'
     st.markdown(
-        f'<div class="sp-hero"><div class="sp-top"><b>Coach View</b>'
+        f'<div class="sp-hero"><div class="sp-top"><b><i>Freo</i> In Numbers</b>'
         f'<span>Fremantle Dockers · performance analysis</span></div>'
         f'<div class="sp-title">{title}</div>'
         f'<div class="sp-sub">Every game, every player and every club, '
@@ -578,7 +573,7 @@ def login_hero():
 
 def brand_title():
     """The bar's title, set like the club site's headline: a serif, one word in italic."""
-    st.markdown('<div class="cv-brand"><i>Freo</i> Coach View</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cv-brand"><i>Freo</i> In Numbers</div>', unsafe_allow_html=True)
 
 
 def _sparkline(values, labels, highlight=None):
@@ -648,7 +643,8 @@ def ticker(parts, cls="", speed=45):
 LOGIN_TICKER = [
     "Every Freo game, quarter by quarter", "Player form against their own season average",
     "Scout any club against the league", "Compare two players side by side",
-    "A quarter-time check for game day", "Ask Wharf-ai anything about the numbers",
+    "Momentum through every game", "Simulate the next match 10,000 times",
+    "Ask Wharf-ai anything about the numbers",
     "Every number calculated from the data, never guessed",
 ]
 

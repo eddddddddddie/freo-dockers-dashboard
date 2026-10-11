@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Fremantle Dockers Performance Dashboard
 
-A "Coach View" Streamlit dashboard of Fremantle Dockers (AFL) stats in five places around a
-coach's week (Last game, Next opponent, Our season, Players, Game day), with momentum charts, a
+"Freo In Numbers" (it was the Coach View): a Streamlit showcase of Fremantle Dockers (AFL) stats
+in four places (Last game, Next opponent, Our season, Players), with momentum charts, a
 match simulator, SIMULATED ground maps, and a chatbot (Wharf-ai) that answers questions grounded
 in the data.
 Feature-by-feature descriptions, measurements and history live in `docs/design_notes.md`.
@@ -74,12 +74,12 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 
 ## Code map
 - Entry and wiring: `app.py` (sign-in gate, window size, the Wharf-ai panel as a fragment) hands
-  over to `v2.run`, which draws the top bar, the five places and the panel or dock.
+  over to `v2.run`, which draws the top bar, the four places and the panel or dock.
 - Data: `data.py` loads and merges every CSV (cached) and computes all derived tables, tiles and
   records. Pages, takeaways, insights and Wharf-ai's tools all read from it, so stat logic belongs
   here, not in pages or charts.
 - Pages: `v2.py` (places, band, tiles, card headers, navigation, the dock), reusing a few cards
-  from `views.py` (match players table, player game log, quarter-time check, ground cards).
+  from `views.py` (match players table, player game log, ground cards).
 - Presentation: `charts.py` (Plotly figures), `theme.py` (CSS, colours, HTML blocks), `layout.py`
   (window size and layout mode, for the CSS), `nav.py` (`nav.go` for reused cards, Back/Forward),
   `takeaways.py` (card one-liners and chart focus), `marks.py` (band drawings), `sim.py`
@@ -136,7 +136,6 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - Correlations ("what drives our margin") are labelled association, not cause.
 - Game slices (`D.slice_games`): the data is cut in every season, so tiles compare with the same
   slice of the baseline season; an empty slice shows a message instead of cards.
-- The quarter-time check matches games on score only; there are no quarter-by-quarter stats.
 
 ## AFL Tables scraper (freo_scraper.py)
 - `get_match_list` reads `teams/fremantle/allgames.html` by fixed column position (0-12, 9 skipped);
@@ -147,7 +146,8 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - It warns (doesn't stop) when kicks + handballs != disposals or a game has no Freo table.
 
 ## The pages (v2.py)
-- Five places around a coach's week: Last game, Next opponent, Our season, Players, Game day.
+- Four places: Last game, Next opponent, Our season, Players (the showcase is the first three;
+  Game day was dropped 2026-10-11, and an old link to it opens Last game).
   The momentum charts and the simulated ground cards are folded into them: Next opponent shows
   the club's last 5 games as momentum small multiples (`charts.momentum_multiples`, from
   `data.club_game_events`) beside their heat map. The old four views were deleted on 2026-10-11.
@@ -161,6 +161,9 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   with `v2.go(place=...)`. Cards reused from `views.py` call `nav.go(view=...)`; `v2.apply`
   translates those (Match -> Last game, Player -> Players, Scout -> Next opponent), which also
   keeps old `?view=` links working.
+- `v2.head(*widths)` puts a page's pickers on the band's row (the band left, pickers right;
+  above the band on a phone), so no row holds a picker alone. The bar's title is "*Freo* In
+  Numbers" (`theme.brand_title`).
 - Picker first options are real strings (`SQUAD`, `NOBODY`), not None: a None value shows
   Streamlit's "Choose an option" placeholder. Next opponent opens on the first club (Adelaide).
 - Phones get a two-line top bar (seasons and icons, then the place picker): the phone CSS
@@ -256,5 +259,5 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
 - In written text and UI copy, don't use em dashes.
 
 ## Later
-- Live in-game data is licensed (Champion Data) and out of scope; in-game use is the manual
-  quarter-time check.
+- Live in-game data is licensed (Champion Data) and out of scope. The manual quarter-time check
+  (Game day) was dropped on 2026-10-11 to keep the showcase to its strongest pages.

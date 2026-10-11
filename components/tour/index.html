@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><title>tour</title></head>
 <body style="margin:0">
 <script>
-// Guided tour of the Coach View (driver.js, loaded into the app page).
+// Guided tour of Freo In Numbers (driver.js, loaded into the app page).
 // First visit in a browser: a small prompt points at the ? button ("New here?")
 // and the button pulses; "Take the tour" starts it, closing the prompt dismisses
 // it. Either way it is remembered (localStorage) and not shown again. The full
@@ -19,10 +19,10 @@
   }
 
   var STEPS = [
-    {title: "Welcome to the Coach View",
-     text: "Five places around a coach's week, with Wharf-ai, an analyst you can question, always beside the page. This quick tour shows the page you are on. Use the arrow keys or the buttons; Esc skips it."},
-    {el: ".st-key-v2_place", title: "Five places",
-     text: "Last game (the review), Next opponent (the briefing and a simulated match), Our season (the trends), Players (squad, profiles and comparisons) and Game day (the quarter-time check). The web address keeps your place, so you can bookmark or send any page."},
+    {title: "Welcome to Freo In Numbers",
+     text: "Four places around a coach's week, with Wharf-ai, an analyst you can question, always beside the page. This quick tour shows the page you are on. Use the arrow keys or the buttons; Esc skips it."},
+    {el: ".st-key-v2_place", title: "Four places",
+     text: "Last game (the review), Next opponent (the briefing and a simulated match), Our season (the trends) and Players (squad, profiles and comparisons). The web address keeps your place, so you can bookmark or send any page."},
     {el: ".st-key-season", title: "Pick a season",
      text: "Every number on every page follows the season, compared with the one before."},
     {el: ".cv-band", title: "The band",
@@ -53,10 +53,10 @@
 
   // Phones: one scrolling column, Wharf-ai docked at the bottom.
   var PHONE_STEPS = [
-    {title: "Welcome to the Coach View",
-     text: "Five places around a coach's week, with Wharf-ai, an analyst you can question, docked at the bottom. This quick tour shows the page you are on."},
-    {el: ".st-key-v2_place", title: "Five places",
-     text: "Last game, Next opponent, Our season, Players and Game day. Pick one here."},
+    {title: "Welcome to Freo In Numbers",
+     text: "Four places around a coach's week, with Wharf-ai, an analyst you can question, docked at the bottom. This quick tour shows the page you are on."},
+    {el: ".st-key-v2_place", title: "Four places",
+     text: "Last game, Next opponent, Our season and Players. Pick one here."},
     {el: ".st-key-season", title: "Pick a season", text: "Switch seasons; every number follows."},
     {el: ".cv-band", title: "At a glance", text: "The page's headline numbers."},
     {el: ".cv-tiles", title: "Key numbers",
@@ -132,7 +132,7 @@
       showButtons: ["next", "close"], doneBtnText: "Take the tour",
       steps: [{element: ".st-key-tour_btn", popover: {
         title: "New here?",
-        description: "Take a one-minute tour of the Coach View. You can start it any time with this ? button.",
+        description: "Take a one-minute tour of Freo In Numbers. You can start it any time with this ? button.",
         side: P.__freoTourPhone ? "bottom" : "left", align: P.__freoTourPhone ? "end" : "start"}}],
       onNextClick: function () { take = true; d.destroy(); },
       onDestroyed: function () {

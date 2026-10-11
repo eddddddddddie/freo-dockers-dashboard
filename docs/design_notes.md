@@ -560,3 +560,15 @@ so every returning visitor is offered it once.
   is the lever's alone (about 0.1 s). Effects are small and honest: at the top of each slider
   Freo's win chance against Adelaide moves 2 to 4 points, because a stat moves with the others
   held still. Pressure acts and clangers are left out (the model's weights on them are mixed).
+
+### Four places and a new name (2026-10-11)
+- Game day (the quarter-time check) is gone, to keep the showcase on Last game, Next opponent
+  and Our season (Players stays for the one click rule). Removed with it: `views.render_quarter_time`,
+  `data.similar_positions` / `break_margins`, `charts.break_scatter` and their CSS and test.
+  Wharf-ai still answers quarter questions from its own tools.
+- The picker row under the top bar held only a dropdown: `v2.head` now puts the pickers on the
+  band's row, to its right (above it on a phone).
+- The result pill on Last game sat on its RESULT label; it is now an inline block with room under it.
+- Renamed Freo In Numbers ("Freo" in italic, 1.95rem, was 1.5rem) in the bar, the browser tab, the
+  sign-in strip, the loading line and the tour. The phone band gives the title its own first line
+  (the comparison band's title had been squeezed to a word a line beside the two photos).

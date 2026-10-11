@@ -123,7 +123,7 @@ def build_cases():
 
 
 def newer_cases(t, p):
-    """The pickers' whole-list pages (squad, clubs, quarter-time), draws, and the
+    """Questions from the old whole-list pages (squad, clubs, quarter-time), draws, and the
     opposition's players (opp_players)."""
     t24, t26 = t[t["season"] == 2024], t[t["season"] == S]
     w24, l24 = int((t24["result"] == "W").sum()), int((t24["result"] == "L").sum())

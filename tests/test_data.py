@@ -69,12 +69,6 @@ def test_match_tiles_compare_one_game_with_season(team):
     assert t["value"] == pytest.approx(g["freo_clearances"] - g["opp_clearances"])
 
 
-def test_similar_positions_counts(team):
-    games, sm = D.similar_positions(team, "Half time", 0, 6)
-    assert sm["games"] == len(games) == sm["wins"] + sm["losses"]
-    assert (games["Q2"].abs() <= 6).all()
-
-
 def test_league_file_if_present():
     lg = D.load_league()
     if lg is None:

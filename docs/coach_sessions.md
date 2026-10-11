@@ -1,11 +1,11 @@
-# Coach View: coach and analyst sessions
+# Freo In Numbers: coach and analyst sessions
 
 A script for 30-minute sessions with 2 or 3 coaches or analysts. The goal is to see where the
-Coach View helps, where people hesitate or look in the wrong place, and what they want that it
+app helps, where people hesitate or look in the wrong place, and what they want that it
 doesn't show. Watch and take notes; don't teach the app during the tasks.
 
-Updated 11 October 2026 for the five places (Last game, Next opponent, Our season, Players,
-Game day) in the purple top bar, the Games picker on Our season and Players (all, home, away,
+Updated 11 October 2026 for the four places (Last game, Next opponent, Our season, Players)
+in the purple top bar, the Games picker on Our season and Players (all, home, away,
 finals, wins, losses, v top 8, last 10), momentum charts, the match simulator and its what-if
 sliders, the SIMULATED ground maps, the Ask buttons on every card, and Wharf-ai always in view.
 
@@ -39,7 +39,7 @@ if the data has changed since.
 
 | # | Task (read it out) | Expected answer (2026) | Where it is | Tests |
 |---|---|---|---|---|
-| 1 | "How did the season go, in one sentence?" | 21-6; minor premiers on 19-4 (137.2%); lost the grand final to Brisbane by 7, 89-96. | Our season band; Next opponent for the ladder | Warm-up: the band and the five places |
+| 1 | "How did the season go, in one sentence?" | 21-6; minor premiers on 19-4 (137.2%); lost the grand final to Brisbane by 7, 89-96. | Our season band; Next opponent for the ladder | Warm-up: the band and the four places |
 | 2 | "Why did we lose the grand final?" | Kicked 12.17 (41.4%) to Brisbane's 14.12 (53.8%) from 3 more scoring shots; won inside 50s 62-48 and clearances 45-31; led by 10 at three quarter time. | Last game (it opens on the grand final): tiles, Tale of the tape | Reading the band, tiles and tale of the tape |
 | 3 | "When did the grand final turn?" | Up 17 in the last quarter, lost by 7: Brisbane kicked 4.0 unanswered. | Last game: Momentum (the shaded run) | Whether the momentum chart reads without help |
 | 4 | "Which of our players had a big game in the grand final, compared with what they normally do?" | Hayden Young (9 tackles, +157%; also metres gained and pressure acts), Isaiah Dudley (5 inside 50s, 406 metres gained), Murphy Reid, Shai Bolton (686 metres gained). The tinted cells in the players table. | Last game: Players this game | Whether the tinted cells read as "above his own average"; sorting by a column |
@@ -56,8 +56,8 @@ coach?" (1 to 5).
 
 - **Where they look first.** Do they read the takeaway line under each card title, or the
   chart? Do they notice the highlighted bar or row that matches it?
-- **Navigation.** Do they find the five places in the top bar and the picker under it? Do they
-  go to Game day for the quarter-time check, and The squad in the Players picker?
+- **Navigation.** Do they find the four places in the top bar and the picker beside the band?
+  Do they find The squad in the Players picker?
 - **The Games picker.** Do they find it for task 4 without help? Do they notice the band says
   "vs top 8 only" afterwards, and remember to set it back?
 - **Clicking.** Do they try clicking charts? Do they find that any game opens Last game for it

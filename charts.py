@@ -834,33 +834,6 @@ VS_SELF_MIN_AVG = {"disposals": 5, "contested_poss": 2, "metres_gained": 60, "ta
                    "clearances": 1, "inside_50s": 1.5, "goals": 1.5, "rating_points": 6}
 
 
-# ---- Quarter-time check ---------------------------------------------------------
-def break_scatter(bm, col, margin, window, brk_label, height):
-    """Every game: margin at the break (across) against the final margin (up),
-    W green / L red / draw grey, with the chosen position shaded."""
-    fig = go.Figure()
-    fig.add_vrect(x0=margin - window, x1=margin + window, fillcolor=COLORS["freo"],
-                  opacity=0.10, line_width=0)
-    for res, name, color in [("W", "Won", COLORS["win"]), ("L", "Lost", COLORS["loss"]),
-                             ("D", "Drew", COLORS["neutral"])]:
-        g = bm[bm["result"] == res]
-        if not len(g):
-            continue
-        fig.add_trace(go.Scatter(
-            x=g[col], y=g["margin"], mode="markers", name=name,
-            marker=dict(size=9, color=color, line=dict(color="#FFFFFF", width=2)),
-            customdata=list(zip(g["season"], g["round"], g["opponent"])),
-            hovertemplate="%{customdata[0]} %{customdata[1]} v %{customdata[2]}<br>"
-                          f"{brk_label}: " + "%{x:+d}<br>Final: %{y:+d}<extra></extra>"))
-    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig.add_vline(x=0, line=dict(color=COLORS["muted"], width=1, dash="dot"))
-    fig = style_fig(fig, "Final margin", unified=False, height=height)
-    fig.update_layout(margin=dict(l=8, r=12, t=24, b=8))
-    fig.update_xaxes(title=dict(text=f"Margin at {brk_label.lower()}",
-                                font=dict(color=COLORS["muted"], size=11)), zeroline=False)
-    return fig
-
-
 # ---- Wharf-ai answer charts -------------------------------------------------------
 def answer_chart(series, title, y_title, kind="line", height=210):
     """A small chart for the Wharf-ai panel. series: [(name, x list, y list)].

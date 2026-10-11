@@ -1,6 +1,5 @@
-"""Cards that v2.py reuses: the match players table, the player's game log,
-the quarter-time check and the SIMULATED ground cards (positions, events and
-GPS running). Pages scroll, so cards grow with their content.
+"""Cards that v2.py reuses: the match players table, the player's game log
+and the SIMULATED ground cards (positions, events and GPS running). Pages scroll, so cards grow with their content.
 
 Every card has a computed one-line takeaway under its title (takeaways.py).
 Clicking a player in a table opens their profile (nav.go; v2.apply turns the
@@ -15,7 +14,7 @@ import data as D
 import charts as CH
 import nav
 import takeaways as T
-from theme import COLORS, RAMP, card_title, record_text
+from theme import COLORS, RAMP, card_title
 
 
 # Player stats offered on the form card: label -> column.
@@ -231,72 +230,6 @@ SQUAD_STATS = {
     "Rebound 50s": "rebound_50s", "Intercepts": "intercepts", "Marks": "marks",
     "One percenters": "one_percenters", "Goals": "goals",
 }
-def render_quarter_time(team_df, all_seasons):
-    """Enter the margin at a break; see how Freo have gone from similar positions.
-
-    Only quarter scores are in the data (AFL Tables has no quarter-by-quarter
-    stats), so positions are matched on the margin alone."""
-    top_h = 340                        # the result and scatter cards
-
-    with card("qtinput"):
-        card_title("Quarter-time check", "enter the margin at a break")
-        c1, c2, c3, c4, c5 = st.columns([1.2, 1, 1, 1.1, 1.6], vertical_alignment="bottom")
-        brk = c1.selectbox("Break", list(D.BREAKS), index=1, key="qt_brk")
-        margin = c2.number_input("Freo margin", value=0, step=1, key="qt_margin",
-                                 help="Freo score minus opposition score at the break")
-        window = c3.number_input("Within ± points", value=6, min_value=0, max_value=60, step=1,
-                                 key="qt_window")
-        scope = c4.selectbox("Seasons", ["All seasons"] + [str(s) for s in reversed(all_seasons)],
-                             key="qt_scope")
-        game_type = c5.segmented_control("Venue", ["Any", "Home", "Away", "Final"], default="Any",
-                                         key="qt_venue") or "Any"
-    seasons = None if scope == "All seasons" else [int(scope)]
-    gt = None if game_type == "Any" else game_type
-    games, sm = D.similar_positions(team_df, brk, int(margin), int(window), seasons, gt)
-    col = sm["col"]
-
-    def result_card():
-        with card("qtresult"):
-            card_title("From there")
-            if sm["games"]:
-                st.markdown(
-                    f'<div class="qt-box"><div class="qt-big">{record_text(sm["wins"], sm["losses"], sm["draws"])}</div>'
-                    f'<div class="qt-sub">from {sm["games"]} games within ±{int(window)} of '
-                    f'{int(margin):+d} at {brk.lower()} ({sm["win_pct"]:.0f}% won, of '
-                    f'{sm["pool"]} games checked)</div>'
-                    f'<div class="qt-line">Average final margin <b>{sm["avg_final"]:+.1f}</b></div>'
-                    f'<div class="qt-line">Net scoring from the break to the siren '
-                    f'<b>{sm["avg_after"]:+.1f}</b></div></div>',
-                    unsafe_allow_html=True)
-            else:
-                st.info("No games from a position like that. Widen the ± window.")
-            st.caption("Matched on the score only: quarter-by-quarter stats (inside 50s, "
-                       "clearances) are not in the data. A small sample says little; check the count.")
-
-    def scatter_card():
-        with card("qtscatter"):
-            card_title(f"Margin at {brk.lower()} and at the siren", "every game, shaded: your window")
-            bm = D.break_margins(team_df)
-            if seasons:
-                bm = bm[bm["season"].isin(seasons)]
-            if gt:
-                bm = bm[bm["type"] == gt]
-            _plot(CH.break_scatter(bm, col, int(margin), int(window), brk, top_h - 56))
-
-    def games_card():
-        with card("qtgames"):
-            card_title("The matching games", f"{sm['games']} games" if sm["games"] else "")
-            if sm["games"]:
-                show = games[["season", "round", "type", "opponent", col, "margin", "result"]].rename(
-                    columns={col: f"At {brk.lower()}", "margin": "Final", "result": "Result",
-                             "season": "Season", "round": "Round", "type": "Type",
-                             "opponent": "Opponent"})
-                st.dataframe(show, hide_index=True, width="stretch", height=260)
-            else:
-                st.caption("None yet.")
-
-    arrange(grid=[[result_card, scatter_card], [games_card]],
-            phone=[result_card, scatter_card, games_card])
 
 
 # ---- On the ground (SIMULATED): positions and GPS running --------------------------

@@ -1,4 +1,4 @@
-"""Fremantle Dockers Coach View: five places around a coach's week (v2.py).
+"""Freo In Numbers: four places around a coach's week (v2.py).
 
 Run with:  streamlit run app.py
 The page on the left, the Wharf-ai chat panel in a sticky column on the right
@@ -18,7 +18,7 @@ import plotly.io as pio
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Fremantle Dockers Coach View",
+st.set_page_config(page_title="Freo In Numbers",
                    page_icon="🟣", layout="wide",
                    initial_sidebar_state="collapsed")
 
@@ -48,7 +48,7 @@ if first_run and not layout.size_known():
     # Signed in straight away (cookie or Google) before the browser has said how
     # wide it is: wait for it rather than draw the desktop layout on a phone and
     # then jump. The size arrives in a moment and reruns the app.
-    st.markdown('<div class="cv-wait">Loading the Coach View...</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cv-wait">Loading Freo In Numbers...</div>', unsafe_allow_html=True)
     st.stop()
 LAYOUT = layout.mode(win_w, win_h)      # phone, stack, split or desktop (see layout.mode)
 PHONE = LAYOUT == "phone"
@@ -130,12 +130,6 @@ def example_prompts(season, baseline, focus=None):
                 "Who wins the most contested ball in the squad?",
                 "Who leads our pressure acts, and does it matter?",
                 "Which players have the most score involvements?"]
-    if focus and focus.startswith("the quarter-time check"):
-        return ["How often do we win from behind at three quarter time?",
-                "How often do we hold a half-time lead?",
-                "Which quarter do we fade in, and against whom?",
-                "How do we go in the last quarter of close games?",
-                "Do we finish games better at home or away?"]
     if focus and focus.startswith("the opponent scout report for "):
         club = focus.split(" for ", 1)[1].split(",")[0]
         scout = [f"What wins {club} games?",

@@ -770,39 +770,6 @@ def momentum_test(tdf, shuffles=2000, seed=7):
 
 
 # ---- Quarter-time check ---------------------------------------------------------
-BREAKS = {"Quarter time": "Q1", "Half time": "Q2", "Three quarter time": "Q3"}
-
-
-def break_margins(team_df):
-    """Every game with Freo's running margin at each break and the result."""
-    f = team_df["freo_qtrs"].map(_qtr_points)
-    o = team_df["opp_qtrs"].map(_qtr_points)
-    run = pd.DataFrame([pd.Series(a) - pd.Series(b) for a, b in zip(f, o)],
-                       index=team_df.index).cumsum(axis=1)
-    run.columns = ["Q1", "Q2", "Q3", "Q4"]
-    cols = ["season", "round", "type", "opponent", "venue", "result", "margin"]
-    return team_df[cols].join(run)
-
-
-def similar_positions(team_df, brk, margin, window, seasons=None, game_type=None):
-    """Games where Freo's margin at a break was within `window` points of
-    `margin`. Returns (matching games, summary dict)."""
-    q = BREAKS[brk]
-    bm = break_margins(team_df)
-    if seasons:
-        bm = bm[bm["season"].isin(seasons)]
-    if game_type:
-        bm = bm[bm["type"] == game_type]
-    m = bm[(bm[q] - margin).abs() <= window].copy()
-    m["after_break"] = m["Q4"] - m[q]   # net scoring from the break to the siren
-    w, lo = int((m["result"] == "W").sum()), int((m["result"] == "L").sum())
-    return m.sort_values(q), {
-        "games": len(m), "wins": w, "losses": lo, "draws": len(m) - w - lo,
-        "win_pct": w / len(m) * 100 if len(m) else None,
-        "avg_final": m["margin"].mean() if len(m) else None,
-        "avg_after": m["after_break"].mean() if len(m) else None,
-        "pool": len(bm), "col": q,
-    }
 
 
 def _qtr_points(qtrs):
