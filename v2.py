@@ -283,39 +283,41 @@ def last_game(ctx, season, tdf, pdf, pos):
             _plot(CH.momentum_chart(events, quarters, D.momentum(events, quarters), run, TALL_H,
                                     opp=short, opp_color=club["chart"]))
 
-    def tape_card():
-        rows = D.tale_of_the_tape(tdf, pos)
-        with finding("v2_tape", "Tale of the tape", T.tape(rows), "tick: Freo's season average share",
-                     question="Which counts decided this game?"):
-            tape(rows, opp_color=club["chart"], names=("Freo", short))
-
     def ground_card():
         V.match_ground_card(ctx["player_df"], season, game)
 
-    def leaders_card():
+    def numbers_card():
+        """The tale of the tape and the game's leaders, side by side in one card."""
+        rows = D.tale_of_the_tape(tdf, pos)
         leaders, goals = D.match_leaders(pdf, game)
         theirs = D.opp_match_leaders(game)
-        with finding("v2_leaders", "Game leaders", T.match_leaders(goals, theirs[1], short) if theirs
-                     else T.match_leaders(goals), "Freo's leaders open the player",
-                     question="Who were our best players in this game?"):
-            names = {f"{l['role']}: {l['player'].split()[-1]} {l['value']}": l["player"] for l in leaders}
-            n = st.session_state.get("v2_lead_n", 0)
-            pick = st.pills("Freo leaders", list(names), key=f"v2_lead_{season}_{game['round']}_{n}",
-                            label_visibility="collapsed")
-            if pick:
-                st.session_state["v2_lead_n"] = n + 1
-                go(place="Players", season=season, player=names[pick], vs=None)
-            if theirs is not None:
-                line = " · ".join(f"{l['role']}: {l['player'].split()[-1]} {l['value']}"
-                                  for l in theirs[0])
-                st.markdown(f'<div class="v2-line"><b>{html.escape(short)}</b> · {html.escape(line)}</div>',
+        with finding("v2_numbers", "Tale of the tape", T.tape(rows),
+                     "tick: Freo's season average share · Freo's leaders open the player",
+                     question="Which counts decided this game, and who stood out?"):
+            a, b = (st.container(), st.container()) if DOCK else st.columns([1.15, 1], gap="medium")
+            with a:
+                tape(rows, opp_color=club["chart"], names=("Freo", short))
+            with b:
+                take = (T.match_leaders(goals, theirs[1], short) if theirs else T.match_leaders(goals))
+                st.markdown(f'<div class="card-take">Game leaders: {html.escape(take)}</div>',
                             unsafe_allow_html=True)
+                names = {f"{l['role']}: {l['player'].split()[-1]} {l['value']}": l["player"] for l in leaders}
+                n = st.session_state.get("v2_lead_n", 0)
+                pick = st.pills("Freo leaders", list(names), key=f"v2_lead_{season}_{game['round']}_{n}",
+                                label_visibility="collapsed")
+                if pick:
+                    st.session_state["v2_lead_n"] = n + 1
+                    go(place="Players", season=season, player=names[pick], vs=None)
+                if theirs is not None:
+                    line = " · ".join(f"{l['role']}: {l['player'].split()[-1]} {l['value']}"
+                                      for l in theirs[0])
+                    st.markdown(f'<div class="v2-line"><b>{html.escape(short)}</b> · {html.escape(line)}</div>',
+                                unsafe_allow_html=True)
 
-    def players_card():
+    grid([([1.55, 1], [momentum_card, ground_card]), ([1], [numbers_card])])
+    # Every player's numbers on request: the page leads with the story, not the table.
+    if st.toggle("Show every player's numbers", key="v2_all_players"):
         V._match_players(pdf, game, season, pos)
-
-    grid([([1.55, 1], [momentum_card, ground_card]), ([1.1, 1], [tape_card, leaders_card]),
-          ([1], [players_card])])
     return (f"{game['round']} v {opp} at {game['venue']}, "
             + ("drew" if game["result"] == "D" else
                f"{'won' if game['result'] == 'W' else 'lost'} by {margin}") + GROUND_NOTE)
@@ -378,59 +380,31 @@ def next_opponent(ctx, season, club):
     def sim_card():
         sim_card_body(club, short, tint)
 
-    def what_if_card():
-        what_if_body(club, short, tint)
-
-    def style_card():
+    def scout_card():
+        """Style vs league as the chart, the rest of the scouting as one line each:
+        what wins their games, their quarters, and Freo's record against them."""
         avg, ranks = D.team_ranks(lg, season)
-        with finding("v2_style", "Style vs league", T.style(ranks, club), "rank of 18 on each stat",
-                     question=f"Where are {club} weakest compared with the league?"):
+        with finding("v2_scout", "Scouting notes", T.style(ranks, club), "rank of 18 on each stat",
+                     question=f"What wins {club} games, and where are they weakest?"):
             _plot(CH.rank_dumbbell(avg, ranks, club, D.SCOUT_STATS, CHART_H, team_color=tint,
                                    focus=T.style_marks(ranks, club)))
+            wc = D.scout_win_conditions(lg, club, season)
+            qp = D.scout_quarters(lg, club, season)
+            rows = D.head_to_head(ctx["team"], club)
+            notes = [("How they win", T.where_we_win(wc)), ("Their quarters", T.quarters(qp))]
+            if len(rows):
+                w, lo = int((rows["result"] == "W").sum()), int((rows["result"] == "L").sum())
+                notes.append(("Against Fremantle", f"{record_text(w, lo, len(rows) - w - lo)} in the data"))
+            st.markdown("".join(f'<div class="v2-line"><b>{html.escape(k)}</b> · {html.escape(v)}</div>'
+                                for k, v in notes if v), unsafe_allow_html=True)
+            if len(rows):
+                last = rows.iloc[0]   # newest first
+                res = "drew" if last["result"] == "D" else f"{'won' if last['result'] == 'W' else 'lost'} by {abs(int(last['margin']))}"
+                if st.button(f"Last met: {last['season']} {last['round']}, Freo {res}", key=f"v2_lastmet_{club}",
+                             icon=":material/arrow_forward:", type="tertiary"):
+                    go(place="Last game", season=int(last["season"]), game=last["round"])
 
-    def win_card():
-        wc = D.scout_win_conditions(lg, club, season)
-        with finding("v2_theywin", "How they win", T.where_we_win(wc),
-                     "win rate when each side won the count",
-                     question=f"What wins {club} games?"):
-            _plot(CH.win_dumbbell(wc, CHART_H, names=(f"{short} won it", "Their opponent won it"),
-                                  colors=(tint, grey), focus=T.swing_stat(wc)))
-
-    def quarters_card():
-        qp = D.scout_quarters(lg, club, season)
-        with finding("v2_theirq", "Their quarters", T.quarters(qp), "average points",
-                     question=f"Which quarters do {club} win?"):
-            _plot(CH.quarter_bars(qp, CHART_H, names=(club, "Opponents"), colors=(tint, grey),
-                                  focus=T.best_worst_quarter(qp)))
-
-    def form_card():
-        last = games.tail(14)
-        with finding("v2_theirform", "Their form", T.scout_form(last),
-                     f"last {len(last)} games, green win, red loss"):
-            _plot(CH.form_bars(last, CHART_H))
-
-    def h2h_card():
-        rows = D.head_to_head(ctx["team"], club)
-        with finding("v2_h2h", "Against Fremantle", T.h2h(rows), "every game, all seasons · click a game",
-                     question=f"How have we gone against {club}, and what decided those games?"):
-            if not len(rows):
-                st.caption("No games against Fremantle in the data.")
-                return
-            show = rows.assign(
-                Game=rows["season"].astype(str) + " " + rows["round"],
-                Result=[f"{r} {m:+d}" if r != "D" else "D" for r, m in zip(rows["result"], rows["margin"])],
-                Score=rows["freo_score"].astype(str) + "-" + rows["opp_score"].astype(str))
-            cols = ["Game", "venue", "Result", "Score"]
-            if "freo_inside_50s" in rows:
-                show["I50 diff"] = rows["freo_inside_50s"] - rows["opp_inside_50s"]
-                show["CP diff"] = rows["freo_contested_poss"] - rows["opp_contested_poss"]
-                cols += ["I50 diff", "CP diff"]
-            show = show[cols].rename(columns={"venue": "Venue"})
-            _table_pick(show, f"v2h2h_{club}", lambda i: go(
-                place="Last game", season=int(rows["season"].iloc[i]), game=rows["round"].iloc[i]))
-
-    grid([([1], [sim_card]), ([1], [what_if_card]), ([1], [last5_card]), ([1.1, 1], [heat_card, style_card]),
-          ([1.1, 1], [win_card, quarters_card]), ([1, 1.1], [form_card, h2h_card])])
+    grid([([1], [sim_card]), ([1], [last5_card]), ([1.1, 1], [heat_card, scout_card])])
     return (f"the opponent scout report for {club}, {season} season" + GROUND_NOTE
             + f"; it also shows a model FORECAST of Freo v {club} (simulated games from a model, not "
             "data): answer from the real data, and say any forecast on the page comes from the model")
@@ -536,6 +510,10 @@ def sim_card_body(club, short, tint):
                      type="tertiary"):
             st.session_state["v2_sim_seed"] = n + 1
             st.rerun()
+        # What if: inside the card, folded away, so the forecast leads.
+        with st.expander("What would change it? Move a stat and play the 10,000 games again",
+                         icon=":material/tune:", key="v2_whatif"):
+            what_if_body(club, short, tint)
         if ev:
             st.caption(f"How good is it? Tested on all {ev['games']} games of {ev['test']}, each predicted "
                        f"from form before it was played: it tipped {ev['model']['tips']:.0%} "
@@ -571,34 +549,31 @@ def what_if_body(club, short, tint):
         tries = [(m, e["max"], _what_if(club, venue, ((m, e["max"]),))) for m, e in levers.items()]
         best = max(tries, key=lambda t: t[2]["win"])
     head = T.what_if(base, f, moved, levers, short, best)
-    with finding("v2_whatif", "What would change it", head,
-                 "move Freo's recent average on a stat and play the 10,000 games again: MODEL",
-                 question=f"Against {club}, which stats would most change our chances, and is that "
-                          "what decides our games?"):
-        cols = st.columns(2 if DOCK else 4)
-        for i, (metric, e) in enumerate(levers.items()):
-            avg = saved["freo_form"].get(metric)
-            cols[i % len(cols)].slider(
-                e["label"], -e["max"], e["max"], 0, e["step"], key=f"v2_wi_{metric}", format="%+d",
-                help=f"A game, against Freo's recent average of {avg:.0f}" if avg is not None else None)
-        lose, lose0 = 1 - f["win"] - f["draw"], 1 - base["win"] - base["draw"]
-        g, b = f["lam"] * f["acc"], f["lam"] - f["lam"] * f["acc"]
-        tiles([
-            {"label": "Freo win chance", "value": f"{f['win']:.0%}",
-             "note": f"was {base['win']:.0%}; {short} {lose:.0%} (was {lose0:.0%})" if moved
-             else f"{short} {lose:.0%}, draw {f['draw']:.0%}"},
-            {"label": "Likely margin", "value": "Level" if round(f["p50"]) == 0 else f"{f['p50']:+.0f}",
-             "note": f"was {base['p50']:+.0f}" if moved else f"8 in 10: {f['p10']:+.0f} to {f['p90']:+.0f}"},
-            {"label": "Expected score", "value": f"{g[0]:.0f}.{b[0]:.0f} v {g[1]:.0f}.{b[1]:.0f}",
-             "note": f"{f['lam'][0] * (1 + 5 * f['acc'][0]):.0f} v {f['lam'][1] * (1 + 5 * f['acc'][1]):.0f} points"},
-        ])
-        if moved:
-            _plot(CH.margin_histogram(base["edges"], f["counts"], f["p50"], CHART_H, us="Freo", them=short,
-                                      them_color=tint, base=base["counts"]))
-        st.caption("The model learned which stats have gone with scoring across the league, not what "
-                   "causes it: each slider moves one stat with every other held still, so a stat that "
-                   "rises with others (more inside 50s usually means more shots) moves less on its own. "
-                   "Pressure acts and clangers aren't here: they rise for reasons other than playing well.")
+    st.markdown(f'<div class="card-take">{html.escape(head)}</div>', unsafe_allow_html=True)
+    cols = st.columns(2 if DOCK else 4)
+    for i, (metric, e) in enumerate(levers.items()):
+        avg = saved["freo_form"].get(metric)
+        cols[i % len(cols)].slider(
+            e["label"], -e["max"], e["max"], 0, e["step"], key=f"v2_wi_{metric}", format="%+d",
+            help=f"A game, against Freo's recent average of {avg:.0f}" if avg is not None else None)
+    lose, lose0 = 1 - f["win"] - f["draw"], 1 - base["win"] - base["draw"]
+    g, b = f["lam"] * f["acc"], f["lam"] - f["lam"] * f["acc"]
+    tiles([
+        {"label": "Freo win chance", "value": f"{f['win']:.0%}",
+         "note": f"was {base['win']:.0%}; {short} {lose:.0%} (was {lose0:.0%})" if moved
+         else f"{short} {lose:.0%}, draw {f['draw']:.0%}"},
+        {"label": "Likely margin", "value": "Level" if round(f["p50"]) == 0 else f"{f['p50']:+.0f}",
+         "note": f"was {base['p50']:+.0f}" if moved else f"8 in 10: {f['p10']:+.0f} to {f['p90']:+.0f}"},
+        {"label": "Expected score", "value": f"{g[0]:.0f}.{b[0]:.0f} v {g[1]:.0f}.{b[1]:.0f}",
+         "note": f"{f['lam'][0] * (1 + 5 * f['acc'][0]):.0f} v {f['lam'][1] * (1 + 5 * f['acc'][1]):.0f} points"},
+    ])
+    if moved:
+        _plot(CH.margin_histogram(base["edges"], f["counts"], f["p50"], CHART_H, us="Freo", them=short,
+                                  them_color=tint, base=base["counts"]))
+    st.caption("The model learned which stats have gone with scoring across the league, not what "
+               "causes it: each slider moves one stat with every other held still, so a stat that "
+               "rises with others (more inside 50s usually means more shots) moves less on its own. "
+               "Pressure acts and clangers aren't here: they rise for reasons other than playing well.")
 
 
 def our_season(ctx, season, baseline, tdf, pdf, games_slice):
@@ -652,24 +627,23 @@ def our_season(ctx, season, baseline, tdf, pdf, games_slice):
                 _open_game_from(ev, labels, season)
 
     def wins_card():
+        """What wins us games and when we score, side by side in one card."""
         ww = D.what_wins(tdf)
+        qp = D.quarter_pattern(tdf)
         with finding("v2_wins", "What wins us games", T.where_we_win(ww),
                      "win rate when each side won the count; r: how the count tracks the margin "
-                     "(association, not cause)",
-                     question="Which counts matter most to whether we win?"):
-            _plot(CH.win_dumbbell(ww, CHART_H, focus=T.swing_stat(ww), show_r=True))
-
-    def quarters_card():
-        qp = D.quarter_pattern(tdf)
-        with finding("v2_quarters", "Quarters", T.quarters(qp), "average points a quarter, then "
-                     "inside each quarter: F first 10 minutes, M middle, L last 10",
-                     question="Which quarter do we fade in, and against whom?"):
-            _plot(CH.quarter_bars(qp, CHART_H - 40, focus=T.best_worst_quarter(qp)))
-            if D.load_score_events() is not None:
-                w, _ = D.window_scoring(tdf)
-                st.markdown(f'<div class="card-take">{html.escape(T.windows(w))}</div>',
-                            unsafe_allow_html=True)
-                _plot(CH.window_bars(w, CHART_H - 40, focus=T.window_focus(w)))
+                     "(association, not cause); then average points a quarter",
+                     question="Which counts matter most to whether we win, and which quarter do we fade in?"):
+            a, b = (st.container(), st.container()) if DOCK else st.columns([1.25, 1], gap="medium")
+            with a:
+                _plot(CH.win_dumbbell(ww, CHART_H, focus=T.swing_stat(ww), show_r=True))
+            with b:
+                take = T.quarters(qp)
+                if D.load_score_events() is not None:
+                    w = T.windows(D.window_scoring(tdf)[0])
+                    take += f" · within quarters, {w[:1].lower() + w[1:]}" if w else ""
+                st.markdown(f'<div class="card-take">Quarters: {html.escape(take)}</div>', unsafe_allow_html=True)
+                _plot(CH.quarter_bars(qp, CHART_H - 30, focus=T.best_worst_quarter(qp)))
 
     def momentum_card():
         if D.load_score_events() is None:
@@ -707,7 +681,11 @@ def our_season(ctx, season, baseline, tdf, pdf, games_slice):
         import sim
         V._ground_card("v2_season_ground", pdf, sim.roles(ctx["player_df"]), f"the team in {season}")
 
-    grid([([1], [strip_card]), ([1, 1], [wins_card, quarters_card]), ([1.6, 1], [momentum_card, ground_card])])
+    grid([([1], [strip_card]), ([1.5, 1], [wins_card, ground_card])])
+    # The momentum test and every scoring run on request: the overlay above tells the story.
+    if D.load_score_events() is not None and st.toggle("Show the momentum test and every scoring run",
+                                                        key="v2_season_runs"):
+        momentum_card()
     focus = None if games_slice == D.GAME_SLICES[0] else f"the {season} season, {games_slice.lower()} only"
     return (focus or f"the {season} season") + GROUND_NOTE
 
@@ -1055,6 +1033,7 @@ def inject_css(dock_mode, win_h):
           .cv-band.v2 {{ height:auto; min-height:56px; flex-wrap:wrap; row-gap:6px; margin:6px 0 4px; }}
           .cv-band.v2 .cv-stat span {{ display:block; }}
           .cv-band.v2 .cv-stat .cv-res {{ display:inline-block; line-height:1.35; margin-bottom:4px; }}
+          .st-key-card_v2_numbers [data-testid="stButtonGroup"] > div {{ flex-wrap:wrap !important; }}
           /* Phones: the title (beside any photos) takes the first line, the numbers wrap under it. */
           @media (max-width: 699px) {{ .cv-band.v2 .ttl {{ flex:1 1 calc(100% - 120px) !important; min-width:0; }} }}
           /* Tiles fill whole rows: 6, then 3, then 2 a row as the window narrows. */

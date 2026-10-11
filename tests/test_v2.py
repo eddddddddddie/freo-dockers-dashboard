@@ -96,7 +96,7 @@ def test_next_opponent_opens_on_the_first_club_and_its_what_if_moves():
 
 def test_ask_wharf_ai_queues_the_cards_question():
     at = _app({"season": "2026", "place": "last-game", "game": "GF"})
-    ask = next(b for b in at.button if b.key == "ask_v2_tape")
+    ask = next(b for b in at.button if b.key == "ask_v2_numbers")
     at = ask.click().run()
     assert not at.exception
     # No API key in tests, so the question waits for the panel instead of being answered.

@@ -572,3 +572,17 @@ so every returning visitor is offered it once.
 - Renamed Freo In Numbers ("Freo" in italic, 1.95rem, was 1.5rem) in the bar, the browser tab, the
   sign-in strip, the loading line and the tour. The phone band gives the title its own first line
   (the comparison band's title had been squeezed to a word a line beside the two photos).
+
+### Fewer cards a page (2026-10-11)
+About four cards a page, with the heat maps, momentum and the simulator up front:
+- Last game: Momentum and the ground card, then one "Tale of the tape" card with the game's
+  leaders beside the tape (the leader buttons wrap and open the player). The players table is
+  behind a "Show every player's numbers" toggle.
+- Next opponent: the simulator (the what-if sliders folded into it as a "What would change it?"
+  section), their last 5 games, then the heat map beside "Scouting notes": the style chart with
+  one line each for how they win, their quarters and Freo's record against them (draws counted
+  apart), and a button to the last meeting. Gone: the separate How they win, Their quarters,
+  Their form and Against Fremantle cards (the band already shows their last five).
+- Our season: Game by game (the momentum overlay), then "What wins us games" (the win-rate chart
+  beside the quarters, the minute windows as a line) beside the ground card. The momentum test
+  and the list of scoring runs are behind a toggle.
