@@ -586,3 +586,11 @@ About four cards a page, with the heat maps, momentum and the simulator up front
 - Our season: Game by game (the momentum overlay), then "What wins us games" (the win-rate chart
   beside the quarters, the minute windows as a line) beside the ground card. The momentum test
   and the list of scoring runs are behind a toggle.
+
+## Dark mode rolled back, game leaders tidied (2026-10-12)
+- Dark mode (2026-10-11) was reverted: switching was slow (Streamlit restyles every widget and
+  each chart redraws), and the showcase doesn't need it.
+- Last game's game leaders were three styles in a row: a purple sentence of goal kickers, black
+  pill buttons for Freo's leaders and a grey run-on line for the opposition. They are now one
+  small table set like the tape beside it: the role, Freo's leader (a purple link to the player)
+  and theirs. Goals show the top three kickers and "+ n more".

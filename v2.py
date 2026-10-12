@@ -249,6 +249,14 @@ def _table_pick(df, key, on_pick, height=None, config=None):
 
 
 # ---- places --------------------------------------------------------------------
+def _goals(text, shown=3):
+    """'Voss 3, Dudley 2, Amiss 2 + 4 more' (a game's goal kickers, most first)."""
+    if not text or text == "none":
+        return "-"
+    parts = text.split(", ")
+    return ", ".join(parts[:shown]) + (f" + {len(parts) - shown} more" if len(parts) > shown else "")
+
+
 def last_game(ctx, season, tdf, pdf, pos):
     game = tdf.iloc[pos]
     opp = game["opponent"]
@@ -298,21 +306,36 @@ def last_game(ctx, season, tdf, pdf, pos):
             with a:
                 tape(rows, opp_color=club["chart"], names=("Freo", short))
             with b:
-                take = (T.match_leaders(goals, theirs[1], short) if theirs else T.match_leaders(goals))
-                st.markdown(f'<div class="card-take">Game leaders: {html.escape(take)}</div>',
-                            unsafe_allow_html=True)
-                names = {f"{l['role']}: {l['player'].split()[-1]} {l['value']}": l["player"] for l in leaders}
-                n = st.session_state.get("v2_lead_n", 0)
-                pick = st.pills("Freo leaders", list(names), key=f"v2_lead_{season}_{game['round']}_{n}",
-                                label_visibility="collapsed")
-                if pick:
-                    st.session_state["v2_lead_n"] = n + 1
-                    go(place="Players", season=season, player=names[pick], vs=None)
-                if theirs is not None:
-                    line = " · ".join(f"{l['role']}: {l['player'].split()[-1]} {l['value']}"
-                                      for l in theirs[0])
-                    st.markdown(f'<div class="v2-line"><b>{html.escape(short)}</b> · {html.escape(line)}</div>',
+                leaders_table(leaders, goals, theirs, short)
+
+    def leaders_table(leaders, goals, theirs, short):
+        """The game's leaders set like the tape beside them: the role, then Freo's
+        leader (a link to the player) and theirs, one row each."""
+        opp = theirs[0] if theirs else None
+        widths = [1, 1.25, 1.25] if opp else [1, 1.6]
+        with st.container(key="v2_lead_grid"):
+            head = st.columns(widths, vertical_alignment="center")
+            head[0].markdown('<div class="ld-h">Game leaders</div>', unsafe_allow_html=True)
+            head[1].markdown('<div class="ld-h">Freo</div>', unsafe_allow_html=True)
+            if opp:
+                head[2].markdown(f'<div class="ld-h">{html.escape(short)}</div>', unsafe_allow_html=True)
+            row = st.columns(widths, vertical_alignment="center")
+            row[0].markdown('<div class="ld-l">Goals</div>', unsafe_allow_html=True)
+            row[1].markdown(f'<div class="ld-v">{html.escape(_goals(goals))}</div>', unsafe_allow_html=True)
+            if opp:
+                row[2].markdown(f'<div class="ld-v">{html.escape(_goals(theirs[1]))}</div>',
                                 unsafe_allow_html=True)
+            for i, l in enumerate(leaders):
+                row = st.columns(widths, vertical_alignment="center")
+                row[0].markdown(f'<div class="ld-l" title="{html.escape(l["sub"])}">'
+                                f'{html.escape(l["role"].capitalize())}</div>', unsafe_allow_html=True)
+                if row[1].button(f"{l['player'].split()[-1]} {l['value']}", key=f"v2_lead_{i}",
+                                 type="tertiary", help=f"{l['player']}: {l['value']} {l['sub']}. Open the player"):
+                    go(place="Players", season=season, player=l["player"], vs=None)
+                if opp:
+                    o = next((x for x in opp if x["role"] == l["role"]), None)
+                    them = f"{o['player'].split()[-1]} {o['value']}" if o else "-"
+                    row[2].markdown(f'<div class="ld-v">{html.escape(them)}</div>', unsafe_allow_html=True)
 
     grid([([1.55, 1], [momentum_card, ground_card]), ([1], [numbers_card])])
     # Every player's numbers on request: the page leads with the story, not the table.
@@ -1041,7 +1064,21 @@ def inject_css(dock_mode, win_h):
           @media (max-width: 1250px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }} }}
           @media (max-width: 699px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }} }}
           .cv-tiles.v2 .fr {{ font-size:.75rem; color:var(--muted); }}
-          .st-key-v2_leaders {{ background:#fff; border-radius:4px; padding:10px 14px 6px; }}
+          /* Game leaders (Last game): set like the tape beside them. */
+          .st-key-v2_lead_grid {{ gap:0 !important; }}
+          .st-key-v2_lead_grid [data-testid="stHorizontalBlock"] {{ gap:8px; min-height:21px;
+            flex-wrap:nowrap !important; }}
+          .st-key-v2_lead_grid [data-testid="stColumn"] {{ min-width:0 !important; }}
+          @media (max-width: 699px) {{ .st-key-v2_lead_grid [data-testid="stColumn"] {{
+            width:auto !important; flex:1 1 0 !important; }} }}
+          .st-key-v2_lead_grid [data-testid="stMarkdownContainer"] {{ margin-bottom:0 !important; }}
+          .st-key-v2_lead_grid .ld-h {{ font-size:.75rem; font-weight:700; color:var(--muted); line-height:16px; }}
+          .st-key-v2_lead_grid .ld-l {{ font-size:.75rem; font-weight:500; color:var(--muted); line-height:1.25; }}
+          .st-key-v2_lead_grid .ld-v {{ font-size:.85rem; font-weight:800; color:var(--ink); line-height:1.25; }}
+          .st-key-v2_lead_grid div[data-testid="stButton"] button {{ min-height:21px; padding:0; }}
+          .st-key-v2_lead_grid div[data-testid="stButton"] button p {{ font-size:.85rem; font-weight:800;
+            color:var(--freo); }}
+          .st-key-v2_lead_grid div[data-testid="stButton"] button:hover p {{ text-decoration:underline; }}
           .v2-line {{ font-size:.85rem; color:var(--muted); margin:2px 0 4px; }}
           .v2-line b {{ color:var(--ink); }}
           .cv-tiles.v2 .val small {{ font-size:.7em; color:var(--muted); font-weight:600; }}

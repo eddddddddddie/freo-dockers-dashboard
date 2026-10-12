@@ -210,14 +210,6 @@ def season_momentum(avg):
     return f"Strongest: {name(hi)} ({m[hi]:+.1f} momentum on average); weakest: {name(lo)} ({m[lo]:+.1f})"
 
 
-def match_leaders(goals, opp_goals=None, opp_label=None):
-    """'Goals: Voss 3, Dudley 2 · BRL: Neale 3' (the opposition's when known)."""
-    text = f"Goals: {goals}" if goals != "none" else "No Freo goals recorded"
-    if opp_goals and opp_goals != "none":
-        text += f" · {opp_label}: {opp_goals}"
-    return text
-
-
 def vs_self(vals, pct, avgs, stats, n=2):
     """'Biggest games on their own average: Bolton metres gained 686 (+101%), ...'
     (only stats whose season average is big enough for a % to mean much)."""
