@@ -71,18 +71,3 @@ def test_player_details_age_height_and_best_ranking(season):
     assert d["height_cm"] == row["height_cm"]
     ranks = D.player_squad_ranks(D.players_season(players, 2026), "Jordan Clark")
     assert d["top"]["rank"] == ranks["rank"].min()
-
-
-def test_dark_charts_recolour_marks_but_keep_labels_readable():
-    import theme
-    fig = {"data": [{"marker": {"color": theme.COLORS["freo"], "line": {"color": "#FFFFFF"}},
-                     "textfont": {"color": "#FFFFFF"}, "fillcolor": "rgba(159,134,207,0.3)"}],
-           "layout": {"font": {"color": theme.COLORS["ink"]}, "annotations": [
-               {"bgcolor": "#E8A33D", "font": {"color": "#1A1A1A"}}]}}
-    d = theme._to_dark(fig)
-    assert d["data"][0]["marker"]["color"] == theme.DARK[theme.COLORS["freo"]]
-    assert d["data"][0]["marker"]["line"]["color"] == theme.DARK_CARD     # rings match the card
-    assert d["data"][0]["textfont"]["color"] == "#FFFFFF"                 # white text on a mark stays
-    assert d["data"][0]["fillcolor"] == "rgba(90,63,140,0.3)"               # RAMP[1] -> its dark step
-    assert d["layout"]["font"]["color"] == "#ECEAF0"
-    assert d["layout"]["annotations"][0]["font"]["color"] == "#1A1A1A"     # ink on its own amber tag

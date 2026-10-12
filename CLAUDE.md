@@ -166,13 +166,6 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   Numbers" (`theme.brand_title`).
 - Picker first options are real strings (`SQUAD`, `NOBODY`), not None: a None value shows
   Streamlit's "Choose an option" placeholder. Next opponent opens on the first club (Adelaide).
-- Dark mode: the moon button top right (`v2.mode_button`, `st.session_state["dark"]`, `?theme=dark`
-  in the address). `theme.inject_mode` swaps the CSS tokens (`theme.DARK_CSS`; page CSS uses
-  `var(--card)`, `var(--accent)` etc., never `#fff` or the brand purple as text) and switches
-  Streamlit's own widgets to `[theme.dark]` in `.streamlit/config.toml` by answering the browser's
-  prefers-color-scheme with the viewer's choice. Charts are built in the light colours and
-  recoloured as drawn (`theme.fit_mode` in `views._plot` and the chat's charts, by the `theme.DARK`
-  map, validated on the dark card #1E1A26). A new colour needs its dark step in `theme.DARK`.
 - Phones get a two-line top bar (seasons and icons, then the place picker): the phone CSS
   (`theme.inject_phone_css`) sizes the first top-bar column to its content.
 - Tests: `tests/test_v2.py` (AppTest, every place) and `tests/test_ui.py` (browser).

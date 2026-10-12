@@ -110,16 +110,3 @@ def test_phone_docks_wharf_ai_and_opens_it():
     assert not at.exception
     assert any(b.key == "wa_close" for b in at.button)
     assert any("Wharf-ai" in m.value for m in at.markdown)
-
-
-def test_dark_mode_button_flips_and_the_address_keeps_it():
-    at = _app({"season": "2026", "place": "next-opponent"})
-    assert not at.session_state["dark"]
-    at.button(key="mode_btn").click().run()
-    assert not at.exception
-    assert at.session_state["dark"] and at.query_params["theme"] == ["dark"]
-    assert any("--canvas:#121016" in m.value for m in at.markdown)
-    at = _app({"season": "2026", "place": "our-season", "theme": "dark"})   # a link opens dark
-    assert not at.exception and at.session_state["dark"]
-    at.button(key="mode_btn").click().run()
-    assert not at.session_state["dark"] and "theme" not in at.query_params

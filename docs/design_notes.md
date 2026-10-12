@@ -586,25 +586,3 @@ About four cards a page, with the heat maps, momentum and the simulator up front
 - Our season: Game by game (the momentum overlay), then "What wins us games" (the win-rate chart
   beside the quarters, the minute windows as a line) beside the ground card. The momentum test
   and the list of scoring runs are behind a toggle.
-
-## Dark mode (2026-10-11)
-- A moon button at the top right, beside the tour and sign-out buttons, switches the whole app.
-  The choice is per session and lives in the address (`?theme=dark`), so a reload or a shared
-  link keeps it. The app opens light, even on a dark system setting.
-- Dark is its own palette, not a flip. The series were lifted into the dark lightness band and
-  checked with the dataviz validator on the dark card #1E1A26 (all checks pass):
-  - Freo #8560CC and opposition #17A6BB (normal-vision ΔE 21, deutan 7.9 with labels).
-  - Series 3 #E0608E and series 4 #5B8DE8.
-  - Ink #ECEAF0, muted #A9A4B3, rules #3A3545, page #121016.
-  - The purple ramp runs dark to light, so "more" still stands out.
-  - Win and loss keep their colours and letters; the heat scale is unchanged.
-- How it works:
-  - The page CSS uses tokens (`--card`, `--accent`, `--tint`, `--rule`), which `theme.DARK_CSS` resets.
-  - Streamlit's own widgets (selects, tables, sliders, the chat input) use `[theme.dark]` in
-    config.toml. Streamlit picks light or dark from prefers-color-scheme, so `theme.inject_mode`
-    answers that query with the viewer's choice and fires `afterprint`, after which Streamlit
-    looks again. This relies on Streamlit internals (checked on 1.64): recheck after an upgrade
-    (`tests/test_ui.py::test_dark_mode_switches_streamlit_too`).
-  - Charts are recoloured as they are drawn (`theme.fit_mode`). White text on a mark stays
-    white, and a label on its own background keeps its ink.
-

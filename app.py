@@ -23,7 +23,7 @@ st.set_page_config(page_title="Freo In Numbers",
                    initial_sidebar_state="collapsed")
 
 from theme import (inject_css, inject_phone_css, inject_side_panel_css, brand_title, BALL_SVG, inject_tablet_css,
-                   chat_header, insight_rotator, inject_mode, fit_mode)
+                   chat_header, insight_rotator)
 import auth
 import settings
 import layout
@@ -37,9 +37,6 @@ import tour
 import v2
 
 inject_css()
-if "dark" not in st.session_state:          # first run: a link may carry ?theme=dark
-    st.session_state["dark"] = st.query_params.get("theme") == "dark"
-inject_mode()
 # The window size is asked for first, so it is usually known by the time the
 # dashboard draws (the sign-in page gives it time to arrive).
 win_w, win_h = layout.window_size()
@@ -252,7 +249,7 @@ def scroll_to_bottom(selector):
 
 
 def _show_chart(fig_json):
-    st.plotly_chart(fit_mode(pio.from_json(fig_json)), width="stretch",
+    st.plotly_chart(pio.from_json(fig_json), width="stretch",
                     config={"displayModeBar": False})
 
 
