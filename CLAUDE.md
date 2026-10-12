@@ -127,8 +127,10 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   the app, Wharf-ai's tools don't see it, and the page note says forecasts come from a model.
   Form inputs use only games before the one predicted (tests/test_model.py checks this).
   Settings (penalties, spread, quarter swings, its own uncertainty `unc`) are chosen on the
-  tuning season, never the test season. The what-if sliders (`model.what_if`) say association,
-  not cause, and reuse the forecast's random draws so a change shows only the lever's effect.
+  tuning season, never the test season. The what-if sliders (`model.what_if`) show association,
+  not cause (the tour step says so; the long caption under them was removed 2026-10-12), and reuse
+  the forecast's random draws so a change shows only the lever's effect. The what-if runs only
+  while its expander is open (`on_change="rerun"`).
 - Pressure acts rise when Freo don't have the ball (Freo win more often when the opposition wins
   the pressure count), so the pressure tile has no good/bad colour.
 - Tile changes: differentials and accuracy change in absolute units (a % change of a value that

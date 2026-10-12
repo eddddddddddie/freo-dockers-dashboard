@@ -594,3 +594,26 @@ About four cards a page, with the heat maps, momentum and the simulator up front
   pill buttons for Freo's leaders and a grey run-on line for the opposition. They are now one
   small table set like the tape beside it: the role, Freo's leader (a purple link to the player)
   and theirs. Goals show the top three kickers and "+ n more".
+- Then simpler again: Freo's leaders only, each a pill (photo or initials, role, name, the number),
+  two a row (one on a phone), the top goal kicker first (`data.goal_leader`). The whole pill opens
+  the player: an invisible button is laid over it (no help tooltip, which wraps the button
+  differently on phones). The opposition's leaders were dropped.
+
+## Faster pages (2026-10-12)
+- Measured first: a warm rerun was about 0.3 s on the server, but the first visit to a page
+  (empty caches, as after every redeploy or wake-up) took 4.3 s on Our season and 3.1 s on Next
+  opponent.
+- `data.momentum` looped over every half minute with pandas filters (59 ms a game); now numpy
+  over all steps at once (identical output, about 23x faster). That was most of the season
+  momentum overlay's 1.6 s.
+- `data.window_scoring` works over all games at once (identical output); `data.season_events`
+  is cached, since five cached functions each rebuilt it.
+- Charts with several panels add their quarter lines and shapes in one batch
+  (`charts._add_shapes`): Plotly's `add_vline(row=, col=)` re-checks the whole figure each call,
+  which cost the last-5 games chart about a second. Hover clocks are computed together
+  (`charts._clocks`).
+- The what-if expander runs only while open (`on_change="rerun"`): closed, it still simulated
+  every stat at the top of its slider.
+- Result (local): first visit to Our season 0.9 s, Next opponent 1.1 s; charts pixel-identical.
+- The model accuracy caption under the simulator and the long caption under the what-if
+  sliders were removed (the tour still says the what-if is association, not cause).

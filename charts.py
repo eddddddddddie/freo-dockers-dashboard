@@ -395,11 +395,44 @@ def game_flow_lines(game, avg, height, others=None):
     return fig
 
 
+def _refs(fig, row, col):
+    """A subplot's axis references for shapes: ('x2', 'y2')."""
+    sp = fig.get_subplot(row, col)
+    return sp.xaxis.plotly_name.replace("axis", ""), sp.yaxis.plotly_name.replace("axis", "")
+
+
+def _add_shapes(fig, shapes):
+    """Add many shapes at once: add_vline / add_shape on a subplot figure re-check
+    the whole figure each call, which made a chart with dozens of quarter lines
+    take a second to build."""
+    fig.update_layout(shapes=list(fig.layout.shapes) + shapes)
+
+
+def _vline(fig, x, line, row, col):
+    xr, yr = _refs(fig, row, col)
+    return dict(type="line", xref=xr, yref=f"{yr} domain", x0=x, x1=x, y0=0, y1=1, line=line)
+
+
+def _hline(fig, y, line, row, col):
+    xr, yr = _refs(fig, row, col)
+    return dict(type="line", xref=f"{xr} domain", yref=yr, x0=0, x1=1, y0=y, y1=y, line=line)
+
+
 def _clock(t, quarters):
     """Minutes from the first bounce -> 'Q3 12:05'."""
     q = int(quarters.index[(quarters["start"] <= t + 1e-9)].max())
     m = (t - quarters.loc[q, "start"]) * 60
     return f"Q{q} {int(m // 60)}:{int(m % 60):02d}"
+
+
+def _clocks(ts, quarters):
+    """_clock for many times at once (hover text on every momentum bar)."""
+    import numpy as np
+    starts = quarters["start"].to_numpy(float)
+    t = np.asarray(ts, float)
+    i = np.searchsorted(starts, t + 1e-9, side="right") - 1
+    secs = (t - starts[i]) * 60
+    return [f"Q{q} {int(s // 60)}:{int(s % 60):02d}" for q, s in zip(quarters.index.to_numpy()[i], secs)]
 
 
 def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None, us="Freo",
@@ -438,8 +471,10 @@ def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None
     lo, hi = min(min(y), 0), max(max(y), 0)
     pad = max((hi - lo) * 0.18, 4)
     if run is not None:
-        fig.add_vrect(x0=run["start"] - 0.4, x1=run["end"] + 0.4, row=1, col=1, line_width=0,
-                      fillcolor=side[run["team"]], opacity=0.12, layer="below")
+        xr, yr = _refs(fig, 1, 1)
+        _add_shapes(fig, [dict(type="rect", xref=xr, yref=f"{yr} domain", x0=run["start"] - 0.4,
+                               x1=run["end"] + 0.4, y0=0, y1=1, line=dict(width=0),
+                               fillcolor=side[run["team"]], opacity=0.12, layer="below")])
         who = us if run["team"] == "Freo" else opp
         mid = (run["start"] + run["end"]) / 2      # kept inside the plot near either end
         anchor = "right" if mid > end * 0.85 else "left" if mid < end * 0.15 else "center"
@@ -453,12 +488,11 @@ def momentum_chart(events, quarters, mom, run, height, opp="Opp", opp_color=None
     for vals, color, name in ((up, us_color, us), (down, opp_color, opp)):
         fig.add_trace(go.Bar(
             x=mom["t"], y=vals, width=step, marker=dict(color=color, line=dict(width=0)),
-            text=[_clock(t, quarters) for t in mom["t"]], showlegend=False,
+            text=_clocks(mom["t"], quarters), showlegend=False,
             hovertemplate="%{text} · momentum %{y:+.1f} (" + name + ")<extra></extra>"), row=2, col=1)
-    for start in quarters["start"].iloc[1:]:
-        for r in (1, 2):
-            fig.add_vline(x=float(start), line=dict(color=COLORS["neutral"], width=1), row=r, col=1)
-    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"), row=1, col=1)
+    _add_shapes(fig, [_vline(fig, float(start), dict(color=COLORS["neutral"], width=1), r, 1)
+                      for start in quarters["start"].iloc[1:] for r in (1, 2)]
+                + [_hline(fig, 0, dict(color=COLORS["muted"], width=1, dash="dot"), 1, 1)])
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, bargap=0, margin=dict(l=4, r=6, t=8, b=4))
     mids = (quarters["start"] + quarters["length"] / 2).tolist()
@@ -601,6 +635,7 @@ def momentum_multiples(games, height, us, us_color, them_color, cols=None):
     hi = max(max(0, int(e["margin"].max())) for _, e, _, _ in games)
     pad = max((hi - lo) * 0.12, 4)
     top = max(max(float(m["momentum"].abs().max()) for *_, m in games), 6)
+    shapes = []
     for k, (title, e, q, mom) in enumerate(games):
         r, c = 2 * (k // cols) + 1, k % cols + 1
         end = float(q["start"].iloc[-1] + q["length"].iloc[-1])
@@ -620,10 +655,9 @@ def momentum_multiples(games, height, us, us_color, them_color, cols=None):
                             (mom["momentum"].clip(upper=0), them_color)):
             fig.add_trace(go.Bar(x=mom["t"], y=vals, width=step, hoverinfo="skip", showlegend=False,
                                  marker=dict(color=color, line=dict(width=0))), row=r + 1, col=c)
-        for start in q["start"].iloc[1:]:
-            for rr in (r, r + 1):
-                fig.add_vline(x=float(start), line=dict(color=COLORS["neutral"], width=1), row=rr, col=c)
-        fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"), row=r, col=c)
+        shapes += [_vline(fig, float(start), dict(color=COLORS["neutral"], width=1), rr, c)
+                   for start in q["start"].iloc[1:] for rr in (r, r + 1)]
+        shapes.append(_hline(fig, 0, dict(color=COLORS["muted"], width=1, dash="dot"), r, c))
         fig.update_xaxes(range=[0, end], showticklabels=False, row=r, col=c)
         mids = (q["start"] + q["length"] / 2).tolist()
         fig.update_xaxes(range=[0, end], tickmode="array", tickvals=mids, tickfont=dict(size=9),
@@ -631,6 +665,7 @@ def momentum_multiples(games, height, us, us_color, them_color, cols=None):
         fig.update_yaxes(range=[lo - pad, hi + pad], showticklabels=c == 1, tickfont=dict(size=9),
                          row=r, col=c)
         fig.update_yaxes(range=[-top * 1.1, top * 1.1], showticklabels=False, row=r + 1, col=c)
+    _add_shapes(fig, shapes)
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, bargap=0, margin=dict(l=4, r=4, t=26, b=4))
     return fig
@@ -676,10 +711,9 @@ def season_momentum(worms, avg, height):
         fig.add_trace(go.Bar(x=avg["x"], y=vals, width=step, marker=dict(color=col, line=dict(width=0)),
                              hovertemplate="average momentum %{y:+.1f} (" + name + ")<extra></extra>",
                              showlegend=False), row=2, col=1)
-    for q in range(1, 4):
-        for r in (1, 2):
-            fig.add_vline(x=q * D.QUARTER_UNITS, line=dict(color=COLORS["neutral"], width=1), row=r, col=1)
-    fig.add_hline(y=0, line=dict(color=COLORS["muted"], width=1, dash="dot"), row=1, col=1)
+    _add_shapes(fig, [_vline(fig, q * D.QUARTER_UNITS, dict(color=COLORS["neutral"], width=1), r, 1)
+                      for q in range(1, 4) for r in (1, 2)]
+                + [_hline(fig, 0, dict(color=COLORS["muted"], width=1, dash="dot"), 1, 1)])
     fig = style_fig(fig, "", unified=False, height=height)
     fig.update_layout(showlegend=False, bargap=0, margin=dict(l=4, r=70, t=8, b=4))
     fig.update_xaxes(range=[0, end], showticklabels=False, row=1, col=1)
@@ -1088,19 +1122,20 @@ def ground(fig, height, attack="Freo"):
     size the axes."""
     # The turf below everything; the markings above the data, so they always show.
     line = dict(color="rgba(120,120,120,0.55)", width=1.1)
-    fig.add_shape(type="circle", x0=-82, x1=82, y0=-66, y1=66, line=dict(width=0),
-                  fillcolor="#FBFBF8", layer="below")
-    fig.add_shape(type="circle", x0=-82, x1=82, y0=-66, y1=66,
-                  line=dict(color="rgba(120,120,120,0.7)", width=1.5), layer="above")
-    fig.add_shape(type="rect", x0=-25, x1=25, y0=-25, y1=25, line=line, layer="above")
-    for r in (3, 10):
-        fig.add_shape(type="circle", x0=-r, x1=r, y0=-r, y1=r, line=line, layer="above")
+    mark = dict(line=line, layer="above")
+    shapes = [dict(type="circle", x0=-82, x1=82, y0=-66, y1=66, line=dict(width=0),
+                   fillcolor="#FBFBF8", layer="below"),
+              dict(type="circle", x0=-82, x1=82, y0=-66, y1=66,
+                   line=dict(color="rgba(120,120,120,0.7)", width=1.5), layer="above"),
+              dict(type="rect", x0=-25, x1=25, y0=-25, y1=25, **mark)]
+    shapes += [dict(type="circle", x0=-r, x1=r, y0=-r, y1=r, **mark) for r in (3, 10)]
     for side in (1, -1):
         gx = 82 * side
-        fig.add_shape(type="path", path=_arc(gx, 50, side), line=line, layer="above")
-        fig.add_shape(type="rect", x0=gx - 9 * side, x1=gx, y0=-3.2, y1=3.2, line=line, layer="above")
-        for py in (-9.6, -3.2, 3.2, 9.6):
-            fig.add_shape(type="line", x0=gx, x1=gx + 2 * side, y0=py, y1=py, line=line, layer="above")
+        shapes += [dict(type="path", path=_arc(gx, 50, side), **mark),
+                   dict(type="rect", x0=gx - 9 * side, x1=gx, y0=-3.2, y1=3.2, **mark)]
+        shapes += [dict(type="line", x0=gx, x1=gx + 2 * side, y0=py, y1=py, **mark)
+                   for py in (-9.6, -3.2, 3.2, 9.6)]
+    _add_shapes(fig, shapes)
     # Plainly simulated, wherever this picture ends up.
     fig.add_annotation(x=0, xref="paper", y=0, yref="paper", text="<b>SIMULATED</b>", showarrow=False,
                        xanchor="left", yanchor="bottom", bgcolor="#E8A33D", borderpad=3,

@@ -399,17 +399,6 @@ def sim_paths(f, them):
     return text
 
 
-def calibration(ev):
-    """How the model's strongest calls came out in its test season: 'When it
-    made the home side a 70%+ favourite, they won 96% of those 51 games (it
-    said 81%). '"""
-    top = next((c for c in ev.get("calibration", []) if c["forecast"].startswith("70%")), None)
-    if not top or top["games"] < 10:
-        return ""
-    return (f"When it made the home side a 70%+ favourite, they won {top['won']:.0%} of those "
-            f"{top['games']} games (it said {top['said']:.0%}). ")
-
-
 def what_if(base, f, moved, levers, them, best=None):
     """'+3 centre clearances a game: Freo's win chance 60% to 66%, margin +8 to
     +12'; with nothing moved, the stat that moves it most (best: (metric,

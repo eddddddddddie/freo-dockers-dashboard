@@ -89,7 +89,12 @@ def test_next_opponent_opens_on_the_first_club_and_its_what_if_moves():
     assert any("Adelaide" in m.value for m in at.markdown if BAND in m.value)
     assert at.query_params["club"] == ["Adelaide"]
     takes = lambda a: [m.value for m in a.markdown if "win chance" in m.value and "to" in m.value]  # noqa: E731
-    at = at.slider(key="v2_wi_centre_clearances").set_value(3).run()
+    assert not [s for s in at.slider if s.key.startswith("v2_wi_")], "the what-if runs only when opened"
+    at.session_state["v2_whatif"] = True
+    at = at.run()
+    at.slider(key="v2_wi_centre_clearances").set_value(3)
+    at.session_state["v2_whatif"] = True      # AppTest doesn't keep an expander open; a browser does
+    at = at.run()
     assert not at.exception
     assert any("+3 centre clearances a game" in t for t in takes(at))
 

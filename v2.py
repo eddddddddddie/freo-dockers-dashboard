@@ -249,14 +249,6 @@ def _table_pick(df, key, on_pick, height=None, config=None):
 
 
 # ---- places --------------------------------------------------------------------
-def _goals(text, shown=3):
-    """'Voss 3, Dudley 2, Amiss 2 + 4 more' (a game's goal kickers, most first)."""
-    if not text or text == "none":
-        return "-"
-    parts = text.split(", ")
-    return ", ".join(parts[:shown]) + (f" + {len(parts) - shown} more" if len(parts) > shown else "")
-
-
 def last_game(ctx, season, tdf, pdf, pos):
     game = tdf.iloc[pos]
     opp = game["opponent"]
@@ -297,8 +289,7 @@ def last_game(ctx, season, tdf, pdf, pos):
     def numbers_card():
         """The tale of the tape and the game's leaders, side by side in one card."""
         rows = D.tale_of_the_tape(tdf, pos)
-        leaders, goals = D.match_leaders(pdf, game)
-        theirs = D.opp_match_leaders(game)
+        leaders, _ = D.match_leaders(pdf, game)
         with finding("v2_numbers", "Tale of the tape", T.tape(rows),
                      "tick: Freo's season average share · Freo's leaders open the player",
                      question="Which counts decided this game, and who stood out?"):
@@ -306,36 +297,26 @@ def last_game(ctx, season, tdf, pdf, pos):
             with a:
                 tape(rows, opp_color=club["chart"], names=("Freo", short))
             with b:
-                leaders_table(leaders, goals, theirs, short)
+                leaders_pills(leaders)
 
-    def leaders_table(leaders, goals, theirs, short):
-        """The game's leaders set like the tape beside them: the role, then Freo's
-        leader (a link to the player) and theirs, one row each."""
-        opp = theirs[0] if theirs else None
-        widths = [1, 1.25, 1.25] if opp else [1, 1.6]
-        with st.container(key="v2_lead_grid"):
-            head = st.columns(widths, vertical_alignment="center")
-            head[0].markdown('<div class="ld-h">Game leaders</div>', unsafe_allow_html=True)
-            head[1].markdown('<div class="ld-h">Freo</div>', unsafe_allow_html=True)
-            if opp:
-                head[2].markdown(f'<div class="ld-h">{html.escape(short)}</div>', unsafe_allow_html=True)
-            row = st.columns(widths, vertical_alignment="center")
-            row[0].markdown('<div class="ld-l">Goals</div>', unsafe_allow_html=True)
-            row[1].markdown(f'<div class="ld-v">{html.escape(_goals(goals))}</div>', unsafe_allow_html=True)
-            if opp:
-                row[2].markdown(f'<div class="ld-v">{html.escape(_goals(theirs[1]))}</div>',
-                                unsafe_allow_html=True)
-            for i, l in enumerate(leaders):
-                row = st.columns(widths, vertical_alignment="center")
-                row[0].markdown(f'<div class="ld-l" title="{html.escape(l["sub"])}">'
-                                f'{html.escape(l["role"].capitalize())}</div>', unsafe_allow_html=True)
-                if row[1].button(f"{l['player'].split()[-1]} {l['value']}", key=f"v2_lead_{i}",
-                                 type="tertiary", help=f"{l['player']}: {l['value']} {l['sub']}. Open the player"):
-                    go(place="Players", season=season, player=l["player"], vs=None)
-                if opp:
-                    o = next((x for x in opp if x["role"] == l["role"]), None)
-                    them = f"{o['player'].split()[-1]} {o['value']}" if o else "-"
-                    row[2].markdown(f'<div class="ld-v">{html.escape(them)}</div>', unsafe_allow_html=True)
+    def leaders_pills(leaders):
+        """Freo's leader in each role as a pill (photo, role, name, number); the
+        whole pill opens the player (an invisible button laid over it)."""
+        top = D.goal_leader(pdf, game)
+        shown = ([top] if top else []) + [l for l in leaders if l["player"] != "-"]
+        st.markdown('<div class="ld-h">Freo\'s game leaders</div>', unsafe_allow_html=True)
+        with st.container(key="v2_lead_pills"):
+            for i, l in enumerate(shown):
+                pid = D.player_details(ctx["player_df"], l["player"], season).get("player_id")
+                with st.container(key=f"v2_ldp_{i}"):
+                    st.markdown(
+                        f'<div class="ld-pill">{_avatar(l["player"], ctx["photo"](pid, season))}'
+                        f'<div class="ld-txt"><span class="ld-role">{html.escape(l["role"].capitalize())}</span>'
+                        f'<b>{html.escape(l["player"])}</b>'
+                        f'<span class="ld-val">{html.escape(l["value"])} {html.escape(l["sub"])}</span></div></div>',
+                        unsafe_allow_html=True)
+                    if st.button(" ", key=f"v2_ldb_{i}"):     # no help: a tooltip wraps the button differently on phones
+                        go(place="Players", season=season, player=l["player"], vs=None)
 
     grid([([1.55, 1], [momentum_card, ground_card]), ([1], [numbers_card])])
     # Every player's numbers on request: the page leads with the story, not the table.
@@ -471,9 +452,8 @@ VENUES = {"At home": 1, "Away": -1, "Neutral": 0}
 def sim_card_body(club, short, tint):
     """Freo v the club, simulated 10,000 times by the match model (model.py): win
     chance, likely margins, each side's chance of a 3+ goal run, and one example
-    game as a momentum chart. Plainly a forecast, with how the model tested."""
+    game as a momentum chart. Plainly a forecast."""
     import model as M
-    ev = M.load_eval()
     venue = st.session_state.get("v2_sim_venue") or "At home"
     f = _forecast(club, VENUES[venue])
     win, lose = f["win"], 1 - f["win"] - f["draw"]
@@ -534,16 +514,12 @@ def sim_card_body(club, short, tint):
             st.session_state["v2_sim_seed"] = n + 1
             st.rerun()
         # What if: inside the card, folded away, so the forecast leads.
-        with st.expander("What would change it? Move a stat and play the 10,000 games again",
-                         icon=":material/tune:", key="v2_whatif"):
-            what_if_body(club, short, tint)
-        if ev:
-            st.caption(f"How good is it? Tested on all {ev['games']} games of {ev['test']}, each predicted "
-                       f"from form before it was played: it tipped {ev['model']['tips']:.0%} "
-                       f"(recent form alone {ev['form']['tips']:.0%}, home ground alone "
-                       f"{ev['home']['tips']:.0%}), with an average margin error of "
-                       f"{ev['model']['mae']:.0f} points. {T.calibration(ev)}It knows nothing of "
-                       "injuries, selection, weather or tactics.")
+        # Run only while open: closed, it would still simulate every stat at the top of its slider.
+        whatif = st.expander("What would change it? Move a stat and play the 10,000 games again",
+                             icon=":material/tune:", key="v2_whatif", on_change="rerun")
+        if whatif.open:
+            with whatif:
+                what_if_body(club, short, tint)
 
 
 @st.cache_data(show_spinner=False, max_entries=500)
@@ -593,10 +569,6 @@ def what_if_body(club, short, tint):
     if moved:
         _plot(CH.margin_histogram(base["edges"], f["counts"], f["p50"], CHART_H, us="Freo", them=short,
                                   them_color=tint, base=base["counts"]))
-    st.caption("The model learned which stats have gone with scoring across the league, not what "
-               "causes it: each slider moves one stat with every other held still, so a stat that "
-               "rises with others (more inside 50s usually means more shots) moves less on its own. "
-               "Pressure acts and clangers aren't here: they rise for reasons other than playing well.")
 
 
 def our_season(ctx, season, baseline, tdf, pdf, games_slice):
@@ -1064,21 +1036,30 @@ def inject_css(dock_mode, win_h):
           @media (max-width: 1250px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }} }}
           @media (max-width: 699px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }} }}
           .cv-tiles.v2 .fr {{ font-size:.75rem; color:var(--muted); }}
-          /* Game leaders (Last game): set like the tape beside them. */
-          .st-key-v2_lead_grid {{ gap:0 !important; }}
-          .st-key-v2_lead_grid [data-testid="stHorizontalBlock"] {{ gap:8px; min-height:21px;
-            flex-wrap:nowrap !important; }}
-          .st-key-v2_lead_grid [data-testid="stColumn"] {{ min-width:0 !important; }}
-          @media (max-width: 699px) {{ .st-key-v2_lead_grid [data-testid="stColumn"] {{
-            width:auto !important; flex:1 1 0 !important; }} }}
-          .st-key-v2_lead_grid [data-testid="stMarkdownContainer"] {{ margin-bottom:0 !important; }}
-          .st-key-v2_lead_grid .ld-h {{ font-size:.75rem; font-weight:700; color:var(--muted); line-height:16px; }}
-          .st-key-v2_lead_grid .ld-l {{ font-size:.75rem; font-weight:500; color:var(--muted); line-height:1.25; }}
-          .st-key-v2_lead_grid .ld-v {{ font-size:.85rem; font-weight:800; color:var(--ink); line-height:1.25; }}
-          .st-key-v2_lead_grid div[data-testid="stButton"] button {{ min-height:21px; padding:0; }}
-          .st-key-v2_lead_grid div[data-testid="stButton"] button p {{ font-size:.85rem; font-weight:800;
-            color:var(--freo); }}
-          .st-key-v2_lead_grid div[data-testid="stButton"] button:hover p {{ text-decoration:underline; }}
+          /* Game leaders (Last game): a pill each, two a row; an invisible button over each opens the player. */
+          .ld-h {{ font-size:.75rem; font-weight:700; color:var(--muted); line-height:16px; margin:0 0 4px; }}
+          div[data-testid="stMarkdownContainer"]:has(> .ld-h),
+          .st-key-v2_lead_pills [data-testid="stMarkdownContainer"] {{ margin-bottom:0 !important; }}
+          .st-key-v2_lead_pills {{ display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr));
+            gap:8px !important; }}
+          @media (max-width: 499px) {{ .st-key-v2_lead_pills {{ grid-template-columns:minmax(0, 1fr); }} }}
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldp_"] {{ position:relative; gap:0 !important;
+            border:1px solid var(--line); border-radius:999px; background:#fff; transition:border-color .15s; }}
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldp_"]:hover {{ border-color:var(--brand); }}
+          .ld-pill {{ display:flex; align-items:center; gap:9px; padding:4px 14px 4px 4px; min-width:0; }}
+          .ld-pill .pl-photo {{ width:40px; height:40px; border:none; background:#F4F1F8; }}
+          .ld-pill .pl-initials {{ background:var(--brand-2); }}
+          .ld-txt {{ display:flex; flex-direction:column; min-width:0; line-height:1.2; }}
+          .ld-txt > * {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+          .ld-role {{ font-size:.7rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }}
+          .ld-txt b {{ font-size:.85rem; font-weight:800; color:var(--ink); }}
+          .ld-val {{ font-size:.75rem; font-weight:600; color:var(--freo); }}
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldb_"] {{ position:absolute; inset:0; z-index:2; margin:0; }}
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldb_"],
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldb_"] div,
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldb_"] span {{ width:100% !important; height:100% !important; }}
+          .st-key-v2_lead_pills div[class*="st-key-v2_ldb_"] button {{ width:100%; height:100%; min-height:0;
+            background:transparent !important; border:none !important; border-radius:999px; padding:0; }}
           .v2-line {{ font-size:.85rem; color:var(--muted); margin:2px 0 4px; }}
           .v2-line b {{ color:var(--ink); }}
           .cv-tiles.v2 .val small {{ font-size:.7em; color:var(--muted); font-weight:600; }}

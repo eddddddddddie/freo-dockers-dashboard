@@ -446,6 +446,16 @@ def match_leaders(pdf_season, game_row):
     return _leaders(g)
 
 
+def goal_leader(pdf_season, game_row):
+    """The game's top goal kicker as a leader row (most disposals breaks a tie), or None."""
+    g = pdf_season[(pdf_season["round"] == game_row["round"])
+                   & (pdf_season["opponent"] == game_row["opponent"]) & (pdf_season["goals"] > 0)]
+    if not len(g):
+        return None
+    top = g.sort_values(["goals", "disposals"], ascending=False).iloc[0]
+    return {"role": "Goals", "player": top["player"], "value": f"{int(top['goals'])}", "sub": "goals"}
+
+
 def _leaders(g):
     """One side's players in one game -> (leader of each role, goalkickers)."""
     out = []
@@ -569,14 +579,15 @@ def momentum(events, quarters, step=0.5):
     """Who has been scoring lately, every `step` minutes: the sum of the scores so
     far in the quarter, each weighted down by half every MOMENTUM_HALF_LIFE
     minutes. Positive is Freo. It starts at 0 each quarter: the break stops play."""
-    rows = []
+    parts = []
     for q, (start, length) in quarters.iterrows():
         in_q = events[events["quarter"] == q]
-        for t in np.arange(start, start + length + 1e-9, step):
-            past = in_q[in_q["t"] <= t]
-            m = float((past["pts"] * 0.5 ** ((t - past["t"]) / MOMENTUM_HALF_LIFE)).sum())
-            rows.append({"t": round(float(t), 3), "quarter": q, "momentum": m})
-    return pd.DataFrame(rows)
+        te, pe = in_q["t"].to_numpy(float), in_q["pts"].to_numpy(float)
+        grid = np.arange(start, start + length + 1e-9, step)
+        age = grid[:, None] - te[None, :]            # minutes since each score, at each step
+        m = np.where(age >= 0, pe * 0.5 ** (np.maximum(age, 0) / MOMENTUM_HALF_LIFE), 0).sum(axis=1)
+        parts.append(pd.DataFrame({"t": np.round(grid, 3), "quarter": q, "momentum": m}))
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["t", "quarter", "momentum"])
 
 
 def scoring_runs(events):
@@ -603,6 +614,7 @@ def _clock(t, quarters):
     return f"Q{q} {int(m // 60)}:{int(m % 60):02d}"
 
 
+@st.cache_data
 def season_events(tdf):
     """Every game in tdf with its scores in order: a list of (game row, events,
     quarters) for the games that have score events."""
@@ -714,24 +726,19 @@ def game_run_summary(tdf):
 def window_scoring(tdf, minutes=10):
     """Average points a game for and against in the first and last `minutes` of
     each quarter, and the rest of it (quarters run about 30 minutes)."""
-    acc = {}
     games = season_events(tdf)
-    for _, e, quarters in games:
-        for q, (start, length) in quarters.iterrows():
-            in_q = e[e["quarter"] == q]
-            into = in_q["t"] - start
-            part = pd.Series("Middle", index=in_q.index)
-            part[into <= minutes] = f"First {minutes}"
-            part[into > length - minutes] = f"Last {minutes}"
-            for p, grp in in_q.groupby(part):
-                f = float(grp.loc[grp["pts"] > 0, "pts"].sum())
-                o = float(-grp.loc[grp["pts"] < 0, "pts"].sum())
-                a = acc.setdefault((q, p), [0.0, 0.0])
-                a[0] += f
-                a[1] += o
     n = max(len(games), 1)
-    rows = [{"quarter": f"Q{q}", "part": p, "freo_pts": f / n, "opp_pts": o / n, "net": (f - o) / n}
-            for (q, p), (f, o) in acc.items()]
+    rows = []
+    if games:      # every game's scores at once, each placed in its part of its quarter
+        e = pd.concat([ev.assign(_start=ev["quarter"].map(q["start"]), _len=ev["quarter"].map(q["length"]))
+                       for _, ev, q in games], ignore_index=True)
+        into = e["t"] - e["_start"]
+        part = np.where(into > e["_len"] - minutes, f"Last {minutes}",
+                        np.where(into <= minutes, f"First {minutes}", "Middle"))
+        sums = (e.assign(part=part, f=e["pts"].clip(lower=0), o=-e["pts"].clip(upper=0))
+                .groupby(["quarter", "part"])[["f", "o"]].sum())
+        rows = [{"quarter": f"Q{q}", "part": p, "freo_pts": f / n, "opp_pts": o / n, "net": (f - o) / n}
+                for (q, p), (f, o) in zip(sums.index, sums.to_numpy(float))]
     order = {f"First {minutes}": 0, "Middle": 1, f"Last {minutes}": 2}
     out = pd.DataFrame(rows, columns=["quarter", "part", "freo_pts", "opp_pts", "net"])
     return out.sort_values(["quarter", "part"], key=lambda c: c.map(order) if c.name == "part" else c
