@@ -39,8 +39,9 @@ Feature-by-feature descriptions, measurements and history live in `docs/design_n
     delay): `league_score_events.csv`, every score of every AFL game in order (home and away as
     AFL Tables lists them), for other clubs' momentum charts. Checks each game's last score.
 - Check the merge of the two sources: `python -c "import data; data.ext_check()"`.
-- Match model: `python model.py` (about 3 min) trains on 2024 (2025 tunes the settings), predicts
-  every 2026 game from form before it, and saves the results and tuned settings to
+- Match model: `python model.py` (about 3 min) trains on 2024 (2025 tunes the settings and form
+  half-life), predicts every 2026 game from form before it (walk-forward: refitted before each
+  round on every game so far; the one-fit version is saved as "frozen"), and saves the results and tuned settings to
   `model_eval.json`, which the app reads (it refits the fast part on all seasons at start-up).
   It then works out every club v Freo at home, away and neutral into `model_forecasts.json`
   (51 forecasts, about 70 s; `python model.py forecasts` does only this), so the app's

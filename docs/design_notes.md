@@ -552,6 +552,16 @@ so every returning visitor is offered it once.
   changed almost nothing: Brier 0.1817 (0.1814 without), tips 70.6% (70.2%), margin error 26.1.
   The model was never overconfident on 2026: at the top it undersells favourites (said 81%,
   won 96%); the card's caption now says so.
+- Walk-forward and half-life (2026-10-14): `model.walk_forward` refits the regressions before
+  each 2026 round on every game played so far (as the app does after each refresh), keeping the
+  settings tuned before 2026; it is now the headline test ("model" in model_eval.json, the
+  one-fit version is "frozen"). The form half-life is tuned on 2025 from 3 to 24 games
+  (`tune_half_life`), but the 2025 error curve is flat from 8 to 24 (27.8 to 27.7), so it
+  keeps 8 unless another half-life wins by more than 0.25 points (`HL_TOL`). 2026 results:
+  walk-forward 26.05 / 72.5% / Brier 0.1831, frozen 26.08 / 70.6% / 0.1817. Retraining on
+  recent games changes almost nothing: the 1.9-point tips gain is 4 games of 218, and Brier is
+  slightly worse. A half-life of 24 (the 2025 pick by a hair) was worse on 2026 (26.3); 8 and
+  12 did best. The tolerance was set after seeing that.
 - What if: four sliders (inside 50s, contested possessions, centre clearances, tackles) move
   Freo's form average and play the 10,000 games again (`model.what_if`). The model is linear,
   so each lever's effect on both sides' expected shots and accuracy is saved once

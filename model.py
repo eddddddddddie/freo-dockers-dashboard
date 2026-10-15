@@ -2,9 +2,10 @@
 
 What it does
   1. Form: for every club before every game, a rolling average (exponentially
-     weighted, half-life HALF_LIFE games, carried across seasons) of each metric
-     for and against, from league_team_games.csv. Only games before the one
-     being predicted are used, so nothing leaks from the result.
+     weighted, carried across seasons) of each metric for and against, from
+     league_team_games.csv. Only games before the one being predicted are
+     used, so nothing leaks from the result. The half-life (in games) is
+     chosen from HL_GRID on the tuning season.
   2. Model: ridge regressions (numpy, standardised inputs) from both clubs'
      form and who is at home to each side's scoring shots and goal accuracy.
   3. Simulator: a game played score by score. Each side's scoring shots in each
@@ -27,7 +28,9 @@ import pandas as pd
 
 import data as D
 
-HALF_LIFE = 8          # games: a game 8 games ago counts half as much as the last one
+HALF_LIFE = 8          # games: a game 8 games ago counts half as much as the last one (default)
+HL_GRID = [3, 4, 6, 8, 12, 16, 24]     # half-lives tried on the tuning season
+HL_TOL = 0.25          # points of margin error a half-life must beat HALF_LIFE by to replace it
 MIN_PRIOR = 5          # games of history a club needs before its form is trusted
 METRICS = ["scoring_shots", "accuracy", "score_for", "inside50s", "contested_possessions",
            "uncontested_possessions", "centre_clearances", "stoppage_clearances", "metres_gained",
@@ -37,7 +40,7 @@ LAMBDAS = [1, 3, 10, 30, 100, 300, 1000, 3000]
 
 
 # ---- form and design ------------------------------------------------------------
-def form(lg):
+def form(lg, half_life=HALF_LIFE):
     """Each club's form going into each game: one row per (match_id, team) with
     f_<metric> (its own average) and a_<metric> (what its opponents averaged
     against it), plus n_prior (games of history)."""
@@ -49,9 +52,9 @@ def form(lg):
         for m in METRICS:
             own = g[m].astype(float)
             opp = g[f"opp_{m}"].astype(float) if f"opp_{m}" in g else None
-            cols[f"f_{m}"] = own.shift(1).ewm(halflife=HALF_LIFE).mean()
+            cols[f"f_{m}"] = own.shift(1).ewm(halflife=half_life).mean()
             if opp is not None:
-                cols[f"a_{m}"] = opp.shift(1).ewm(halflife=HALF_LIFE).mean()
+                cols[f"a_{m}"] = opp.shift(1).ewm(halflife=half_life).mean()
         df = pd.DataFrame(cols, index=g.index)
         df["n_prior"] = np.arange(len(g))
         df["match_id"], df["team"] = g["match_id"].values, g["team"].values
@@ -263,9 +266,9 @@ def one_game(lam, acc, k, shares, qlen, seed, kq=None, stick=0.0):
 
 
 # ---- fitting and evaluation ---------------------------------------------------------
-def training_frame(lg=None):
+def training_frame(lg=None, half_life=HALF_LIFE):
     lg = _league_with_extras(D.load_league() if lg is None else lg)
-    fm = form(lg)
+    fm = form(lg, half_life)
     X, ok = design(lg, fm)
     return lg, X, ok
 
@@ -274,13 +277,38 @@ KQ_GRID = [None, 30, 15, 8, 5]
 STICK_GRID = [0.0, 0.1, 0.2, 0.35]
 
 
-def fit(seasons_train, season_tune=None, lg=None, shape=True):
+def tune_half_life(seasons_train, season_tune, lg=None):
+    """The form half-life (games) that predicts the tuning season's margins best:
+    for each half-life in HL_GRID, fit on seasons_train (penalties picked on
+    season_tune as `fit` does) and score the margin error on season_tune.
+    The error curve is flat from about 8 to 24 games (2025: 27.8 to 27.7), so
+    the default stays unless another half-life beats it by more than HL_TOL.
+    Returns (half-life, {half-life: margin error})."""
+    lg = D.load_league() if lg is None else lg
+    errs = {}
+    for hl in HL_GRID:
+        lgx, X, ok = training_frame(lg, hl)
+        tr = ok & lgx["season"].isin(seasons_train).values
+        tu = ok & (lgx["season"] == season_tune).values
+        m = MatchModel()
+        m.cols = list(X.columns)
+        for target, attr in (("scoring_shots", "shots"), ("accuracy", "acc")):
+            y_tr, y_tu = lgx.loc[tr, target].values, lgx.loc[tu, target].values
+            lam = min(LAMBDAS, key=lambda l: np.mean((Ridge(l).fit(X[tr], y_tr).predict(X[tu]) - y_tu) ** 2))
+            setattr(m, attr, Ridge(lam).fit(X[tr], y_tr))
+        home = tu & lgx["is_home"].astype(bool).values
+        errs[hl] = float(np.mean(np.abs(_pred_margin(m, lgx, X, home) - lgx.loc[home, "margin"].values)))
+    best = min(HL_GRID, key=lambda h: errs[h])
+    return (best if errs[best] < errs[HALF_LIFE] - HL_TOL else HALF_LIFE), errs
+
+
+def fit(seasons_train, season_tune=None, lg=None, shape=True, half_life=HALF_LIFE):
     """Fit on seasons_train; on season_tune (never the test season) choose the
     penalties, the spread and the game-shape settings, then refit on both."""
-    lg, X, ok = training_frame(lg)
+    lg, X, ok = training_frame(lg, half_life)
     tr = ok & lg["season"].isin(seasons_train).values
     m = MatchModel().fit(X[tr], lg.loc[tr, "scoring_shots"].values, lg.loc[tr, "accuracy"].values)
-    m.kq, m.stick, m.unc = None, 0.0, 0.0
+    m.kq, m.stick, m.unc, m.half_life = None, 0.0, 0.0, half_life
     if season_tune is None:
         return m, lg, X, ok
     tu = ok & (lg["season"] == season_tune).values
@@ -292,6 +320,7 @@ def fit(seasons_train, season_tune=None, lg=None, shape=True):
                             tune_X=X[tu], tune_shots=lg.loc[tu, "scoring_shots"].values,
                             tune_acc=lg.loc[tu, "accuracy"].values)
     full.spread = max(1.0, spread)
+    full.half_life = half_life
     full.kq, full.stick = (_fit_shape(m, lg, X, home) if shape else (None, 0.0))
     # The model's own uncertainty: how much to blur each side's expected shots
     # before a game is played. Chosen on the tuning season by Brier score, with
@@ -460,35 +489,82 @@ def what_if(f, saved, changes, n=10000, seed=0):
     return {"lam": lam, "acc": acc, "counts": counts.tolist(), **outcome(margin)}
 
 
-def evaluate(train=(2024,), tune=2025, test=2026, n=4000):
-    """Fit on `train` (+ `tune` for the penalty, then refit with it), predict every
-    `test` game from the home side, before it happened. Returns a dict of results
-    against two baselines, and the momentum-shape check."""
-    model, lg, X, ok = fit(list(train), tune)
+def _refit(m, X, shots, acc):
+    """A copy of m with its regressions and spreads refitted on (X, shots, acc),
+    keeping its tuned penalties, spread, game shape and uncertainty."""
+    import copy
+    m = copy.copy(m)
+    m.cols = list(X.columns)
+    m.shots, m.acc = Ridge(m.lam_shots).fit(X, shots), Ridge(m.lam_acc).fit(X, acc)
+    pred = np.clip(m.shots.predict(X), 5, None)
+    m.k = float(np.mean(pred) ** 2 / max(np.var(shots - pred) - np.mean(pred), 1e-6))
+    p = np.clip(m.acc.predict(X) / 100, 0.3, 0.75)
+    m.acc_sd = float(np.sqrt(max(np.var(acc / 100 - p) - np.mean(p * (1 - p) / shots), 0.0)))
+    return m
+
+
+def walk_forward(model, lg, X, ok, test):
+    """Predict every `test` game as the app would have on the day: before each
+    round, refit the regressions on every game played so far (earlier seasons
+    and earlier rounds of this one), keeping the settings tuned before the test
+    season. Returns the home rows predicted and, for each, the refitted model's
+    (lam_h, lam_a, acc_h, acc_a, k, acc_sd)."""
     te = ok & (lg["season"] == test).values & lg["is_home"].astype(bool).values
+    season = lg[lg["season"] == test]
+    starts = season.groupby("api_round")["game_dt"].min().sort_values()
+    out = np.zeros((len(lg), 6))
+    for rnd, start in starts.items():
+        rows = te & (lg["api_round"] == rnd).values
+        if not rows.any():
+            continue
+        tr = ok & (lg["game_dt"] < start).values
+        m = _refit(model, X[tr], lg.loc[tr, "scoring_shots"].values, lg.loc[tr, "accuracy"].values)
+        lh, ah = m.predict(X[rows])
+        la, aa = m.predict(X.iloc[_away_rows(lg, rows)])
+        out[rows] = np.column_stack([lh, la, ah, aa, np.full(len(lh), m.k), np.full(len(lh), m.acc_sd)])
+    return te, out[te]
+
+
+def _wf_win_chances(model, p, n=4000):
+    """Win chances for walk-forward predictions (each game with its own round's k and acc_sd)."""
+    out = []
+    for i, (lh, la, ah, aa, k, acc_sd) in enumerate(p):
+        pts, *_ = simulate([lh, la], [ah, aa], k, None, None, n=n, seed=i, acc_sd=acc_sd, kq=model.kq,
+                           unc=model.unc)
+        mg = pts[:, 0] - pts[:, 1]
+        out.append((mg > 0).mean() + 0.5 * (mg == 0).mean())
+    return np.array(out)
+
+
+def evaluate(train=(2024,), tune=2025, test=2026, n=4000):
+    """Choose the form half-life and every setting on `train` + `tune`, then
+    predict every `test` game from the home side, before it happened, two ways:
+    walk-forward (refitted before each round on every game so far, as the app
+    does after each data refresh; the headline "model") and frozen (fitted once
+    on train + tune). Returns a dict of results against two baselines, and the
+    momentum-shape check."""
+    raw = D.load_league()
+    half_life, hl_mae = tune_half_life(list(train), tune, raw)
+    model, lg, X, ok = fit(list(train), tune, raw, half_life=half_life)
+    te, wf = walk_forward(model, lg, X, ok, test)
     games = lg[te]
-    Xh = X[te]
-    away_rows = []
-    for mid, team in zip(games["match_id"], games["opponent"]):
-        away_rows.append(np.where((lg["match_id"] == mid).values & (lg["team"] == team).values)[0][0])
-    Xa = X.iloc[away_rows]
-    lam_h, acc_h = model.predict(Xh)
-    lam_a, acc_a = model.predict(Xa)
-    exp_h = lam_h * (1 + 5 * acc_h)
-    exp_a = lam_a * (1 + 5 * acc_a)
-    pred = exp_h - exp_a
+    Xh, Xa = X[te], X.iloc[_away_rows(lg, te)]
+    lam_h, lam_a, acc_h, acc_a = wf[:, 0], wf[:, 1], wf[:, 2], wf[:, 3]
     actual = games["margin"].values.astype(float)
+    won = np.where(actual > 0, 1.0, np.where(actual < 0, 0.0, 0.5))
+    wins = _wf_win_chances(model, wf, n=n)
+    pred = lam_h * (1 + 5 * acc_h) - lam_a * (1 + 5 * acc_a)
+    fz_lh, fz_ah = model.predict(Xh)
+    fz_la, fz_aa = model.predict(Xa)
+    fz_pred = fz_lh * (1 + 5 * fz_ah) - fz_la * (1 + 5 * fz_aa)
+    fz_wins = _win_chances(model, fz_lh, fz_la, fz_ah, fz_aa, model.unc, n=n)
     shares = quarter_shares(D.load_league_events().query("season < @test"))
     qlen = quarter_lengths()
-    wins = _win_chances(model, lam_h, lam_a, acc_h, acc_a, model.unc, n=n)
-    won = np.where(actual > 0, 1.0, np.where(actual < 0, 0.0, 0.5))
     trn = lg[ok & lg["season"].isin(list(train) + [tune]).values & lg["is_home"].astype(bool).values]
     home_adv = float(trn["margin"].mean())
     home_rate = float((trn["margin"] > 0).mean() + 0.5 * (trn["margin"] == 0).mean())
-    fh = X.loc[te]
-    fa = Xa
-    form_pred = ((fh["us_f_score_for"].values - fh["us_a_score_for"].values)
-                 - (fa["us_f_score_for"].values - fa["us_a_score_for"].values)) / 2 + home_adv
+    form_pred = ((Xh["us_f_score_for"].values - Xh["us_a_score_for"].values)
+                 - (Xa["us_f_score_for"].values - Xa["us_a_score_for"].values)) / 2 + home_adv
     sd = float(np.std(trn["margin"]))
     from math import erf, sqrt
     form_win = np.array([0.5 * (1 + erf(v / (sd * sqrt(2)))) for v in form_pred])
@@ -503,7 +579,10 @@ def evaluate(train=(2024,), tune=2025, test=2026, n=4000):
         "games": int(len(games)), "lam_shots": model.lam_shots, "lam_acc": model.lam_acc, "k": model.k,
         "spread": model.spread, "kq": model.kq, "stick": model.stick, "unc": model.unc,
         "unc_brier": {str(u): b for u, b in model.unc_brier.items()},
+        "half_life": half_life, "half_life_mae": {str(h): e for h, e in hl_mae.items()},
         "model": {"mae": float(np.mean(np.abs(pred - actual))), "tips": tips(wins), "brier": brier(wins)},
+        "frozen": {"mae": float(np.mean(np.abs(fz_pred - actual))), "tips": tips(fz_wins),
+                   "brier": brier(fz_wins)},
         "form": {"mae": float(np.mean(np.abs(form_pred - actual))), "tips": tips(form_win),
                  "brier": brier(form_win)},
         "home": {"mae": float(np.mean(np.abs(home_adv - actual))), "tips": tips(np.full(len(won), home_rate)),
@@ -587,18 +666,13 @@ def app_model():
     """The model the app forecasts with: fitted on every season, with the
     penalties, spread and game-shape settings tuned in model_eval.json."""
     ev = load_eval()
-    lg, X, ok = training_frame()
+    half_life = ev.get("half_life", HALF_LIFE) if ev else HALF_LIFE
+    lg, X, ok = training_frame(half_life=half_life)
     m = MatchModel()
-    m.cols = list(X.columns)
-    lam_s = ev["lam_shots"] if ev else LAMBDAS[4]
-    lam_a = ev["lam_acc"] if ev else LAMBDAS[4]
-    shots, acc = lg.loc[ok, "scoring_shots"].values, lg.loc[ok, "accuracy"].values
-    m.lam_shots, m.lam_acc = lam_s, lam_a
-    m.shots, m.acc = Ridge(lam_s).fit(X[ok], shots), Ridge(lam_a).fit(X[ok], acc)
-    pred = np.clip(m.shots.predict(X[ok]), 5, None)
-    m.k = float(np.mean(pred) ** 2 / max(np.var(shots - pred) - np.mean(pred), 1e-6))
-    p = np.clip(m.acc.predict(X[ok]) / 100, 0.3, 0.75)
-    m.acc_sd = float(np.sqrt(max(np.var(acc / 100 - p) - np.mean(p * (1 - p) / shots), 0.0)))
+    m.lam_shots = ev["lam_shots"] if ev else LAMBDAS[4]
+    m.lam_acc = ev["lam_acc"] if ev else LAMBDAS[4]
+    m = _refit(m, X[ok], lg.loc[ok, "scoring_shots"].values, lg.loc[ok, "accuracy"].values)
+    m.half_life = half_life
     m.spread = ev["spread"] if ev else 1.0
     m.kq = ev["kq"] if ev else None
     m.stick = ev["stick"] if ev else 0.0
@@ -642,7 +716,7 @@ def save_forecasts(path=FORECASTS_JSON, club="Fremantle"):
            "acc_sd": m.acc_sd, "unc": m.unc, "edges": HIST_EDGES.tolist(), "path_bins": PATH_BINS,
            "band_pcts": list(BAND_PCTS), "levers": {k: {**LEVERS[k], **v} for k, v in lever_effects(m).items()},
            "freo_form": {k: float(lg[lg["team"] == club].sort_values("game_dt")[k].astype(float)
-                                  .ewm(halflife=HALF_LIFE).mean().iloc[-1]) for k in LEVERS},
+                                  .ewm(halflife=m.half_life).mean().iloc[-1]) for k in LEVERS},
            "forecasts": {}}
     for opp in sorted(t for t in lg["team"].unique() if t != club):
         for venue in (1, -1, 0):
@@ -673,7 +747,10 @@ if __name__ == "__main__":
     import sys
     if "forecasts" not in sys.argv[1:]:       # python model.py forecasts: skip the 3 min test
         r = save_eval()
-        print(f"Saved {EVAL_JSON}: model tips {r['model']['tips']:.1%}, margin error "
-              f"{r['model']['mae']:.1f}, Brier {r['model']['brier']:.3f} on {r['games']} {r['test']} games")
+        for name in ("model", "frozen", "form", "home"):
+            print(f"{name:>7}: tips {r[name]['tips']:.1%}, margin error {r[name]['mae']:.1f}, "
+                  f"Brier {r[name]['brier']:.3f}")
+        print(f"Saved {EVAL_JSON}: half-life {r['half_life']} games, {r['games']} {r['test']} games "
+              f"(model = walk-forward, refitted before each round)")
     f = save_forecasts()
     print(f"Saved {FORECASTS_JSON}: {len(f['forecasts'])} forecasts")

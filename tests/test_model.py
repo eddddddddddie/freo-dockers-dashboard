@@ -96,6 +96,29 @@ def test_uncertainty_is_chosen_on_the_tuning_season():
     assert ev["unc"] == min(briers, key=lambda u: (round(briers[u], 4), u))
 
 
+def test_walk_forward_uses_only_games_before_each_round(fitted):
+    m, _, _ = fitted
+    lg, X, ok = M.training_frame()
+    te, wf = M.walk_forward(m, lg, X, ok, 2026)
+    cut = lg.loc[te, "game_dt"].sort_values().iloc[len(wf) // 2]
+    late = lg.copy()
+    late.loc[late["game_dt"] >= cut, ["scoring_shots", "accuracy"]] = [99, 99.0]   # results not yet known
+    te2, wf2 = M.walk_forward(m, late, X, ok, 2026)
+    before = (lg.loc[te, "game_dt"] < cut).values
+    assert (te == te2).all() and before.sum() > 50
+    assert np.allclose(wf[before], wf2[before]) and not np.allclose(wf[~before], wf2[~before])
+
+
+def test_half_life_is_chosen_on_the_tuning_season():
+    ev = M.load_eval()
+    if ev is None or "half_life" not in ev:
+        pytest.skip("model_eval.json not made")
+    errs = {int(h): e for h, e in ev["half_life_mae"].items()}
+    assert set(errs) == set(M.HL_GRID)
+    best = min(errs, key=errs.get)
+    assert ev["half_life"] == (best if errs[best] < errs[M.HALF_LIFE] - M.HL_TOL else M.HALF_LIFE)
+
+
 def test_what_if_with_no_change_is_the_forecast_and_levers_match_a_live_run(fitted):
     saved = M.load_forecasts()
     if saved is None or "levers" not in saved:
