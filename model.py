@@ -407,13 +407,14 @@ def matchup(model, lg, X, club, opp, home, shares, n=10000, seed=0, shifts=None,
     through the games (path_summary)."""
     # Form after their latest game: roll the average forward one more game.
     after = {}
+    hl = getattr(model, "half_life", HALF_LIFE)
     for t in (club, opp):
         g = lg[lg["team"] == t].sort_values("game_dt")
         row = {}
         for m in METRICS:
-            row[f"f_{m}"] = g[m].astype(float).ewm(halflife=HALF_LIFE).mean().iloc[-1]
+            row[f"f_{m}"] = g[m].astype(float).ewm(halflife=hl).mean().iloc[-1]
             if f"opp_{m}" in g:
-                row[f"a_{m}"] = g[f"opp_{m}"].astype(float).ewm(halflife=HALF_LIFE).mean().iloc[-1]
+                row[f"a_{m}"] = g[f"opp_{m}"].astype(float).ewm(halflife=hl).mean().iloc[-1]
         after[t] = pd.Series(row)
     for metric, change in (shifts or {}).items():
         after[club][f"f_{metric}"] += change
