@@ -648,3 +648,7 @@ About four cards a page, with the heat maps, momentum and the simulator up front
   site's sub-nav); pickers are outlined pills; "Ask" is a lavender pill. Role-leader pills keep an
   outline because they open a player.
 - Wharf-ai: at most four suggestions beside the page (`app.SIDE_PROMPTS`), set as quiet grey rows.
+- Then: the pickers moved inside the band (`v2.head` wraps band and pickers in `st-key-v2_head`,
+  which takes the band's colours; pickers are white-outlined pills on it), and the card buttons
+  read "Ask Wharf-ai". The dropdown CSS had targeted `data-baseweb="select"`, which Streamlit 1.64
+  no longer renders, so no picker style had applied; it now targets `[role="group"]`.

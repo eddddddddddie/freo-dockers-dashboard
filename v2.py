@@ -54,6 +54,7 @@ TALL_H = 380
 DOCK = False           # set by run(): Wharf-ai docked to the bottom (phones, portrait tablets)
 PHONE = False          # set by run(): under 700px wide
 BAND_SLOT = None       # where the next band goes: the left of the band and pickers row (head)
+IN_HEAD = False        # the next band is inside head()'s banner
 
 
 # ---- navigation ---------------------------------------------------------------
@@ -134,26 +135,32 @@ def band(title, sub="", lead=None, facts=(), form=None, avatars="", style="", cl
         chips = "".join(f'<i title="{html.escape(t)}" style="background:{result_colour(r)}">{r}</i>'
                         for r, t in form)
         parts.append(f'<div class="cv-stat" title="Last 5 results"><div class="cv-form">{chips}</div></div>')
-    global BAND_SLOT
+    global BAND_SLOT, IN_HEAD
     slot, BAND_SLOT = BAND_SLOT or st.container(), None
+    # In a head row the band's colours go on the whole box, so the pickers sit inside the banner.
+    box = f"<style>.st-key-v2_head {{ {style} }}</style>" if IN_HEAD and style else ""
+    IN_HEAD = False
     with slot:
-        st.markdown(f'<div class="cv-band v2 {cls}" style="{style}">{"".join(parts)}</div>',
+        st.markdown(f'{box}<div class="cv-band v2 {cls}" style="{style}">{"".join(parts)}</div>',
                     unsafe_allow_html=True)
 
 
 def head(*widths):
-    """The band and the page's pickers on one row, so no row holds a picker alone:
-    the band on the left (drawn later by band()), then one column per picker.
-    On a phone the pickers sit above the band. Returns the picker columns."""
-    global BAND_SLOT
-    if PHONE:
-        cols = st.columns(len(widths))
-        BAND_SLOT = st.container()
+    """The band and the page's pickers in one banner (`st-key-v2_head`, in the band's
+    colours), so no row holds a picker alone: the band on the left (drawn later by
+    band()), then one column per picker. On a phone the pickers sit above the band.
+    Returns the picker columns."""
+    global BAND_SLOT, IN_HEAD
+    IN_HEAD = True
+    with st.container(key="v2_head"):
+        if PHONE:
+            cols = st.columns(len(widths))
+            BAND_SLOT = st.container()
+            return cols
+        band_w = 4.4 - sum(widths)
+        band_col, *cols = st.columns([band_w, *widths], vertical_alignment="center")
+        BAND_SLOT = band_col
         return cols
-    band_w = 4.4 - sum(widths)
-    band_col, *cols = st.columns([band_w, *widths], vertical_alignment="center")
-    BAND_SLOT = band_col
-    return cols
 
 
 def tiles(items):
@@ -205,9 +212,9 @@ def finding(name, label, headline="", how="", question=None):
     "Ask Wharf-ai" button that sends `question` to the panel."""
     with V.card(name):
         if question:
-            t, b = st.columns([4.2, 1], vertical_alignment="top")
+            t, b = st.columns([3.6, 1.4], vertical_alignment="top")
             with b:
-                if st.button("Ask", key=f"ask_{name}", icon=":material/forum:",
+                if st.button("Ask Wharf-ai", key=f"ask_{name}", icon=":material/forum:",
                              type="tertiary", help=f"Ask Wharf-ai: {question}"):
                     ask(question)
         else:
@@ -1026,6 +1033,22 @@ def inject_css(dock_mode, win_h):
           /* Pages scroll, so card text wraps instead of being cut off. */
           .card-title, .card-take, .card-title .take, .cv-band .ttl, .cv-band .ttl small {{ white-space:normal !important; }}
           .cv-band.v2 {{ height:auto; min-height:76px; flex-wrap:wrap; row-gap:6px; margin:10px 0 0; }}
+          /* The banner (head): the band and its pickers in one box in the band's colours;
+             the band inside goes transparent, the pickers are white-outlined pills. */
+          .st-key-v2_head {{ background:var(--brand); border-radius:4px; margin-top:10px; padding:0 16px 0 0;
+            position:relative; overflow:hidden; --mark:var(--mark-freo); gap:0; }}
+          .st-key-v2_head::after {{ content:""; position:absolute; right:14px; top:-10px; width:100px; height:100px;
+            background:var(--mark) no-repeat center/contain; opacity:.08; pointer-events:none; }}
+          .st-key-v2_head > div {{ position:relative; z-index:1; }}
+          .st-key-v2_head .cv-band.v2 {{ background:transparent !important; border:none !important; margin:0; }}
+          .st-key-v2_head .cv-band::after {{ display:none; }}
+          .st-key-v2_head div[data-testid="stSelectbox"] [role="group"] {{
+            background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.45); color:#fff; }}
+          .st-key-v2_head div[data-testid="stSelectbox"] [role="group"]:hover {{
+            background:rgba(255,255,255,.16); border-color:#fff; }}
+          .st-key-v2_head div[data-testid="stSelectbox"] [role="group"] * {{ color:#fff; }}
+          .st-key-v2_head div[data-testid="stSelectbox"] svg {{ fill:#fff; }}
+          @media (max-width: 699px) {{ .st-key-v2_head {{ padding:12px 12px 0; gap:8px; }} }}
           .cv-band.v2 .cv-stat span {{ display:block; }}
           .cv-band.v2 .cv-stat .cv-res {{ display:inline-block; line-height:1.35; margin-bottom:4px; }}
           .st-key-card_v2_numbers [data-testid="stButtonGroup"] > div {{ flex-wrap:wrap !important; }}

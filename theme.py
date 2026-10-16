@@ -185,8 +185,9 @@ def inject_css():
           .st-key-topbar div[data-testid="stButton"] button p { color:#fff; }
           .st-key-topbar div[data-testid="stButton"] button:hover { background:#fff; color:var(--brand); }
           .st-key-topbar div[data-testid="stButton"] button:hover p { color:var(--brand); }
-          .st-key-topbar div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+          .st-key-topbar div[data-testid="stSelectbox"] [role="group"] {
             background:transparent; border-color:rgba(255,255,255,.38); color:#fff; }
+          .st-key-topbar div[data-testid="stSelectbox"] [role="group"] * { color:#fff; }
           .st-key-topbar div[data-testid="stSelectbox"] svg { fill:#fff; }
 
           /* Cards: keyed containers (st-key-card_*), plus the older wrapper name */
@@ -274,10 +275,10 @@ def inject_css():
           div[class*="st-key-v2_roles_"] button:hover { border-color:var(--brand) !important; }
 
           /* Pickers: the club site's filter pills */
-          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:38px; font-size:.85rem;
+          div[data-testid="stSelectbox"] [role="group"] { min-height:38px; font-size:.85rem;
             font-weight:600; color:var(--ink); border-radius:999px; border:1px solid #D9D9D9; background:#fff;
             padding-left:8px; }
-          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover { border-color:var(--brand); }
+          div[data-testid="stSelectbox"] [role="group"]:hover { border-color:var(--brand); }
 
           /* Streamlit pulls markdown blocks up by 1rem; not wanted for these. */
           div[data-testid="stMarkdownContainer"]:has(> .cv-band),
@@ -451,7 +452,7 @@ def inject_css():
           div[class*="st-key-ask_"] { display:flex; justify-content:flex-end; }
           div[class*="st-key-ask_"] button[kind="tertiary"] { background:var(--lav); border-radius:999px;
             padding:4px 14px; width:auto; }
-          div[class*="st-key-ask_"] button p { color:var(--brand); font-weight:700; }
+          div[class*="st-key-ask_"] button p { color:var(--brand); font-weight:700; white-space:nowrap; }
           div[class*="st-key-ask_"] button:hover { background:#E2DBEE; }
           .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:34px; height:34px; min-height:34px;
             padding:0; border-radius:50%; justify-content:center; border:1.5px solid var(--brand);
@@ -529,7 +530,7 @@ def inject_phone_css():
           .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:40px; height:40px; min-height:40px; }
           div[data-testid="stButtonGroup"] button { min-height:40px; padding:4px 10px; }
           div[data-testid="stButtonGroup"] button p { font-size:.85rem; }
-          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:40px; font-size:.9rem; }
+          div[data-testid="stSelectbox"] [role="group"] { min-height:40px; font-size:.9rem; }
           div[data-testid="stButton"] button { min-height:44px; }
           div[data-testid="stButton"] button p { font-size:.88rem; }
           div[data-testid="stButton"] button[kind="tertiary"] { min-height:36px; }
@@ -570,7 +571,7 @@ def inject_tablet_css():
         <style>
           div[data-testid="stButton"] button { min-height:38px; }
           div[data-testid="stButtonGroup"] button { min-height:36px; }
-          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:36px; }
+          div[data-testid="stSelectbox"] [role="group"] { min-height:36px; }
           .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:38px; height:38px; min-height:38px; }
           div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
             position:absolute; width:0; height:0; overflow:hidden; margin:0; }

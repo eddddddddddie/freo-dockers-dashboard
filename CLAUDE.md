@@ -164,8 +164,10 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   with `v2.go(place=...)`. Cards reused from `views.py` call `nav.go(view=...)`; `v2.apply`
   translates those (Match -> Last game, Player -> Players, Scout -> Next opponent), which also
   keeps old `?view=` links working.
-- `v2.head(*widths)` puts a page's pickers on the band's row (the band left, pickers right;
-  above the band on a phone), so no row holds a picker alone. The bar's title is "*Freo* In
+- `v2.head(*widths)` puts a page's pickers inside the band (one `st-key-v2_head` box in the
+  band's colours, the band left, white-outlined pickers right; above the band on a phone), so no
+  row holds a picker alone. Card buttons read "Ask Wharf-ai". Streamlit 1.64 selectboxes are
+  react-aria: style `[data-testid="stSelectbox"] [role="group"]`, not `data-baseweb`. The bar's title is "*Freo* In
   Numbers" (`theme.brand_title`).
 - Picker first options are real strings (`SQUAD`, `NOBODY`), not None: a None value shows
   Streamlit's "Choose an option" placeholder. Next opponent opens on the first club (Adelaide).
