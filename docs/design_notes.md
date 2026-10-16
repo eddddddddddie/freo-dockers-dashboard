@@ -627,3 +627,24 @@ About four cards a page, with the heat maps, momentum and the simulator up front
 - Result (local): first visit to Our season 0.9 s, Next opponent 1.1 s; charts pixel-identical.
 - The model accuracy caption under the simulator and the long caption under the what-if
   sliders were removed (the tour still says the what-if is association, not cause).
+
+## Calmer look, closer to the club site (2026-10-16)
+- Compared side by side with fremantlefc.com.au (home, fixture, ladder, squad, match centre). The
+  site gives one thing per section a big bold heading, lots of white space, big numerals in the
+  match hero, nav words in a soft pill, filters as outlined pills, round W/L chips on the ladder.
+  The app felt busy: six boxed tiles, three lines of small text per card header, outlined
+  segmented controls everywhere, two look-alike button groups in the bar, eight boxed suggestions.
+- Top bar: places are bold white words, the one selected in a soft white pill (the site's nav);
+  seasons became a small outlined toggle (a filter, not a place), white fill on the one selected.
+  Under 1400px both shrink so the bar stays on one line.
+- Band: taller (76px), the lead number 2.3rem (the score on Last game), facts 1.3rem; round
+  W/L chips.
+- Tiles: one white strip divided by hairlines instead of six boxes; values 1.6rem.
+- Card headers (`theme.card_title`): the title is a small purple uppercase eyebrow, the takeaway
+  is the heading (1.08rem, bold, site purple), how to read it is one grey line under it. A card
+  with no takeaway uses its title as the heading. `.card-take` inside a card is a smaller sub-head.
+  Cards have more padding (18px 20px) and the page more gap (12px / 14px).
+- Controls: segmented controls drop their boxes (soft lavender pill on the one selected, the
+  site's sub-nav); pickers are outlined pills; "Ask" is a lavender pill. Role-leader pills keep an
+  outline because they open a player.
+- Wharf-ai: at most four suggestions beside the page (`app.SIDE_PROMPTS`), set as quiet grey rows.

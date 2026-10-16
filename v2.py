@@ -1025,14 +1025,14 @@ def inject_css(dock_mode, win_h):
           .block-container {{ padding:0 14px {"96px" if dock_mode else "24px"} !important; }}
           /* Pages scroll, so card text wraps instead of being cut off. */
           .card-title, .card-take, .card-title .take, .cv-band .ttl, .cv-band .ttl small {{ white-space:normal !important; }}
-          .cv-band.v2 {{ height:auto; min-height:56px; flex-wrap:wrap; row-gap:6px; margin:6px 0 4px; }}
+          .cv-band.v2 {{ height:auto; min-height:76px; flex-wrap:wrap; row-gap:6px; margin:10px 0 0; }}
           .cv-band.v2 .cv-stat span {{ display:block; }}
           .cv-band.v2 .cv-stat .cv-res {{ display:inline-block; line-height:1.35; margin-bottom:4px; }}
           .st-key-card_v2_numbers [data-testid="stButtonGroup"] > div {{ flex-wrap:wrap !important; }}
           /* Phones: the title (beside any photos) takes the first line, the numbers wrap under it. */
           @media (max-width: 699px) {{ .cv-band.v2 .ttl {{ flex:1 1 calc(100% - 120px) !important; min-width:0; }} }}
           /* Tiles fill whole rows: 6, then 3, then 2 a row as the window narrows. */
-          .cv-tiles.v2 {{ grid-template-columns:repeat(6, minmax(0, 1fr)) !important; margin:6px 0; }}
+          .cv-tiles.v2 {{ grid-template-columns:repeat(6, minmax(0, 1fr)) !important; margin:0; }}
           @media (max-width: 1250px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }} }}
           @media (max-width: 699px) {{ .cv-tiles.v2 {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }} }}
           .cv-tiles.v2 .fr {{ font-size:.75rem; color:var(--muted); }}

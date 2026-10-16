@@ -247,8 +247,12 @@ Cloud Secrets. The repo is public: no credentials, admin emails or unlimited-use
   tests' app gets its own secrets file, never `.streamlit/secrets.toml`.
 
 ## Style and constraints
-- Look follows fremantlefc.com.au: flat purple #331C54 top bar, #F7F7F7 page, white cards (4px
-  radius, no border or shadow), Inter, Source Serif 4 for the title. Never use the Fremantle (or
+- Look follows fremantlefc.com.au: flat purple #331C54 top bar (places as white words in a soft
+  pill, seasons a small outlined toggle), #F7F7F7 page, white cards (4px radius, no border or
+  shadow, roomy padding), Inter, Source Serif 4 for the title. Card headers: small uppercase
+  eyebrow, the takeaway as the heading, one grey how-to-read line. Tiles are one white strip with
+  hairlines. Segmented controls are borderless with a lavender pill (`--lav`); pickers are
+  outlined pills. Keep it calm: one heading per card, few boxes. Never use the Fremantle (or
   any club's) logo, crest, photos, font files or other trademarks; band drawings in `marks.py` are
   our own. Other clubs appear in their colours only (`theme.CLUB_COLOURS`).
 - All colours live in `theme.COLORS` / `RAMP` / `DIVERGE` / `SERIES` / `HEAT` (nothing hard-coded

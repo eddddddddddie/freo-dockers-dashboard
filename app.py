@@ -182,8 +182,11 @@ def _lines(text, width):
     return max(1, -(-int(len(text) * CHAR_W) // max(int(width), 1)))
 
 
+SIDE_PROMPTS = 4               # at most this many suggestions beside the page: a short list reads calmer
+
+
 def fitting_prompts(prompts, insight, win_w, history_h):
-    """As many prompts as fit between the insight card and the chat box.
+    """Up to SIDE_PROMPTS prompts, as many as fit between the insight card and the chat box.
     Button and insight heights are estimated from text length and the panel
     width, since long prompts wrap onto two lines in a narrow panel."""
     # Measured at 1440 and 1920 wide: a prompt button is 30px (50px on two
@@ -199,6 +202,8 @@ def fitting_prompts(prompts, insight, win_w, history_h):
             continue            # too tall for what is left: a shorter one may still fit
         used += h
         out.append(q)
+        if len(out) == SIDE_PROMPTS:
+            break
     return out or prompts[:3]
 
 
@@ -336,7 +341,7 @@ def chat_panel(season, baseline, focus=None):
                 st.rerun(scope="fragment")
         clicked = None
         if not msgs:
-            # Fill the panel to the bottom: as many suggestions as fit under the insight.
+            # A few suggestions under the insight (as many as fit, at most SIDE_PROMPTS).
             st.markdown('<div class="wa-sub">Try asking</div>', unsafe_allow_html=True)
             longest = max(pool, key=len) if pool else insight  # the card is as tall as this
             shown = (example_prompts(season, baseline, focus)[:TOP_PROMPTS] if DOCK else

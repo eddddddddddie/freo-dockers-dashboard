@@ -1,8 +1,9 @@
 """Colours, Plotly styling, CSS and HTML components for Freo In Numbers.
 
-Styled after the club website's look (flat deep purple #331C54 header and
-navigation, #F7F7F7 page, white cards with a soft shadow, bold Inter headings
-in sentence case, purple-to-maroon match card), without any club logo, crest,
+Styled after the club website's look (flat deep purple #331C54 header with nav
+words in a soft pill, #F7F7F7 page, roomy white cards, a big bold heading per
+card under a small eyebrow, outlined filter pills, purple-to-maroon match card,
+big numerals in the band), without any club logo, crest,
 photos or other trademarks. Data colours stay the validated pair below. The categorical pair (Freo purple,
 opposition orange) was validated for lightness, chroma, colour-vision
 separation and contrast on a light surface. Colour follows the entity (Freo is
@@ -124,7 +125,7 @@ def inject_css():
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;1,8..60,600&display=swap');
           :root { --brand:#331C54; --brand-2:#4A2A78; --maroon:#8B0042; --ink:#1A1A1A;
                   --muted:#525252; --line:#E6E6E6; --canvas:#F7F7F7;
-                  --freo:#61359C; --opp:#008CA2; }
+                  --freo:#61359C; --opp:#008CA2; --lav:#EEEAF4; }
           html, body, .stApp, .stApp button, .stApp input, .stApp textarea, .stApp select,
           .stApp [data-testid="stMarkdownContainer"], .stApp [data-baseweb] {
             font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -135,8 +136,8 @@ def inject_css():
           [data-testid="stToolbar"], [data-testid="stDecoration"],
           section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none !important; }
           .block-container { padding:0 14px 0 !important; max-width:100% !important; }
-          div[data-testid="stVerticalBlock"] { gap:6px; }
-          div[data-testid="stHorizontalBlock"] { gap:8px; }
+          div[data-testid="stVerticalBlock"] { gap:12px; }
+          div[data-testid="stHorizontalBlock"] { gap:14px; }
           div[data-testid="stElementContainer"]:has(> .stPlotlyChart) { margin:0; }
 
           /* The top bar, after the club site's nav bar: flat purple, edge to edge,
@@ -144,7 +145,7 @@ def inject_css():
              underline on the one selected, outlined icon buttons. */
           [data-testid="stLayoutWrapper"]:has(> .st-key-topbar) { margin:0 -14px 2px;
             width:auto !important; max-width:none !important; align-self:stretch; }
-          .st-key-topbar { background:var(--brand); padding:2px 14px; width:100% !important;
+          .st-key-topbar { background:var(--brand); padding:8px 14px; width:100% !important;
             border-bottom:1px solid rgba(255,255,255,.14); }
           /* The CSS blocks above the bar take no room (no gap above it). */
           .block-container div[data-testid="stElementContainer"]:has(> .stMarkdown [data-testid="stMarkdownContainer"] > style:only-child) {
@@ -153,16 +154,32 @@ def inject_css():
             font-size:1.95rem; line-height:1; color:#fff; letter-spacing:-.5px; white-space:nowrap;
             overflow:hidden; text-overflow:ellipsis; }
           .cv-brand i { font-style:italic; }
-          .st-key-topbar [data-testid="stButtonGroup"] > div { gap:2px; }
+          /* Places: the club site's nav, bold white words, the one selected in a soft pill. */
+          .st-key-topbar [data-testid="stButtonGroup"] > div { gap:4px; }
           .st-key-topbar [data-testid="stButtonGroup"] button { background:transparent !important;
-            border:none !important; border-radius:0 !important; box-shadow:none !important;
-            min-height:36px; padding:2px 9px; }
-          .st-key-topbar [data-testid="stButtonGroup"] button p { color:rgba(255,255,255,.78);
-            font-weight:700; font-size:.88rem; }
+            border:none !important; border-radius:999px !important; box-shadow:none !important;
+            min-height:38px; padding:4px 16px; }
+          .st-key-topbar [data-testid="stButtonGroup"] button p { color:rgba(255,255,255,.82);
+            font-weight:700; font-size:.98rem; }
           .st-key-topbar [data-testid="stButtonGroup"] button:hover { background:rgba(255,255,255,.08) !important; }
           .st-key-topbar [data-testid="stButtonGroup"] button[aria-checked="true"] {
-            box-shadow:inset 0 -3px 0 #fff !important; }
+            background:rgba(255,255,255,.16) !important; }
           .st-key-topbar [data-testid="stButtonGroup"] button[aria-checked="true"] p { color:#fff; }
+          /* Seasons: a filter, not a place, so a small outlined toggle (the club's filter pills). */
+          .st-key-season [data-testid="stButtonGroup"] > div { gap:0; border:1px solid rgba(255,255,255,.3);
+            border-radius:999px; padding:2px; width:max-content; }
+          .st-key-season [data-testid="stButtonGroup"] button { min-height:30px; padding:2px 11px; }
+          .st-key-season [data-testid="stButtonGroup"] button p { font-size:.82rem; font-weight:600;
+            color:rgba(255,255,255,.7); }
+          .st-key-season [data-testid="stButtonGroup"] button[aria-checked="true"] { background:#fff !important; }
+          .st-key-season [data-testid="stButtonGroup"] button[aria-checked="true"] p { color:var(--brand); font-weight:700; }
+          /* Smaller desktops: the bar keeps everything on one line. */
+          @media (max-width: 1400px) {
+            .st-key-topbar [data-testid="stButtonGroup"] button { padding:4px 10px; }
+            .st-key-topbar [data-testid="stButtonGroup"] button p { font-size:.9rem; }
+            .st-key-season [data-testid="stButtonGroup"] button { padding:2px 8px; }
+            .st-key-season [data-testid="stButtonGroup"] button p { font-size:.78rem; }
+            .cv-brand { font-size:1.65rem; } }
           .st-key-topbar div[data-testid="stButton"] button { background:transparent;
             border:1px solid rgba(255,255,255,.38); color:#fff; }
           .st-key-topbar div[data-testid="stButton"] button p { color:#fff; }
@@ -177,30 +194,36 @@ def inject_css():
           div[data-testid="stVerticalBlockBorderWrapper"] {
             background:#FFFFFF; border:none !important; border-radius:4px; box-shadow:none;
           }   /* white on the light page is boundary enough: no border, no shadow */
-          div[class*="st-key-card_"] { gap:2px; }
-          div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:2px; }
-          .card-title {
-            font-size:.82rem; font-weight:700; letter-spacing:-.2px; color:var(--ink);
-            margin:0; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-          }
-          .card-title span { color:var(--muted); font-weight:400; font-size:.75rem; letter-spacing:0; }
-          .card-title .key { color:var(--muted); margin-left:8px; white-space:nowrap; font-size:.75rem; font-weight:500; }
-          .card-take, .card-title .take { display:block; font-size:.8rem; font-weight:600; color:var(--brand);
-            line-height:1.35; margin:0 0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-            letter-spacing:0; }
+          div[class*="st-key-card_"] { gap:6px; padding:18px 20px 14px; }
+          div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] { gap:6px; }
+          /* Card heading, after the club site's sections: a small eyebrow (what the card
+             is), the finding as the heading, and how to read it in small grey type. */
+          .card-title { font-size:.75rem; color:var(--muted); margin:0 0 6px; line-height:1.35;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .card-title .eb { display:block; font-size:.72rem; font-weight:700; letter-spacing:.08em;
+            text-transform:uppercase; color:var(--freo); margin-bottom:3px; }
+          .card-title .eb.only { font-size:1.05rem; font-weight:700; letter-spacing:-.3px; text-transform:none;
+            color:var(--brand); }
+          .card-title .how { display:block; color:var(--muted); font-weight:400; font-size:.75rem; margin-top:2px; }
+          .card-title .key { color:var(--muted); margin-left:8px; white-space:nowrap; font-size:.75rem;
+            font-weight:500; letter-spacing:0; text-transform:none; }
+          .card-take, .card-title .take { display:block; font-size:1.08rem; font-weight:700; color:var(--brand);
+            line-height:1.3; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            letter-spacing:-.3px; }
+          .card-take { font-size:.9rem; letter-spacing:-.1px; margin:6px 0 2px; }  /* a sub-heading inside a card */
           .card-title .key i { display:inline-block; width:9px; height:9px; border-radius:2px;
             margin-right:4px; vertical-align:-1px; }
 
           /* Header band */
           .cv-band {
             background:var(--brand);
-            color:#fff; border-radius:4px; padding:7px 14px; height:52px;
+            color:#fff; border-radius:4px; padding:12px 20px; height:76px;
             display:flex; align-items:center; gap:clamp(10px, 1.2vw, 22px); overflow:hidden;
           }
           /* The title block gives way (its subtitle ellipsises) so a band never overflows. */
-          .cv-band .ttl { font-weight:800; font-size:1.08rem; letter-spacing:-.3px; white-space:nowrap;
+          .cv-band .ttl { font-weight:800; font-size:1.3rem; letter-spacing:-.4px; white-space:nowrap;
             flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-          .cv-band .ttl small { display:block; font-weight:500; font-size:.75rem; letter-spacing:0;
+          .cv-band .ttl small { display:block; font-weight:500; font-size:.8rem; letter-spacing:0; margin-top:2px;
             color:rgba(255,255,255,.72); overflow:hidden; text-overflow:ellipsis; }
           .cv-band .cv-stat { flex:none; }
           .cv-band.match { background:linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 55%, var(--maroon) 100%); }
@@ -208,38 +231,53 @@ def inject_css():
              crests: our own line drawings (marks.py), the anchor for Freo and a
              club's mascot in its Scout band and at their end of the Match band. */
           .cv-band { position:relative; --mark:var(--mark-freo); }
-          .cv-band::after { content:""; position:absolute; right:14px; top:-8px; width:80px; height:80px;
+          .cv-band::after { content:""; position:absolute; right:14px; top:-10px; width:100px; height:100px;
             background:var(--mark) no-repeat center/contain; opacity:.08; pointer-events:none; }
           .cv-band.club::after, .cv-band.match::after { right:24px; }
           .cv-stat { line-height:1.05; white-space:nowrap; }
-          .cv-stat b { font-size:1.08rem; font-weight:700; }
+          .cv-stat b { font-size:1.3rem; font-weight:800; letter-spacing:-.3px; }
           .cv-stat span { display:block; font-size:.75rem; letter-spacing:.04em; text-transform:uppercase;
             color:rgba(255,255,255,.75); }
-          .cv-stat.hero b { font-size:1.75rem; font-weight:800; letter-spacing:-.8px; line-height:1; }
+          .cv-stat.hero b { font-size:2.3rem; font-weight:800; letter-spacing:-1px; line-height:1; }
           .cv-form { display:flex; gap:3px; }
-          .cv-form i { font-style:normal; font-size:.75rem; font-weight:700; width:20px;
-            height:20px; border-radius:4px; display:flex; align-items:center;
+          .cv-form i { font-style:normal; font-size:.75rem; font-weight:700; width:22px;
+            height:22px; border-radius:50%; display:flex; align-items:center;
             justify-content:center; color:#fff; box-shadow:0 0 0 1.5px rgba(255,255,255,.9); }
 
           /* Headline tiles */
-          .cv-tiles { margin:2px 0 8px; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:8px; }
-          .cv-tile { background:#fff; border:none; border-radius:4px;
-            padding:6px 8px 4px; min-width:0; box-shadow:none; }
-          .cv-tile .lbl { font-size:.75rem; font-weight:700; color:var(--muted); white-space:nowrap; overflow:hidden;
-            text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.04em; }
-          .cv-tile .val { font-size:1.4rem; font-weight:800; letter-spacing:-.4px; color:var(--ink); line-height:1.15; }
-          .cv-tile .dlt { font-size:.75rem; font-weight:600; margin-left:3px; white-space:nowrap; }
-          .cv-tile svg { display:block; width:100%; height:22px; margin-top:1px; }
+          .cv-tiles { margin:0; display:grid; grid-template-columns:repeat(var(--n, 6), 1fr); gap:0;
+            background:#fff; border-radius:4px; overflow:hidden; }
+          .cv-tile { background:#fff; border:none; padding:14px 16px 10px; min-width:0;
+            box-shadow:-1px 0 0 var(--line), 0 -1px 0 var(--line); }
+          .cv-tile .lbl { font-size:.72rem; font-weight:700; color:var(--muted); white-space:nowrap; overflow:hidden;
+            text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.03em; }
+          .cv-tile .val { font-size:1.6rem; font-weight:800; letter-spacing:-.6px; color:var(--ink); line-height:1.2;
+            margin-top:2px; }
+          .cv-tile .dlt { font-size:.75rem; font-weight:600; margin-left:4px; white-space:nowrap; letter-spacing:0; }
+          .cv-tile svg { display:block; width:100%; height:18px; margin-top:4px; }
           /* Narrow windows: value, rank chip and change stay on one line. */
           .cv-tile .val { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-          @media (max-width: 1380px) { .cv-tile .val { font-size:1.22rem; letter-spacing:-.6px; }
+          @media (max-width: 1380px) { .cv-tile { padding:12px 12px 8px; } .cv-tile .val { font-size:1.3rem; letter-spacing:-.6px; }
             .cv-tile .dlt { margin-left:1px; letter-spacing:-.2px; } }
 
           /* Compact segmented controls */
-          div[data-testid="stButtonGroup"] button { min-height:28px; padding:2px 7px; }
-          div[data-testid="stButtonGroup"] button p { font-size:.75rem; }
+          div[data-testid="stButtonGroup"] > div { gap:4px; }
+          div[data-testid="stButtonGroup"] button { min-height:30px; padding:2px 12px; border:none !important;
+            border-radius:999px !important; background:transparent; box-shadow:none !important; }
+          div[data-testid="stButtonGroup"] button p { font-size:.8rem; font-weight:600; color:var(--muted); }
+          div[data-testid="stButtonGroup"] button:hover p { color:var(--brand); }
+          div[data-testid="stButtonGroup"] button[aria-checked="true"] { background:var(--lav) !important; }
+          div[data-testid="stButtonGroup"] button[aria-checked="true"] p { color:var(--brand); font-weight:700; }
+          /* Pills that open something (role leaders) keep an outline, so they read as links. */
+          div[class*="st-key-v2_roles_"] button { border:1px solid #D9D9D9 !important; background:#fff; }
+          div[class*="st-key-v2_roles_"] button p { color:var(--ink); font-weight:500; }
+          div[class*="st-key-v2_roles_"] button:hover { border-color:var(--brand) !important; }
 
-          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:30px; font-size:.8rem; }
+          /* Pickers: the club site's filter pills */
+          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:38px; font-size:.85rem;
+            font-weight:600; color:var(--ink); border-radius:999px; border:1px solid #D9D9D9; background:#fff;
+            padding-left:8px; }
+          div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover { border-color:var(--brand); }
 
           /* Streamlit pulls markdown blocks up by 1rem; not wanted for these. */
           div[data-testid="stMarkdownContainer"]:has(> .cv-band),
@@ -348,9 +386,10 @@ def inject_css():
 
           @media (max-width: 1500px) {
             .cv-band.match { gap:12px; padding:7px 11px; }
-            .cv-band.match .cv-stat b { font-size:.98rem; } .cv-band.match .ttl { font-size:1rem; } }
+            .cv-band.match .cv-stat:not(.hero) b { font-size:1.1rem; } .cv-band.match .ttl { font-size:1.12rem; } }
           @media (max-width: 1380px) { .cv-band { gap:9px; padding:7px 10px; }
-            .cv-band .cv-stat b { font-size:.94rem; } .cv-band .ttl { font-size:.98rem; }
+            .cv-band .cv-stat:not(.hero) b { font-size:1.1rem; } .cv-band .ttl { font-size:1.1rem; }
+            .cv-stat.hero b { font-size:1.9rem; }
             .cv-band.match .ttl small { display:none; } }
 
           /* Match mode */
@@ -409,6 +448,11 @@ def inject_css():
           div[data-testid="stButton"] button p { font-size:.78rem; font-weight:500; text-align:left; }
           div[data-testid="stButton"] button > div { justify-content:flex-start; width:100%; }
           div[data-testid="stButton"] button[kind="tertiary"] { border:none; background:transparent; }
+          div[class*="st-key-ask_"] { display:flex; justify-content:flex-end; }
+          div[class*="st-key-ask_"] button[kind="tertiary"] { background:var(--lav); border-radius:999px;
+            padding:4px 14px; width:auto; }
+          div[class*="st-key-ask_"] button p { color:var(--brand); font-weight:700; }
+          div[class*="st-key-ask_"] button:hover { background:#E2DBEE; }
           .st-key-tour_btn button, .st-key-signout_btn button, .st-key-usage_btn button { width:34px; height:34px; min-height:34px;
             padding:0; border-radius:50%; justify-content:center; border:1.5px solid var(--brand);
             color:var(--brand); }
@@ -416,7 +460,14 @@ def inject_css():
           .st-key-tour_btn button p { font-size:1rem; font-weight:800; text-align:center; }
           .st-key-tour_btn button:hover { background:var(--brand); color:#fff; }
           div[data-testid="stButton"] button[kind="primary"] { background:var(--brand); border-color:var(--brand); color:#fff; }
-          .wa-sub { font-size:.75rem; font-weight:700; color:var(--muted); margin:6px 0 2px; }
+          .wa-sub { font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+            color:var(--muted); margin:10px 0 2px; }
+          div[class*="st-key-ex_"] button, div[class*="st-key-fu_"] button, div[class*="st-key-pq_"] button {
+            background:var(--canvas); border:1px solid transparent; border-radius:6px; padding:7px 12px; }
+          div[class*="st-key-ex_"] button p, div[class*="st-key-fu_"] button p, div[class*="st-key-pq_"] button p {
+            color:var(--ink); }
+          div[class*="st-key-ex_"] button:hover, div[class*="st-key-fu_"] button:hover, div[class*="st-key-pq_"] button:hover {
+            background:var(--lav); border-color:transparent; }
           .wa-wait { font-size:.8rem; font-weight:600; color:var(--brand); margin:2px 0 4px; }
           .wa-wait .wa-doing { color:var(--muted); font-weight:500; }
           /* Spinning footy: fixed size, so the line doesn't shift as it turns. */
@@ -532,14 +583,16 @@ def inject_tablet_css():
 def card_title(text, note="", keys=None, takeaway=""):
     """Card heading. keys: optional [(label, colour)] drawn as a legend, for
     charts too narrow for a Plotly legend. takeaway: the card's main point in
-    one line, shown under the title."""
-    note_html = f" <span>{html.escape(note)}</span>" if note else ""
+    one line, set as the heading, with the title as a small eyebrow above it
+    (without a takeaway the title is the heading). note: how to read the card."""
     key_html = "".join(
         f'<span class="key"><i style="background:{c}"></i>{html.escape(l)}</span>'
         for l, c in (keys or []))
     take_html = f'<b class="take" title="{html.escape(takeaway)}">{html.escape(takeaway)}</b>' \
         if takeaway else ""
-    st.markdown(f'<div class="card-title">{html.escape(text)}{note_html}{key_html}{take_html}</div>',
+    note_html = f'<span class="how">{html.escape(note)}</span>' if note else ""
+    eyebrow = f'<span class="eb{"" if takeaway else " only"}">{html.escape(text)}{key_html}</span>'
+    st.markdown(f'<div class="card-title">{eyebrow}{take_html}{note_html}</div>',
                 unsafe_allow_html=True)
 
 
